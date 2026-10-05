@@ -14,7 +14,9 @@ const env = Object.fromEntries(
 
 const url = env.VITE_SUPABASE_URL;
 const token = env.SUPABASE_ACCESS_TOKEN;
-const siteUrl = env.APP_URL || 'http://localhost:5173';
+// Aceita "meuapp.vercel.app" ou "https://meuapp.vercel.app/" — normaliza para https://meuapp.vercel.app
+const rawSite = (env.APP_URL || 'http://localhost:5173').trim().replace(/\/+$/, '');
+const siteUrl = /^https?:\/\//.test(rawSite) ? rawSite : `https://${rawSite}`;
 
 if (!url || url.includes('SEU-PROJETO')) throw new Error('Preencha VITE_SUPABASE_URL no .env.local');
 if (!token || !token.startsWith('sbp_')) throw new Error('Preencha SUPABASE_ACCESS_TOKEN (começa com sbp_) no .env.local');
