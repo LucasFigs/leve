@@ -1,0 +1,17 @@
+node_modules
+dist
+
+# Segredos — nunca vão para o git
+.env
+.env.*
+!.env.example
+*.local
+
+# Vercel
+.vercel
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+*.log
+vite.shot.config.mjs
