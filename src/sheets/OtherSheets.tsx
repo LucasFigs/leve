@@ -11,10 +11,10 @@ import { Icon } from '../components/Icon';
 export function QuickAddSheet({ defaults }: { defaults?: CaptureDefaults }) {
   return (
     <BottomSheet title="Capturar" onClose={closeSheet}>
-      <QuickAdd autoFocus defaults={defaults} onDone={closeSheet} />
+      <QuickAdd autoFocus defaults={defaults} onDone={closeSheet} alwaysDetail />
       <div className="xs faint" style={{ marginTop: 12, lineHeight: 1.6 }}>
         Escreva do seu jeito: <i>“reunião com Ana quinta às 15”</i>, <i>“pagar aluguel todo dia 5”</i>,{' '}
-        <i>“estudar inglês por 30 min amanhã”</i>.
+        <i>“estudar inglês por 30 min amanhã”</i>. Já sabe tudo da tarefa? Toque em <b>Detalhar</b> para preencher os campos antes de salvar.
       </div>
     </BottomSheet>
   );

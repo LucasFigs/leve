@@ -5,16 +5,28 @@ export type Energy = 'low' | 'medium' | 'high';
 export type Category = 'trabalho' | 'pessoal' | 'saude' | 'casa' | 'financas' | 'estudos';
 export type DayPart = 'morning' | 'afternoon' | 'evening';
 
+export type Freq = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
 export interface Recurrence {
-  freq: 'daily' | 'weekly' | 'monthly' | 'interval';
+  /** 'interval' = formato antigo de “a cada N dias” (equivale a daily + interval) */
+  freq: Freq | 'interval';
+  /** a cada N dias/semanas/meses/anos (padrão 1) */
+  interval?: number;
   /** 0 = domingo … 6 = sábado (weekly) */
   weekdays?: number[];
-  /** dia do mês (monthly) */
+  /** dia do mês (monthly/yearly) */
   monthDay?: number;
-  /** a cada N dias (interval) */
-  interval?: number;
-  /** data inicial (YYYY-MM-DD) */
+  /** “na 2ª terça”: posição 1–4 ou -1 = última (monthly/yearly, junto com `weekday`) */
+  nth?: number;
+  weekday?: number;
+  /** mês 0–11 (yearly) */
+  month?: number;
+  /** primeira data da série (YYYY-MM-DD) */
   anchor: string;
+  /** termina nesta data (inclusive) */
+  until?: string;
+  /** termina após N ocorrências */
+  count?: number;
 }
 
 export interface Subtask {
@@ -45,8 +57,15 @@ export interface Task {
   recurrence?: Recurrence;
   /** ocorrências concluídas (tarefas recorrentes) */
   doneDates?: string[];
-  /** ocorrências puladas (tarefas recorrentes) */
+  /** ocorrências puladas ou editadas à parte (tarefas recorrentes) */
   skipDates?: string[];
+  /** compromissos recorrentes: ocorrências que não aconteceram */
+  missedDates?: string[];
+  /** compromisso que não aconteceu (status 'done' + missed) */
+  missed?: boolean;
+  /** ocorrência editada à parte: série de origem e data original */
+  seriesId?: string;
+  seriesDate?: string;
   subtasks: Subtask[];
   /** quantas vezes foi adiada */
   postponed: number;
@@ -107,5 +126,7 @@ export interface DayItem {
   time?: string;
   duration: number;
   done: boolean;
+  /** compromisso marcado como “não aconteceu” */
+  missed: boolean;
   recurring: boolean;
 }

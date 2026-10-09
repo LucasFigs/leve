@@ -3,6 +3,7 @@ import type { AppState, Project, Settings, Subtask, Task } from '../domain/types
 import { addDays, nowMin, todayISO } from '../domain/dates';
 import { durationOf, overdueTasks } from '../domain/selectors';
 import { nextFreeSlot, reflowDay, type DayPlan, type WeekAssignment } from '../domain/planner';
+import { occurrencesBefore } from '../domain/recurrence';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
 import { localRepository } from './persistence';
@@ -118,6 +119,96 @@ export function newTask(partial: Partial<Task> & { title: string }): Task {
   };
 }
 
+const without = (list: string[] | undefined, date: string) => {
+  const next = (list ?? []).filter((d) => d !== date);
+  return next.length ? next : undefined;
+};
+const withDate = (list: string[] | undefined, date: string) => [...new Set([...(list ?? []), date])];
+
+/**
+ * Tira uma ocorrência da série e a transforma numa tarefa avulsa (exceção).
+ * A série passa a pular aquela data; a cópia guarda de onde veio.
+ */
+function detach(s: AppState, id: string, date: string, patch: Partial<Task> = {}): AppState {
+  const t = s.tasks.find((x) => x.id === id);
+  if (!t?.recurrence) return s;
+  const done = !!t.doneDates?.includes(date);
+  const missed = !!t.missedDates?.includes(date);
+  const now = Date.now();
+  const copy: Task = {
+    ...t,
+    id: uid(),
+    recurrence: undefined,
+    doneDates: undefined,
+    skipDates: undefined,
+    missedDates: undefined,
+    date,
+    status: done || missed ? 'done' : 'active',
+    completedAt: done || missed ? now : undefined,
+    missed: missed || undefined,
+    seriesId: t.id,
+    seriesDate: date,
+    postponed: 0,
+    focusMinutes: undefined,
+    subtasks: t.subtasks.map((x) => ({ ...x })),
+    createdAt: now,
+    updatedAt: now,
+    ...patch,
+  };
+  const series = patchTask(id, (t) => ({
+    skipDates: withDate(t.skipDates, date),
+    doneDates: without(t.doneDates, date),
+    missedDates: without(t.missedDates, date),
+  }))(s);
+  return { ...series, tasks: [copy, ...series.tasks] };
+}
+
+/** Encerra a série no dia anterior a `date` e começa outra (com `draft`) a partir dali. */
+function splitSeries(s: AppState, id: string, date: string, draft: Task): AppState {
+  const t = s.tasks.find((x) => x.id === id);
+  const r = t?.recurrence;
+  if (!t || !r) return s;
+  if (date <= r.anchor) return patchTask(id, { ...draft, id })(s);
+  const before = (list?: string[]) => {
+    const l = list?.filter((d) => d < date);
+    return l?.length ? l : undefined;
+  };
+  const after = (list?: string[]) => {
+    const l = list?.filter((d) => d >= date);
+    return l?.length ? l : undefined;
+  };
+  const past = occurrencesBefore(r, date);
+  const old = patchTask(id, {
+    recurrence: { ...r, until: addDays(date, -1), count: undefined },
+    doneDates: before(t.doneDates),
+    skipDates: before(t.skipDates),
+    missedDates: before(t.missedDates),
+  })(s);
+  const now = Date.now();
+  const nr = draft.recurrence;
+  const next: Task = nr
+    ? {
+        ...draft,
+        id: uid(),
+        recurrence: {
+          ...nr,
+          // Mantém a contagem total: se eram 10 vezes e 4 já passaram, faltam 6
+          anchor: nr.anchor !== r.anchor ? nr.anchor : date,
+          count: nr.count && nr.count === r.count ? Math.max(1, r.count - past) : nr.count,
+        },
+        doneDates: after(t.doneDates),
+        skipDates: after(t.skipDates),
+        missedDates: after(t.missedDates),
+        createdAt: now,
+        updatedAt: now,
+      }
+    : // Deixou de repetir: a partir daqui vira uma tarefa só, nesta data
+      { ...draft, id: uid(), date: draft.date ?? date, doneDates: undefined, skipDates: undefined, missedDates: undefined, createdAt: now, updatedAt: now };
+  return { ...old, tasks: [next, ...old.tasks] };
+}
+
+export type SeriesScope = 'one' | 'following' | 'all';
+
 /* ------------------------------------------------------------------ */
 /* Ações                                                               */
 /* ------------------------------------------------------------------ */
@@ -131,8 +222,15 @@ export interface CaptureDefaults {
 export const actions = {
   /** Captura rápida: interpreta o texto e decide para onde vai. */
   capture(text: string, defaults: CaptureDefaults = {}, ignore: Set<string> = new Set()): Task | undefined {
+    if (!text.trim()) return;
+    const task = actions.buildCapture(text, defaults, ignore);
+    set((s) => ({ ...s, tasks: [task, ...s.tasks] }));
+    return task;
+  },
+
+  /** Monta a tarefa a partir do texto da captura, sem salvar (para detalhar antes). */
+  buildCapture(text: string, defaults: CaptureDefaults = {}, ignore: Set<string> = new Set()): Task {
     const raw = text.trim();
-    if (!raw) return;
     const p = assistant.interpret(raw, { defaultDuration: state.settings.defaultDuration });
     const has = (k: string) => !ignore.has(k);
     const date = (has('date') ? p.date : undefined) ?? defaults.date;
@@ -142,7 +240,7 @@ export const actions = {
     const organized = !!(date || time || recurrence || defaults.projectId || kind === 'event');
     // Se o usuário descartou alguma interpretação, o texto volta inteiro para o título
     const title = ignore.size ? raw.charAt(0).toUpperCase() + raw.slice(1) : p.title;
-    const task = newTask({
+    return newTask({
       title,
       kind,
       status: organized ? 'active' : 'inbox',
@@ -157,12 +255,10 @@ export const actions = {
       energy: p.energy,
       projectId: defaults.projectId,
     });
-    set((s) => ({ ...s, tasks: [task, ...s.tasks] }));
-    return task;
   },
 
   add(task: Task) {
-    set((s) => ({ ...s, tasks: [task, ...s.tasks] }));
+    set((s) => ({ ...s, tasks: [task, ...s.tasks] }), { undoable: true });
   },
 
   update(id: string, patch: Partial<Task>) {
@@ -177,6 +273,53 @@ export const actions = {
   /** Salva as definições de uma captura do Inbox de uma vez e a tira de lá. */
   organize(id: string, patch: Partial<Task>) {
     set(patchTask(id, { ...patch, status: 'active' }), { undoable: true });
+  },
+
+  /** Salva a edição de uma tarefa recorrente: só esta ocorrência, esta e as seguintes, ou a série toda. */
+  saveSeries(id: string, draft: Task, scope: SeriesScope, date: string) {
+    set((s) => {
+      if (scope === 'all') return patchTask(id, { ...draft, id })(s);
+      if (scope === 'following') return splitSeries(s, id, date, draft);
+      const { title, notes, kind, priority, time, duration, due, projectId, subtasks } = draft;
+      return detach(s, id, date, { title, notes, kind, priority, time, duration, due, projectId, subtasks });
+    }, { undoable: true });
+  },
+
+  /** Exclui só uma ocorrência, esta e as seguintes, ou a série inteira. */
+  removeSeries(id: string, scope: SeriesScope, date: string) {
+    const r = findTask(id)?.recurrence;
+    if (!r || scope === 'all' || (scope === 'following' && date <= r.anchor)) return actions.remove(id);
+    set(
+      patchTask(id, (t) =>
+        scope === 'one'
+          ? { skipDates: withDate(t.skipDates, date), doneDates: without(t.doneDates, date), missedDates: without(t.missedDates, date) }
+          : {
+              recurrence: { ...r, until: addDays(date, -1), count: undefined },
+              doneDates: t.doneDates?.filter((d) => d < date),
+              skipDates: t.skipDates?.filter((d) => d < date),
+              missedDates: t.missedDates?.filter((d) => d < date),
+            },
+      ),
+      { undoable: true },
+    );
+  },
+
+  /** Compromisso: marca se aconteceu (ou não) naquele dia; sem `outcome`, desmarca. */
+  markEvent(id: string, date: string, outcome?: 'held' | 'missed') {
+    set(
+      patchTask(id, (t): Partial<Task> => {
+        if (t.recurrence) {
+          return {
+            doneDates: outcome === 'held' ? withDate(t.doneDates, date) : without(t.doneDates, date),
+            missedDates: outcome === 'missed' ? withDate(t.missedDates, date) : without(t.missedDates, date),
+          };
+        }
+        return outcome
+          ? { status: 'done', completedAt: Date.now(), missed: outcome === 'missed' || undefined }
+          : { status: 'active', completedAt: undefined, missed: undefined };
+      }),
+      { undoable: true },
+    );
   },
 
   /** Conclui a tarefa (ou a ocorrência do dia, se recorrente). */
@@ -196,7 +339,9 @@ export const actions = {
   reopen(id: string, date = todayISO()) {
     set(
       patchTask(id, (t) =>
-        t.recurrence ? { doneDates: (t.doneDates ?? []).filter((d) => d !== date) } : { status: 'active', completedAt: undefined },
+        t.recurrence
+          ? { doneDates: without(t.doneDates, date), missedDates: without(t.missedDates, date) }
+          : { status: 'active', completedAt: undefined, missed: undefined },
       ),
     );
   },
@@ -218,14 +363,20 @@ export const actions = {
     let label = '';
 
     if (t.recurrence) {
-      // Para recorrentes, pula a ocorrência de hoje
+      // Recorrentes: só esta ocorrência sai da série; as outras continuam iguais
       if (mode === 'later') {
         const slot = nextFreeSlot(state.tasks, today, durationOf(t), state.settings, { after: nowMin(), excludeId: id });
-        set(patchTask(id, { time: slot ?? t.time }), { undoable: true });
-        return slot ? `Movida para ${slot}` : 'Sem horário livre hoje';
+        if (!slot) return 'Sem horário livre hoje';
+        set((s) => detach(s, id, occurrence, { date: today, time: slot, postponed: 1 }), { undoable: true });
+        return `Só esta vez: movida para ${slot}`;
       }
-      set(patchTask(id, (t) => ({ skipDates: [...(t.skipDates ?? []), occurrence] })), { undoable: true });
-      return 'Pulada hoje';
+      if (mode === 'custom') {
+        const d = custom?.date ?? today;
+        set((s) => detach(s, id, occurrence, { date: d, time: custom?.time, postponed: 1 }), { undoable: true });
+        return 'Só esta vez foi remarcada';
+      }
+      set(patchTask(id, (t) => ({ skipDates: withDate(t.skipDates, occurrence) })), { undoable: true });
+      return 'Pulada esta vez';
     }
 
     let patch: Partial<Task> = {};
@@ -251,7 +402,7 @@ export const actions = {
     }
     set(
       (s) => {
-        let next = patchTask(id, (t) => ({ ...patch, status: 'active', postponed: t.postponed + 1 }))(s);
+        let next = patchTask(id, (t) => ({ ...patch, status: 'active', missed: undefined, completedAt: undefined, postponed: t.postponed + 1 }))(s);
         // Recalcula o restante do dia
         const updates = reflowDay(next.tasks, next.settings);
         for (const u of updates) next = patchTask(u.id, { time: u.time })(next);

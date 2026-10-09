@@ -1352,6 +1352,18 @@ input[type='time'] {
   border-top: 1px solid var(--border);
 }
 
+.hour::after {
+  /* marca da meia hora: ajuda a ler blocos de 15/30/45 min */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed var(--border);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .hour:first-child {
   border-top-color: transparent;
 }
@@ -1405,17 +1417,18 @@ input[type='time'] {
   border-left: 3px solid var(--accent);
 }
 
-.block.task {
+/* “block-task”, não “task”: .task é o estilo da linha de lista (min-height 56px) */
+.block.block-task {
   background: var(--surface);
   border: 1px dashed var(--border-strong);
   border-left: 3px solid var(--text-3);
 }
 
-.block.task.essential {
+.block.block-task.essential {
   border-left-color: var(--red);
 }
 
-.block.task.important {
+.block.block-task.important {
   border-left-color: var(--yellow-dot);
 }
 
@@ -1436,6 +1449,22 @@ input[type='time'] {
 .block.compact {
   padding: 2px 10px;
   justify-content: center;
+}
+
+.block.tiny {
+  padding: 0 8px;
+  font-size: var(--fs-xs);
+  border-radius: 6px;
+}
+
+.block-time {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.block.missed {
+  opacity: 0.55;
+  border-style: dashed;
 }
 
 .block.done .block-title {
@@ -2478,3 +2507,65 @@ input[type='time'] {
 .pulse-status.tone-text-yellow i { background: #e0a800; }
 .pulse-status.tone-text-red i { background: var(--red); }
 .pulse-status.tone-text-gray i { background: var(--text-3); }
+
+/* ---------- Passos reordenáveis ---------- */
+.drag-handle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 36px;
+  margin-right: -6px;
+  color: var(--text-3);
+  cursor: grab;
+  touch-action: none;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.subtask.dragging {
+  background: var(--surface-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Captura: detalhar antes de salvar ---------- */
+.quick-detail {
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  gap: 4px;
+  color: var(--text-2);
+}
+
+/* ---------- Tela Tarefas ---------- */
+.filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.filters .input {
+  min-height: 40px;
+  font-size: var(--fs-sm);
+  padding-left: 10px;
+  padding-right: 6px;
+}
+
+@media (max-width: 480px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .filters .input:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.task.missed .task-title {
+  text-decoration: none;
+}

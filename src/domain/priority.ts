@@ -115,11 +115,11 @@ export function rankCandidates(ctx: RankContext): Candidate[] {
 
   const pool: DayItem[] = ctx.items.filter((i) => !i.done && i.task.kind !== 'event');
   for (const t of ctx.overdue) {
-    pool.push({ task: t, date: t.date ?? ctx.today, time: undefined, duration: durationOf(t, fallback), done: false, recurring: false });
+    pool.push({ task: t, date: t.date ?? ctx.today, time: undefined, duration: durationOf(t, fallback), done: false, missed: false, recurring: false });
   }
   for (const t of ctx.unscheduled) {
     if (t.priority === 'essential' || (t.due && diffDays(t.due, ctx.today) <= 2)) {
-      pool.push({ task: t, date: ctx.today, duration: durationOf(t, fallback), done: false, recurring: false });
+      pool.push({ task: t, date: ctx.today, duration: durationOf(t, fallback), done: false, missed: false, recurring: false });
     }
   }
   return pool.map((i) => scoreItem(i, full)).sort((a, b) => b.score - a.score);

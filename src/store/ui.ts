@@ -1,13 +1,17 @@
 /** Estado efêmero de interface (não persistido). */
 import { useSyncExternalStore } from 'react';
+import type { Task } from '../domain/types';
 import type { CaptureDefaults } from './store';
 
-export type Tab = 'today' | 'agenda' | 'inbox' | 'projects' | 'profile';
+export type Tab = 'today' | 'agenda' | 'inbox' | 'tasks' | 'projects' | 'profile';
 export type AgendaView = 'day' | 'week' | 'month';
 
 export type Sheet =
   | { type: 'quickAdd'; defaults?: CaptureDefaults }
   | { type: 'task'; id: string; date?: string }
+  /** tarefa nova, ainda não salva (capturar e já detalhar) */
+  | { type: 'newTask'; task: Task }
+  | { type: 'eventMissed'; id: string; date: string }
   | { type: 'plan'; date: string }
   | { type: 'review' }
   | { type: 'week' }
@@ -68,7 +72,14 @@ export function closeSheet() {
 }
 
 export function goTo(tab: Tab) {
-  setUI({ tab, sheet: undefined, sheetStack: [], openProjectId: tab === 'projects' ? undefined : ui.openProjectId });
+  setUI({
+    tab,
+    sheet: undefined,
+    sheetStack: [],
+    openProjectId: tab === 'projects' ? undefined : ui.openProjectId,
+    // A agenda sempre abre no dia/semana/mês atual
+    agendaDate: tab === 'agenda' ? undefined : ui.agendaDate,
+  });
   if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
 }
 

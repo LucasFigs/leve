@@ -176,13 +176,13 @@ export function planDay(tasks: Task[], date: string, settings: Settings, now = n
   }
   if (date === today) {
     for (const t of overdueTasks(tasks, today)) {
-      movable.push({ task: t, date: t.date ?? today, duration: durationOf(t, fallback), done: false, recurring: false });
+      movable.push({ task: t, date: t.date ?? today, duration: durationOf(t, fallback), done: false, missed: false, recurring: false });
     }
   }
   for (const t of unscheduledTasks(tasks)) {
     if (t.kind === 'event') continue;
     if (t.priority === 'essential' || (t.due && diffDays(t.due, date) <= 1)) {
-      movable.push({ task: t, date, duration: durationOf(t, fallback), done: false, recurring: false });
+      movable.push({ task: t, date, duration: durationOf(t, fallback), done: false, missed: false, recurring: false });
     }
   }
 
