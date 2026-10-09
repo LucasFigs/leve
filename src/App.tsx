@@ -8,13 +8,14 @@ import { TodayScreen } from './screens/Today';
 import { AgendaScreen } from './screens/Agenda';
 import { InboxScreen } from './screens/Inbox';
 import { ProjectsScreen } from './screens/Projects';
+import { TasksScreen } from './screens/Tasks';
 import { ProfileScreen } from './screens/Profile';
 import { FocusMode } from './screens/Focus';
 import { Onboarding } from './screens/Onboarding';
 import { Login, Splash } from './screens/Login';
 import { canUseOffline, cloudEnabled, useCloud } from './store/sync';
 import { TaskSheet } from './sheets/TaskSheet';
-import { BreakdownSheet, PlanSheet, ReplanSheet, ReviewSheet, WeekSheet } from './sheets/PlanningSheets';
+import { BreakdownSheet, EventMissedSheet, PlanSheet, ReplanSheet, ReviewSheet, WeekSheet } from './sheets/PlanningSheets';
 import { ProjectSheet, QuickAddSheet, SearchSheet } from './sheets/OtherSheets';
 import { AccountMenuSheet } from './sheets/AccountMenu';
 
@@ -22,6 +23,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'today', label: 'Hoje', icon: 'sun' },
   { id: 'agenda', label: 'Agenda', icon: 'calendar' },
   { id: 'inbox', label: 'Inbox', icon: 'inbox' },
+  { id: 'tasks', label: 'Tarefas', icon: 'list' },
   { id: 'projects', label: 'Projetos', icon: 'folder' },
   { id: 'profile', label: 'Perfil', icon: 'user' },
 ];
@@ -52,7 +54,7 @@ function useShortcuts() {
         } else if (e.key === '/') {
           e.preventDefault();
           openSheet({ type: 'search' });
-        } else if (['1', '2', '3', '4', '5'].includes(e.key)) goTo(TABS[+e.key - 1].id);
+        } else if (/^[1-6]$/.test(e.key)) goTo(TABS[+e.key - 1].id);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -67,6 +69,10 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
       return <QuickAddSheet defaults={sheet.defaults} />;
     case 'task':
       return <TaskSheet key={sheet.id} id={sheet.id} date={sheet.date} />;
+    case 'newTask':
+      return <TaskSheet key={sheet.task.id} initial={sheet.task} />;
+    case 'eventMissed':
+      return <EventMissedSheet id={sheet.id} date={sheet.date} />;
     case 'plan':
       return <PlanSheet date={sheet.date} />;
     case 'review':
@@ -109,6 +115,7 @@ export default function App() {
     today: <TodayScreen />,
     agenda: <AgendaScreen />,
     inbox: <InboxScreen />,
+    tasks: <TasksScreen />,
     projects: <ProjectsScreen />,
     profile: <ProfileScreen />,
   }[tab];
@@ -151,8 +158,9 @@ export default function App() {
           <button className="fab" onClick={() => openSheet({ type: 'quickAdd' })} aria-label="Adicionar">
             <Icon name="plus" size={26} stroke={2.2} />
           </button>
+          {/* No celular, “Tarefas” também dá acesso aos projetos (abas no topo da tela) */}
           {TABS.slice(2, 4).map((t) => (
-            <TabButton key={t.id} tab={t} active={tab === t.id} badge={t.id === 'inbox' ? inboxCount : 0} />
+            <TabButton key={t.id} tab={t} active={tab === t.id || (t.id === 'tasks' && tab === 'projects')} badge={t.id === 'inbox' ? inboxCount : 0} />
           ))}
         </div>
       </nav>

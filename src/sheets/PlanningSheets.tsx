@@ -398,14 +398,15 @@ export function ReplanSheet({ id, date }: { id: string; date: string }) {
     setStep('part');
   };
 
-  // Tarefas recorrentes: só pular esta vez ou fazer mais tarde
-  if (task.recurrence) {
+  // Recorrentes: mexe só nesta ocorrência (a série continua igual)
+  if (task.recurrence && step === 'when') {
     const later = nextFreeSlot(tasks, today, duration, settings, { after: nowMin(), excludeId: id });
     return (
       <BottomSheet title="Quer que eu reorganize?" onClose={closeSheet}>
         <p className="small muted" style={{ marginBottom: 8 }}>Sem problema — “{task.title}” fica para outro momento.</p>
         <div className="stack" style={{ gap: 2 }}>
           <Option icon="clock" title="Fazer mais tarde hoje" sub={later ? `Próximo horário livre: ${later}` : 'Sem espaço hoje'} disabled={!later} onClick={() => run('later')} />
+          <Option icon="calendar" title="Outro dia ou horário" sub="Só esta vez — as outras repetições continuam iguais" onClick={() => setStep('pickDay')} />
           <Option icon="calendar-arrow" title="Pular esta vez" sub="Volta na próxima repetição" onClick={() => run('tomorrow')} />
         </div>
       </BottomSheet>
@@ -540,7 +541,6 @@ export function BreakdownSheet({ id, thenFocus }: { id: string; thenFocus?: bool
         chosen.map((s) => ({ id: s.id ?? uid(), title: s.title.trim(), done: !!s.done })),
       );
     }
-    if (task.status === 'inbox') actions.update(id, { status: 'active' });
   };
 
   return (
@@ -604,6 +604,67 @@ export function BreakdownSheet({ id, thenFocus }: { id: string; thenFocus?: bool
           <Icon name="plus" size={18} className="faint" />
           <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Adicionar outro passo" aria-label="Novo passo" />
         </form>
+      </div>
+    </BottomSheet>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Compromisso que não aconteceu                                       */
+/* ------------------------------------------------------------------ */
+
+export function EventMissedSheet({ id, date }: { id: string; date: string }) {
+  const task = useStore((s) => s.tasks.find((t) => t.id === id));
+  const tasks = useStore((s) => s.tasks);
+  const settings = useStore((s) => s.settings);
+  if (!task) return null;
+
+  const today = todayISO();
+  const tomorrow = addDays(today, 1);
+  const duration = durationOf(task, settings.defaultDuration);
+  // Sugestões: ainda hoje, ou amanhã perto do mesmo horário
+  const laterToday = nextFreeSlot(tasks, today, duration, settings, { after: nowMin(), excludeId: id });
+  const tomorrowSlot =
+    nextFreeSlot(tasks, tomorrow, duration, settings, { after: task.time ? timeToMin(task.time) : undefined, excludeId: id }) ??
+    nextFreeSlot(tasks, tomorrow, duration, settings, { excludeId: id });
+
+  const reschedule = (d: string, time: string) => {
+    actions.postpone(id, 'custom', { date: d, time }, date);
+    closeSheet();
+    toast(`Remarcado para ${formatDay(d).toLowerCase()} às ${time}${task.recurrence ? ' (só esta vez)' : ''}`, { label: 'Desfazer', run: () => actions.undo() });
+  };
+
+  return (
+    <BottomSheet title="Não aconteceu" onClose={closeSheet}>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        Tudo bem. Quer remarcar “{task.title}”{task.recurrence ? ' (só esta ocorrência)' : ''}?
+      </p>
+      <div className="stack" style={{ gap: 2 }}>
+        {laterToday && (
+          <Option icon="clock" title={`Ainda hoje, às ${laterToday}`} sub="Próximo horário livre" onClick={() => reschedule(today, laterToday)} />
+        )}
+        {tomorrowSlot && (
+          <Option icon="calendar-arrow" title={`Amanhã às ${tomorrowSlot}`} sub={capFirst(formatLongDate(tomorrow))} onClick={() => reschedule(tomorrow, tomorrowSlot)} />
+        )}
+        <Option
+          icon="calendar"
+          title="Escolher outro dia ou horário"
+          onClick={() => {
+            closeSheet();
+            openSheet({ type: 'replan', id, date }, { stack: true });
+          }}
+        />
+        <div className="divider" style={{ margin: '8px 0' }} />
+        <Option
+          icon="x"
+          title="Não remarcar"
+          sub="Fica registrado que não aconteceu"
+          onClick={() => {
+            actions.markEvent(id, date, 'missed');
+            closeSheet();
+            toast('Marcado como “não aconteceu”', { label: 'Desfazer', run: () => actions.undo() });
+          }}
+        />
       </div>
     </BottomSheet>
   );

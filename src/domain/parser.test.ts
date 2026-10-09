@@ -58,7 +58,7 @@ describe('parser', () => {
 
   it('intervalo', () => {
     const r = p('limpar apartamento a cada 15 dias');
-    expect(r.recurrence).toMatchObject({ freq: 'interval', interval: 15 });
+    expect(r.recurrence).toMatchObject({ freq: 'daily', interval: 15 });
     expect(r.title).toBe('Limpar apartamento');
   });
 

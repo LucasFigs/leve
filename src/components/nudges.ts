@@ -9,8 +9,10 @@ import type { IconName } from './Icon';
 
 export interface NudgeAction {
   label: string;
-  kind: 'reflow' | 'start' | 'breakdown' | 'review' | 'plan' | 'planTomorrow' | 'open';
+  kind: 'reflow' | 'start' | 'breakdown' | 'review' | 'plan' | 'planTomorrow' | 'open' | 'eventHeld' | 'eventMissed';
   taskId?: string;
+  /** dia da ocorrência (compromissos) */
+  date?: string;
   primary?: boolean;
 }
 
@@ -38,6 +40,24 @@ export function computeNudges(ctx: Ctx, limit = 1): Nudge[] {
   if (!ctx.settings.nudges) return [];
   const out: Nudge[] = [];
   const isDismissed = (key: string) => ctx.dismissed[key] === ctx.today;
+
+  // 0) Compromisso que já terminou: aconteceu? (se não, ajudo a remarcar)
+  const ended = ctx.items.filter(
+    (i) => i.task.kind === 'event' && !i.done && i.time && timeToMin(i.time) + i.duration <= ctx.now,
+  );
+  const lastEnded = ended[ended.length - 1];
+  if (lastEnded && !isDismissed(`held:${lastEnded.task.id}:${lastEnded.date}`)) {
+    out.push({
+      key: `held:${lastEnded.task.id}:${lastEnded.date}`,
+      icon: 'calendar',
+      tone: 'blue',
+      text: `“${lastEnded.task.title}” (${lastEnded.time}) aconteceu?`,
+      actions: [
+        { label: 'Aconteceu', kind: 'eventHeld', taskId: lastEnded.task.id, date: lastEnded.date, primary: true },
+        { label: 'Não aconteceu', kind: 'eventMissed', taskId: lastEnded.task.id, date: lastEnded.date },
+      ],
+    });
+  }
 
   // 1) Tarefas que passaram do horário
   const stale = ctx.items.filter(

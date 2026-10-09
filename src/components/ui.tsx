@@ -1,5 +1,5 @@
 /** Componentes pequenos e reutilizáveis. */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { Priority } from '../domain/types';
 import { PRIORITY_META } from '../domain/priority';
 import { dismissToast, useUI } from '../store/ui';
@@ -132,5 +132,44 @@ export function SectionHead({ title, action }: { title: ReactNode; action?: Reac
       <h2 className="section-title">{title}</h2>
       {action}
     </div>
+  );
+}
+
+/**
+ * Campo numérico que pode ficar vazio enquanto você digita (apagar tudo e digitar outro número).
+ * Vazio chega como `undefined`; quem usa decide se dá para salvar.
+ */
+export function NumberField({ value, onChange, label, width = 80, maxLength = 3, id }: {
+  value?: number;
+  onChange: (v: number | undefined) => void;
+  label: string;
+  width?: number;
+  maxLength?: number;
+  id?: string;
+}) {
+  const shown = value == null || Number.isNaN(value) ? '' : String(value);
+  const [text, setText] = useState(shown);
+  // Acompanha mudanças vindas de fora (ex.: trocar de opção), sem atrapalhar a digitação
+  useEffect(() => {
+    if ((text === '' ? '' : String(Number(text))) !== shown) setText(shown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
+  return (
+    <input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      className="input num"
+      style={{ width, textAlign: 'center' }}
+      value={text}
+      aria-label={label}
+      aria-invalid={text === '' || undefined}
+      onChange={(e) => {
+        const t = e.target.value.replace(/\D/g, '').slice(0, maxLength);
+        setText(t);
+        onChange(t === '' ? undefined : Number(t));
+      }}
+    />
   );
 }

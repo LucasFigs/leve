@@ -31,6 +31,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const overdue = !isDone && !task.recurrence && ((task.date && task.date < today) || (task.due && task.due < today));
   const subDone = task.subtasks.filter((s) => s.done).length;
   const occurrence = date ?? task.date ?? today;
+  const missed = task.recurrence ? !!task.missedDates?.includes(occurrence) : task.status === 'done' && !!task.missed;
 
   const toggle = () => {
     if (isDone) {
@@ -46,7 +47,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const label = `${task.title}${task.time ? `, às ${task.time}` : ''}`;
 
   return (
-    <div className={`task${isDone ? ' done' : ''}${leaving ? ' leaving' : ''}`}>
+    <div className={`task${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`}>
       {showTime && <span className="task-time num">{task.time ?? '—'}</span>}
       {isEvent ? (
         <span className="check" style={{ borderStyle: 'dashed', opacity: isDone ? 0.4 : 1 }} aria-hidden="true">
@@ -65,6 +66,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
         <div className="task-title">{task.title}</div>
         <div className="task-meta">
           {isEvent && <span>Compromisso</span>}
+          {isEvent && isDone && <span className={missed ? 'warn' : ''}>{missed ? 'Não aconteceu' : 'Aconteceu'}</span>}
           {showDate && task.date && !task.recurrence && (
             <span className={overdue ? 'warn' : ''}>
               <Icon name="calendar" size={12} />

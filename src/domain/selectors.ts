@@ -1,22 +1,8 @@
-import type { DayItem, Recurrence, Task } from './types';
-import { dayOfTimestamp, diffDays, fromISODate, timeToMin, weekdayOf } from './dates';
+import type { DayItem, Task } from './types';
+import { dayOfTimestamp, fromISODate, timeToMin } from './dates';
+import { occursOn } from './recurrence';
 
-export function occursOn(r: Recurrence, date: string): boolean {
-  if (date < r.anchor) return false;
-  switch (r.freq) {
-    case 'daily':
-      return true;
-    case 'weekly':
-      return (r.weekdays ?? []).includes(weekdayOf(date));
-    case 'monthly': {
-      const d = fromISODate(date);
-      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      return d.getDate() === Math.min(r.monthDay ?? 1, lastDay);
-    }
-    case 'interval':
-      return diffDays(date, r.anchor) % (r.interval ?? 1) === 0;
-  }
-}
+export { occursOn };
 
 export const isRecurring = (t: Task) => !!t.recurrence;
 
@@ -33,10 +19,11 @@ export function itemsForDate(tasks: Task[], date: string, fallback = 30): DayIte
       if (!occursOn(t.recurrence, date) || t.skipDates?.includes(date)) continue;
       out.push({
         task: t, date, time: t.time, duration: durationOf(t, fallback),
-        done: !!t.doneDates?.includes(date), recurring: true,
+        done: !!t.doneDates?.includes(date) || !!t.missedDates?.includes(date),
+        missed: !!t.missedDates?.includes(date), recurring: true,
       });
     } else if (t.date === date) {
-      out.push({ task: t, date, time: t.time, duration: durationOf(t, fallback), done: t.status === 'done', recurring: false });
+      out.push({ task: t, date, time: t.time, duration: durationOf(t, fallback), done: t.status === 'done', missed: t.status === 'done' && !!t.missed, recurring: false });
     }
   }
   return sortItems(out);
@@ -72,6 +59,7 @@ export function unscheduledTasks(tasks: Task[]): Task[] {
 export function completedOn(tasks: Task[], date: string): number {
   let n = 0;
   for (const t of tasks) {
+    if (t.kind === 'event') continue;
     if (t.recurrence) n += t.doneDates?.includes(date) ? 1 : 0;
     else if (t.status === 'done' && t.completedAt && dayOfTimestamp(t.completedAt) === date) n++;
   }
@@ -81,6 +69,7 @@ export function completedOn(tasks: Task[], date: string): number {
 export function streak(tasks: Task[], today: string): number {
   const days = new Set<string>();
   for (const t of tasks) {
+    if (t.kind === 'event') continue;
     if (t.completedAt && t.status === 'done') days.add(dayOfTimestamp(t.completedAt));
     t.doneDates?.forEach((d) => days.add(d));
   }

@@ -24,7 +24,8 @@ interface Positioned {
 function layout(items: DayItem[]): Positioned[] {
   const timed = items
     .filter((i) => i.time)
-    .map((i) => ({ item: i, start: timeToMin(i.time!), end: timeToMin(i.time!) + Math.max(i.duration, 20), lane: 0, lanes: 1 }))
+    // Altura proporcional à duração real (30 min = meia hora); mínimo de 15 min só para caber o título
+    .map((i) => ({ item: i, start: timeToMin(i.time!), end: timeToMin(i.time!) + Math.max(i.duration, 15), lane: 0, lanes: 1 }))
     .sort((a, b) => a.start - b.start);
   let group: Positioned[] = [];
   let groupEnd = -1;
@@ -81,12 +82,12 @@ export function DayTimeline({ date, items, hourHeight = 60, scrollToNow }: Props
       ))}
       {positioned.map(({ item, start, end, lane, lanes }) => {
         const t = item.task;
-        const kind = t.kind === 'event' ? 'event' : t.kind === 'habit' ? 'habit' : `task ${t.priority ?? ''}`;
-        const height = Math.max(((end - start) / 60) * hourHeight - 3, 24);
+        const kind = t.kind === 'event' ? 'event' : t.kind === 'habit' ? 'habit' : `block-task ${t.priority ?? ''}`;
+        const height = Math.max(((end - start) / 60) * hourHeight - 2, 16);
         return (
           <button
             key={t.id + item.date}
-            className={`block ${kind}${item.done ? ' done' : isToday && end <= now ? ' past' : ''}${height < 36 ? ' compact' : ''}`}
+            className={`block ${kind}${item.missed ? ' missed' : item.done ? ' done' : isToday && end <= now ? ' past' : ''}${height < 36 ? ' compact' : ''}${height < 24 ? ' tiny' : ''}`}
             style={{
               top: y(start) + 1,
               height,
@@ -95,14 +96,18 @@ export function DayTimeline({ date, items, hourHeight = 60, scrollToNow }: Props
               width: `calc(${100 / lanes}% - ${12 / lanes + 2}px)`,
             }}
             onClick={() => openSheet({ type: 'task', id: t.id, date: item.date })}
-            aria-label={`${t.title}, ${item.time}, ${formatDuration(item.duration)}`}
+            aria-label={`${t.title}, ${item.time}–${minToTime(timeToMin(item.time!) + item.duration)}, ${formatDuration(item.duration)}${item.missed ? ', não aconteceu' : ''}`}
           >
-            <span className="block-title">{t.title}</span>
+            <span className="block-title">
+              {height < 36 && <span className="num block-time">{item.time} </span>}
+              {t.title}
+            </span>
             {height > 40 && (
               <span className="block-meta num">
                 {t.kind === 'habit' && <Icon name="repeat" size={11} />}
                 {item.time}–{minToTime(timeToMin(item.time!) + item.duration)}
                 {t.kind !== 'event' && ` · ${formatDuration(item.duration)}`}
+                {item.missed && ' · não aconteceu'}
               </span>
             )}
           </button>

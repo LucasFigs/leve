@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatDay } from '../domain/dates';
+import { formatDay, todayISO } from '../domain/dates';
 import type { ChipType } from '../domain/parser';
 import { assistant } from '../services/assistant';
-import { actions, useStore, type CaptureDefaults } from '../store/store';
+import { actions, newTask, useStore, type CaptureDefaults } from '../store/store';
 import { openSheet, toast } from '../store/ui';
 import { Icon, type IconName } from './Icon';
 
@@ -22,9 +22,11 @@ interface Props {
   placeholder?: string;
   onDone?: () => void;
   hint?: boolean;
+  /** mostra “Detalhar” mesmo com o campo vazio (na folha de captura) */
+  alwaysDetail?: boolean;
 }
 
-export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true }: Props) {
+export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true, alwaysDetail }: Props) {
   const [text, setText] = useState('');
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -67,6 +69,21 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
     ref.current?.focus();
   };
 
+  /** Já sabe tudo da tarefa? Abre os detalhes antes de salvar. */
+  const detail = () => {
+    const task = text.trim()
+      ? actions.buildCapture(text, defaults, ignored)
+      : newTask({
+          title: '',
+          date: defaults?.date ?? (defaults?.time ? todayISO() : undefined),
+          time: defaults?.time,
+          projectId: defaults?.projectId,
+        });
+    setText('');
+    setIgnored(new Set());
+    openSheet({ type: 'newTask', task });
+  };
+
   const contextChips: { label: string; icon: IconName }[] = [];
   if (defaults?.date && !parsed?.date) contextChips.push({ label: formatDay(defaults.date), icon: 'calendar' });
   if (defaults?.time && !parsed?.time) contextChips.push({ label: defaults.time, icon: 'clock' });
@@ -104,6 +121,12 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
           autoCapitalize="sentences"
           data-autofocus={autoFocus ? '' : undefined}
         />
+        {(alwaysDetail || text.trim()) && (
+          <button type="button" className="btn btn-sm btn-ghost quick-detail" onClick={detail} title="Abrir todos os campos antes de salvar">
+            <Icon name="settings" size={16} />
+            Detalhar
+          </button>
+        )}
         <button type="submit" className="send" disabled={!text.trim()} aria-label="Adicionar">
           <Icon name="arrow-up" size={18} stroke={2.2} />
         </button>

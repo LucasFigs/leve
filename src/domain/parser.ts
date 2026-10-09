@@ -8,8 +8,8 @@
 import type { Category, DayPart, Energy, Kind, Priority, Recurrence } from './types';
 import {
   addDays, formatDay, formatDuration, fromISODate, MONTHS_LONG, pad, toISODate, todayISO, weekdayOf,
-  WEEKDAYS_SHORT,
 } from './dates';
+import { recurrenceLabel } from './recurrence';
 
 export type ChipType = 'kind' | 'date' | 'time' | 'duration' | 'recurrence' | 'priority' | 'due';
 
@@ -137,22 +137,7 @@ function dateFromDayMonth(ref: string, day: number, month: number, year?: number
   return iso;
 }
 
-export function recurrenceLabel(r: Recurrence): string {
-  switch (r.freq) {
-    case 'daily':
-      return 'Todo dia';
-    case 'weekly': {
-      const days = [...(r.weekdays ?? [])].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
-      if (days.join() === '1,2,3,4,5') return 'Dias úteis';
-      if (days.length === 7) return 'Todo dia';
-      return 'Toda ' + days.map((d) => WEEKDAYS_SHORT[d]).join(', ');
-    }
-    case 'monthly':
-      return `Todo dia ${r.monthDay}`;
-    case 'interval':
-      return r.interval === 7 ? 'Toda semana' : `A cada ${r.interval} dias`;
-  }
-}
+export { recurrenceLabel };
 
 /* ------------------------------------------------------------------ */
 /* Parser                                                              */
@@ -232,13 +217,28 @@ export function parse(input: string, opts: ParseOptions = {}): Parsed {
     recurrence = { freq: 'monthly', monthDay: fromISODate(ref).getDate(), anchor: ref };
     return true;
   });
-  take(/\b(?:a\s+cada\s+(\d+|duas|dois|tres|quatro)\s+(dias|semanas)|de\s+(\d+)\s+em\s+\d+\s+dias|quinzenalmente)\b/, (m) => {
+  take(/\b(?:a\s+cada\s+(\d+|duas|dois|tres|quatro)\s+(dias|semanas|meses|anos)|de\s+(\d+)\s+em\s+\d+\s+dias|quinzenalmente)\b/, (m) => {
     if (recurrence) return false;
-    let n = 14;
-    if (m[1]) n = toNumber(m[1]) * (m[2].startsWith('semana') ? 7 : 1);
-    else if (m[3]) n = parseInt(m[3], 10);
+    if (m[3]) {
+      const n = parseInt(m[3], 10);
+      if (!n) return false;
+      recurrence = { freq: 'daily', interval: n, anchor: ref };
+      return true;
+    }
+    const n = m[1] ? toNumber(m[1]) : 2;
     if (!n || n < 1) return false;
-    recurrence = { freq: 'interval', interval: n, anchor: ref };
+    const d = fromISODate(ref);
+    const unit = m[2] ?? 'semanas';
+    if (unit === 'dias') recurrence = { freq: 'daily', interval: n, anchor: ref };
+    else if (unit === 'semanas') recurrence = { freq: 'weekly', interval: n, weekdays: [d.getDay()], anchor: ref };
+    else if (unit === 'meses') recurrence = { freq: 'monthly', interval: n, monthDay: d.getDate(), anchor: ref };
+    else recurrence = { freq: 'yearly', interval: n, month: d.getMonth(), monthDay: d.getDate(), anchor: ref };
+    return true;
+  });
+  take(/\b(?:todo\s+ano|todos\s+os\s+anos|anualmente)\b/, () => {
+    if (recurrence) return false;
+    const d = fromISODate(ref);
+    recurrence = { freq: 'yearly', month: d.getMonth(), monthDay: d.getDate(), anchor: ref };
     return true;
   });
 
@@ -395,7 +395,15 @@ export function parse(input: string, opts: ParseOptions = {}): Parsed {
   const finalDuration = duration ?? estimateDuration(nt, kind, opts.defaultDuration ?? 30);
   const big = kind === 'task' && (finalDuration >= 60 || BIG_WORDS.test(nt));
 
-  if (recurrence && date) recurrence = { ...recurrence, anchor: date };
+  if (recurrence && date) {
+    // “a cada 2 semanas a partir de sábado”: dia da semana/mês vem da data de início
+    const d = fromISODate(date);
+    const r: Recurrence = { ...recurrence, anchor: date };
+    if (r.freq === 'weekly' && r.weekdays?.length === 1 && r.weekdays[0] === weekdayOf(ref)) r.weekdays = [d.getDay()];
+    if ((r.freq === 'monthly' || r.freq === 'yearly') && r.monthDay === fromISODate(ref).getDate()) r.monthDay = d.getDate();
+    if (r.freq === 'yearly') r.month = d.getMonth();
+    recurrence = r;
+  }
 
   /* ---------- Chips ---------- */
   const chips: ParseChip[] = [];

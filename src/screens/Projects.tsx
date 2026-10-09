@@ -8,6 +8,7 @@ import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
 import { EmptyState, ProgressBar, SectionHead } from '../components/ui';
 import { TopActions } from './TopActions';
+import { TasksProjectsSwitch } from './Tasks';
 
 export function ProjectsScreen() {
   const openId = useUI((u) => u.openProjectId);
@@ -30,6 +31,8 @@ function ProjectList() {
           </button>
         </TopActions>
       </div>
+
+      <TasksProjectsSwitch current="projects" />
 
       {projects.length === 0 ? (
         <EmptyState

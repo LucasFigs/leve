@@ -63,6 +63,15 @@ export function TodayScreen() {
         break;
       case 'open':
         if (a.taskId) openSheet({ type: 'task', id: a.taskId });
+        break;
+      case 'eventHeld':
+        if (a.taskId && a.date) {
+          actions.markEvent(a.taskId, a.date, 'held');
+          toast('Marcado como realizado', { label: 'Desfazer', run: () => actions.undo() });
+        }
+        break;
+      case 'eventMissed':
+        if (a.taskId && a.date) openSheet({ type: 'eventMissed', id: a.taskId, date: a.date });
     }
   };
 
