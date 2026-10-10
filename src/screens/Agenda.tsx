@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   addDays, formatDay, formatDuration, fromISODate, monthMatrix, MONTHS_LONG, startOfWeek, toISODate, todayISO, WEEKDAYS_SHORT,
 } from '../domain/dates';
@@ -33,43 +33,50 @@ export function AgendaScreen() {
     view === 'day' ? formatDay(date, today, { long: true }) : view === 'week' ? weekLabel(date) : `${cap(MONTHS_LONG[d.getMonth()])} ${d.getFullYear()}`;
 
   return (
-    <div className="screen">
-      <div className="topbar">
-        <h1 className="page-title">Agenda</h1>
-        <TopActions />
-      </div>
-
-      <Segmented<AgendaView>
-        label="Visualização"
-        value={view}
-        onChange={setView}
-        options={[
-          { value: 'day', label: 'Dia' },
-          { value: 'week', label: 'Semana' },
-          { value: 'month', label: 'Mês' },
-        ]}
-      />
-
-      <div className="row" style={{ marginTop: 14, justifyContent: 'space-between' }}>
-        <div className="daynav">
-          <button className="icon-btn sm" onClick={() => move(-1)} aria-label="Anterior">
-            <Icon name="chevron-left" size={18} />
-          </button>
-          <button className="icon-btn sm" onClick={() => move(1)} aria-label="Próximo">
-            <Icon name="chevron-right" size={18} />
-          </button>
-          <h2 style={{ fontSize: 'var(--fs-md)', fontWeight: 650, marginLeft: 4 }}>{heading}</h2>
+    <div className="screen agenda-screen">
+      {/* ── Cabeçalho fixo (não rola) ── */}
+      <div className="agenda-header">
+        <div className="topbar">
+          <h1 className="page-title">Agenda</h1>
+          <TopActions />
         </div>
-        {date !== today && (
-          <button className="btn btn-sm btn-ghost" onClick={() => setDate(today)}>
-            Hoje
-          </button>
-        )}
+
+        <Segmented<AgendaView>
+          label="Visualização"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'day', label: 'Dia' },
+            { value: 'week', label: 'Semana' },
+            { value: 'month', label: 'Mês' },
+          ]}
+        />
+
+        <div className="row" style={{ marginTop: 14, justifyContent: 'space-between' }}>
+          <div className="daynav">
+            <button className="icon-btn sm" onClick={() => move(-1)} aria-label="Anterior">
+              <Icon name="chevron-left" size={18} />
+            </button>
+            <button className="icon-btn sm" onClick={() => move(1)} aria-label="Próximo">
+              <Icon name="chevron-right" size={18} />
+            </button>
+            <h2 style={{ fontSize: 'var(--fs-md)', fontWeight: 650, marginLeft: 4 }}>{heading}</h2>
+          </div>
+          {date !== today && (
+            <button className="btn btn-sm btn-ghost" onClick={() => setDate(today)}>
+              Hoje
+            </button>
+          )}
+        </div>
+
+        {/* Strip de dias fixo somente na visão semana */}
+        {view === 'week' && <WeekStrip date={date} />}
       </div>
 
-      <div style={{ marginTop: 14 }}>
+      {/* ── Área scrollável ── */}
+      <div className="agenda-body">
         {view === 'day' && <DayView date={date} />}
-        {view === 'week' && <WeekView date={date} onPick={(x) => { setDate(x); setView('day'); }} />}
+        {view === 'week' && <WeekAccordions date={date} />}
         {view === 'month' && <MonthView date={date} onPick={(x) => { setDate(x); setView('day'); }} />}
       </div>
     </div>
@@ -106,7 +113,8 @@ function DayView({ date }: { date: string }) {
 
   return (
     <>
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+      {/* Subheader sticky — fica fixo dentro da agenda-body */}
+      <div className="agenda-day-head">
         <Legend />
         <button className="btn btn-sm btn-soft" onClick={() => openSheet({ type: 'plan', date })}>
           <Icon name="wand" size={16} />
@@ -136,7 +144,41 @@ function DayView({ date }: { date: string }) {
   );
 }
 
-function WeekView({ date, onPick: _onPick }: { date: string; onPick: (d: string) => void }) {
+// ── Visão semana: strip de dias (renderizado no header fixo) ──────────────────
+function WeekStrip({ date }: { date: string }) {
+  const tasks = useStore((s) => s.tasks);
+  const fallback = useStore((s) => s.settings.defaultDuration);
+  const today = todayISO();
+  const start = startOfWeek(date);
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(start, i)).map((d) => ({ date: d, items: itemsForDate(tasks, d, fallback) })),
+    [tasks, start, fallback],
+  );
+  // Lê o dia aberto do store de UI para refletir o estado dos accordions
+  const openDay = useUI((u) => u.agendaOpenDay ?? null);
+  const setOpenDay = (d: string | null) => setUI({ agendaOpenDay: d });
+
+  return (
+    <div className="week-strip" style={{ marginTop: 14 }}>
+      {days.map(({ date: d, items }) => (
+        <button
+          key={d}
+          className={`week-day${d === today ? ' today' : ''}${openDay === d ? ' active' : ''}`}
+          aria-pressed={openDay === d}
+          onClick={() => setOpenDay(openDay === d ? null : d)}
+          aria-label={`${formatDay(d, today, { long: true })}, ${items.length} itens`}
+        >
+          {WEEKDAYS_SHORT[fromISODate(d).getDay()]}
+          <b className="num">{fromISODate(d).getDate()}</b>
+          <Dots items={items} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Visão semana: accordions (renderizados na área scrollável) ────────────────
+function WeekAccordions({ date }: { date: string }) {
   const tasks = useStore((s) => s.tasks);
   const fallback = useStore((s) => s.settings.defaultDuration);
   const today = todayISO();
@@ -146,28 +188,18 @@ function WeekView({ date, onPick: _onPick }: { date: string; onPick: (d: string)
     [tasks, start, fallback],
   );
 
-  // Dias expandidos: começa com o dia de hoje (se estiver na semana atual)
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const todayInWeek = days.some((d) => d.date === today);
-    return new Set(todayInWeek ? [today] : [days[0]?.date ?? '']);
-  });
+  // Estado exclusivo: apenas um dia aberto de cada vez
+  const openDay = useUI((u) => u.agendaOpenDay ?? null);
+  const setOpenDay = (d: string | null) => setUI({ agendaOpenDay: d });
 
-  // Ao navegar para outra semana, reinicia o estado de expansão
+  // Ao mudar de semana, abre hoje (se estiver na semana) ou fecha tudo
   useEffect(() => {
     const todayInWeek = days.some((d) => d.date === today);
-    setExpanded(new Set(todayInWeek ? [today] : [days[0]?.date ?? '']));
+    setUI({ agendaOpenDay: todayInWeek ? today : (days[0]?.date ?? null) });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start]);
 
-  const toggle = (d: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(d)) next.delete(d);
-      else next.add(d);
-      return next;
-    });
-
-  // Ordena tasks cronologicamente: com horário primeiro (por HH:mm), depois sem horário
+  // Ordena tasks cronologicamente: com horário primeiro, depois sem horário
   const sortItems = (items: ReturnType<typeof itemsForDate>) =>
     [...items].sort((a, b) => {
       if (a.time && b.time) return a.time.localeCompare(b.time);
@@ -177,73 +209,57 @@ function WeekView({ date, onPick: _onPick }: { date: string; onPick: (d: string)
     });
 
   return (
-    <>
-      <div className="week-strip" style={{ marginBottom: 16 }}>
-        {days.map(({ date: d, items }) => (
-          <button
-            key={d}
-            className={`week-day${d === today ? ' today' : ''}${expanded.has(d) ? ' active' : ''}`}
-            aria-pressed={expanded.has(d)}
-            onClick={() => toggle(d)}
-            aria-label={`${formatDay(d, today, { long: true })}, ${items.length} itens`}
-          >
-            {WEEKDAYS_SHORT[fromISODate(d).getDay()]}
-            <b className="num">{fromISODate(d).getDate()}</b>
-            <Dots items={items} />
-          </button>
-        ))}
-      </div>
+    <div className="stack" style={{ gap: 8 }}>
+      {days.map(({ date: d, items }) => {
+        const isOpen = openDay === d;
+        const sorted = sortItems(items);
+        const showTime = items.some((x) => x.time);
+        const pending = items.filter((i) => !i.done).length;
+        return (
+          <section key={d} className={`week-accordion${isOpen ? ' open' : ''}`}>
+            <button
+              className="week-accordion-head"
+              aria-expanded={isOpen}
+              onClick={() => setOpenDay(isOpen ? null : d)}
+            >
+              <span style={{ color: d === today ? 'var(--accent)' : undefined, fontWeight: 650, fontSize: 'var(--fs-sm)' }}>
+                {formatDay(d, today, { long: true })}
+              </span>
+              <span className="row" style={{ gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+                {items.length > 0 && (
+                  <span className="xs faint">{pending > 0 ? `${pending} pendente${pending !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
+                )}
+                <button
+                  className="icon-btn sm"
+                  onClick={(e) => { e.stopPropagation(); openSheet({ type: 'quickAdd', defaults: { date: d } }); }}
+                  aria-label={`Adicionar em ${formatDay(d, today)}`}
+                >
+                  <Icon name="plus" size={15} />
+                </button>
+                <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
+              </span>
+            </button>
 
-      <div className="stack" style={{ gap: 8 }}>
-        {days.map(({ date: d, items }) => {
-          const isOpen = expanded.has(d);
-          const sorted = sortItems(items);
-          const showTime = items.some((x) => x.time);
-          return (
-            <section key={d} className={`week-accordion${isOpen ? ' open' : ''}`}>
-              <button
-                className="week-accordion-head"
-                aria-expanded={isOpen}
-                onClick={() => toggle(d)}
-              >
-                <span style={{ color: d === today ? 'var(--accent)' : undefined, fontWeight: 650, fontSize: 'var(--fs-sm)' }}>
-                  {formatDay(d, today, { long: true })}
-                </span>
-                <span className="row" style={{ gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
-                  {items.length > 0 && (
-                    <span className="xs faint">{items.filter((i) => !i.done).length > 0 ? `${items.filter((i) => !i.done).length} pendente${items.filter((i) => !i.done).length !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
-                  )}
-                  <button
-                    className="icon-btn sm"
-                    onClick={(e) => { e.stopPropagation(); openSheet({ type: 'quickAdd', defaults: { date: d } }); }}
-                    aria-label={`Adicionar em ${formatDay(d, today)}`}
-                  >
-                    <Icon name="plus" size={15} />
-                  </button>
-                  <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="week-accordion-body">
-                  {sorted.length ? (
-                    <div className="list">
-                      {sorted.map((i) => (
-                        <TaskCard key={i.task.id + d} task={i.task} date={d} done={i.done} showTime={showTime} exitOnDone={false} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="small faint" style={{ padding: '4px 2px 8px' }}>Dia livre 🌤️</p>
-                  )}
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-    </>
+            {isOpen && (
+              <div className="week-accordion-body">
+                {sorted.length ? (
+                  <div className="list">
+                    {sorted.map((i) => (
+                      <TaskCard key={i.task.id + d} task={i.task} date={d} done={i.done} showTime={showTime} exitOnDone={false} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="small faint" style={{ padding: '4px 2px 8px' }}>Dia livre 🌤️</p>
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
   );
 }
+
 
 function Dots({ items }: { items: DayItem[] }) {
   const shown = items.filter((i) => !i.done).slice(0, 4);
