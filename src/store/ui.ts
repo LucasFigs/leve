@@ -35,6 +35,8 @@ export interface UIState {
   openProjectId?: string;
   agendaView: AgendaView;
   agendaDate?: string;
+  /** dia aberto no accordion da visão semana (exclusivo — só um por vez) */
+  agendaOpenDay?: string | null;
   toasts: Toast[];
 }
 
