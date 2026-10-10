@@ -18,11 +18,9 @@ import { startTask } from '../components/focusFlow';
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso', habit: 'Hábito' };
 
-type SectionId = 'when' | 'repeat' | 'priority' | 'project' | 'due' | 'notes' | 'kind';
-
 /**
  * Detalhes de uma tarefa, pensados para o celular:
- * - abre como um resumo (uma linha por informação); tocar numa linha abre só aquele ajuste;
+ * - tudo fica visível, em seções com título, na ordem em que se decide (quando → quanto → o quê);
  * - o que ajuda a começar (próximo passo, passos, “Começar”) fica no alto e ao alcance do polegar;
  * - edição é rascunho (Cancelar/Salvar), mas marcar um passo como feito vale na hora.
  * Com `initial`, é uma tarefa nova (capturar e já detalhar) que só é criada ao salvar.
@@ -39,8 +37,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const [someday, setSomeday] = useState(false);
   /** Pergunta “só este / este e os seguintes / todos” de uma série */
   const [ask, setAsk] = useState<'save' | 'delete'>();
-  /** Um ajuste aberto por vez; capturas novas já abrem em “Quando”, a decisão que falta */
-  const [open, setOpen] = useState<SectionId | undefined>(live && (isNew || live.status === 'inbox') ? 'when' : undefined);
   const dirty = draft !== original || someday;
   // Sem alterações pendentes, acompanha a versão salva (ex.: concluída, sincronizada)
   if (!isNew && !dirty && live && live !== original) {
@@ -63,7 +59,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const project = projects.find((p) => p.id === task.projectId);
 
   const upd = (patch: Partial<Task>) => setDraft({ ...task, ...patch });
-  const toggle = (s: SectionId) => setOpen(open === s ? undefined : s);
   const addSubtasks = (titles: string[]) =>
     upd({ subtasks: [...task.subtasks, ...titles.filter(Boolean).map((title) => ({ id: uid(), title, done: false }))] });
 
@@ -128,7 +123,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const setKind = (kind: Kind) => {
     if (kind === 'habit' && !task.recurrence) {
       upd({ kind, recurrence: { freq: 'daily', anchor: task.date ?? today }, date: undefined });
-      setOpen('repeat');
     } else upd({ kind });
   };
 
@@ -190,16 +184,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
 
   /* ---------- Resumos de cada linha ---------- */
   const endTime = task.time ? minToTime(timeToMin(task.time) + (task.duration ?? 30)) : undefined;
-  const timeText = task.time ? `${task.time}–${endTime}` : undefined;
-  const whenValue = task.recurrence
-    ? [timeText ?? 'Sem horário', !task.time && task.duration ? formatDuration(task.duration) : ''].filter(Boolean).join(' · ')
-    : task.date
-      ? [formatDay(task.date, today), timeText ?? (task.duration ? formatDuration(task.duration) : '')].filter(Boolean).join(' · ')
-      : someday
-        ? 'Quando der'
-        : !inbox && task.duration
-          ? `Sem data · ${formatDuration(task.duration)}`
-          : '';
   const overdue = !isDone && !isEvent && !task.recurrence && !!task.date && task.date < today;
   const subDone = task.subtasks.filter((s) => s.done).length;
   const nextStep = task.subtasks.find((s) => !s.done);
@@ -380,33 +364,21 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
 
       {hint}
 
-      {/* Captura nova: o tipo muda os campos, então vem primeiro */}
-      {inbox && (
-        <div style={{ marginTop: 12 }}>
-          <Segmented<Kind>
-            label="Tipo"
-            value={task.kind}
-            onChange={setKind}
-            options={[
-              { value: 'task', label: 'Tarefa' },
-              { value: 'event', label: 'Compromisso' },
-              { value: 'habit', label: 'Hábito' },
-            ]}
-          />
-        </div>
-      )}
+      <div className="stack" style={{ gap: 22, marginTop: 14 }}>
+        <Segmented<Kind>
+          label="Tipo"
+          value={task.kind}
+          onChange={setKind}
+          options={[
+            { value: 'task', label: 'Tarefa' },
+            { value: 'event', label: 'Compromisso' },
+            { value: 'habit', label: 'Hábito' },
+          ]}
+        />
 
-      <div className="props" style={{ marginTop: 12 }}>
-        <Section
-          icon="calendar"
-          label={task.recurrence ? 'Horário' : 'Quando'}
-          value={whenValue}
-          placeholder={task.recurrence ? 'Sem horário' : inbox ? 'Escolher' : 'Sem data'}
-          tone={overdue ? 'warn' : undefined}
-          note={overdue ? 'atrasada' : undefined}
-          open={open === 'when'}
-          onToggle={() => toggle('when')}
-        >
+        {/* ---------- Quando: dia e horário juntos ---------- */}
+        <div className="field">
+          <span className="label">{task.recurrence ? 'Horário' : 'Quando'}</span>
           {inbox && !task.recurrence && task.title.trim().length > 2 && (
             <Suggestion task={task} onAccept={(patch, noDate) => { setSomeday(noDate); upd(patch); }} />
           )}
@@ -426,203 +398,160 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
                   <button className={`chip${!task.date ? ' on' : ''}`} aria-pressed={!task.date} onClick={() => pickDate(undefined)}>Sem data</button>
                 )}
               </div>
-              <label className="prop-line">
-                <span>Data</span>
+              <label className="inline-field">
+                <span>Dia</span>
                 <input type="date" className="input num" value={task.date ?? ''} onChange={(e) => pickDate(e.target.value || undefined)} aria-label="Data" />
               </label>
             </>
           )}
-          <div className="prop-line">
-            <span>Horário</span>
-            <div className="row grow" style={{ gap: 6, minWidth: 0 }}>
-              <input
-                type="time"
-                className="input num"
-               
-                value={task.time ?? ''}
-                onChange={(e) => upd({ time: e.target.value || undefined, ...(task.recurrence ? {} : { date: task.date ?? today }) })}
-                aria-label="Horário de início"
-              />
-              {task.time && (
-                <>
-                  <span className="small muted">até</span>
-                  <input
-                    type="time"
-                    className="input num"
-                   
-                    value={endTime}
-                    onChange={(e) => {
-                      if (!e.target.value || !task.time) return;
-                      const diff = timeToMin(e.target.value) - timeToMin(task.time);
-                      if (diff > 0) upd({ duration: diff });
-                    }}
-                    aria-label="Horário de término"
-                  />
-                  <button className="icon-btn sm" onClick={() => upd({ time: undefined })} aria-label="Tirar o horário" title="Tirar o horário">
-                    <Icon name="x" size={16} />
-                  </button>
-                </>
-              )}
-            </div>
+          <div className="inline-field">
+            <span>{task.time ? 'Das' : 'Hora'}</span>
+            <input
+              type="time"
+              className="input num"
+              value={task.time ?? ''}
+              onChange={(e) => upd({ time: e.target.value || undefined, ...(task.recurrence ? {} : { date: task.date ?? today }) })}
+              aria-label="Horário de início"
+            />
+            {task.time ? (
+              <>
+                <span>até</span>
+                <input
+                  type="time"
+                  className="input num"
+                  value={endTime}
+                  onChange={(e) => {
+                    if (!e.target.value || !task.time) return;
+                    const diff = timeToMin(e.target.value) - timeToMin(task.time);
+                    if (diff > 0) upd({ duration: diff });
+                  }}
+                  aria-label="Horário de término"
+                />
+              </>
+            ) : (
+              <span className="faint">opcional</span>
+            )}
           </div>
-          <div className="prop-line top">
-            <span>{isEvent ? 'Duração' : 'Leva'}</span>
-            <div className="chips">
-              {DURATIONS.map((m) => (
-                <button key={m} className={`chip num${task.duration === m ? ' on' : ''}`} aria-pressed={task.duration === m} onClick={() => upd({ duration: m })}>
-                  {formatDuration(m)}
-                </button>
-              ))}
-              <span className="row small muted" style={{ gap: 6 }}>
-                <NumberField label="Duração em minutos" value={task.duration} onChange={(v) => upd({ duration: v || undefined })} width={64} />
-                min
-              </span>
-            </div>
-          </div>
-        </Section>
+          {task.time && (
+            <button className="link-btn xs" style={{ alignSelf: 'flex-start' }} onClick={() => upd({ time: undefined })}>
+              Tirar o horário
+            </button>
+          )}
+          <span className={`xs ${overdue ? 'warn-text' : 'faint'}`} aria-live="polite">
+            {task.recurrence
+              ? task.time ? `${task.time}–${endTime} nos dias em que repete` : 'Sem horário fixo'
+              : task.date
+                ? `${formatDay(task.date, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário'}${overdue ? ' · atrasada' : ''}`
+                : inbox
+                  ? someday
+                    ? 'Vai para “Tarefas › Quando der”, sem data.'
+                    : placed ? 'Sai do Inbox ao salvar.' : 'Sem dia definido, continua no Inbox.'
+                  : 'Sem data: fica em “Tarefas › Quando der”.'}
+          </span>
+        </div>
 
-        <Section
-          icon="repeat"
-          label="Repetir"
-          value={task.recurrence ? (ruleError ? 'Incompleto' : recurrenceLabel(task.recurrence)) : ''}
-          placeholder="Não repete"
-          tone={ruleError ? 'warn' : undefined}
-          open={open === 'repeat'}
-          onToggle={() => toggle('repeat')}
-        >
+        <div className="field">
+          <span className="label">{isEvent ? 'Duração' : 'Quanto tempo leva'}</span>
+          <div className="chips">
+            {DURATIONS.map((m) => (
+              <button key={m} className={`chip num${task.duration === m ? ' on' : ''}`} aria-pressed={task.duration === m} onClick={() => upd({ duration: m })}>
+                {formatDuration(m)}
+              </button>
+            ))}
+          </div>
+          <div className="inline-field">
+            <span>Outro</span>
+            <NumberField label="Duração em minutos" value={task.duration} onChange={(v) => upd({ duration: v || undefined })} width={72} />
+            <span>min</span>
+          </div>
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor="repeat">Repetir</label>
           <RecurrenceEditor value={task.recurrence} onChange={setRecurrence} defaultAnchor={series ? occurrence : task.date ?? today} />
-        </Section>
+        </div>
 
         {!isEvent && (
-          <Section
-            icon="flag"
-            label="Prioridade"
-            value={task.priority ? <span className={`prio ${task.priority}`}><span className="prio-dot" />{PRIORITY_META[task.priority].label}</span> : ''}
-            placeholder="Definir"
-            open={open === 'priority'}
-            onToggle={() => toggle('priority')}
-          >
+          <div className="field">
+            <span className="label">Prioridade</span>
             <div className="chips">
               {(['essential', 'important', 'optional'] as Priority[]).map((p) => (
-                <button
-                  key={p}
-                  className={`chip${task.priority === p ? ' on' : ''}`}
-                  aria-pressed={task.priority === p}
-                  onClick={() => { upd({ priority: task.priority === p ? undefined : p }); setOpen(undefined); }}
-                >
+                <button key={p} className={`chip${task.priority === p ? ' on' : ''}`} aria-pressed={task.priority === p} onClick={() => upd({ priority: task.priority === p ? undefined : p })}>
                   <span className={`prio ${p}`}><span className="prio-dot" /></span>
                   {PRIORITY_META[p].label}
                 </button>
               ))}
             </div>
-          </Section>
+          </div>
         )}
-      </div>
 
-      {!isEvent && (
-        <div className="steps-block">
-          <div className="row" style={{ justifyContent: 'space-between', minHeight: 32 }}>
-            <span className="label">
-              Passos{task.subtasks.length > 0 && <span className="num"> · {subDone}/{task.subtasks.length}</span>}
-            </span>
-            {task.subtasks.length === 0 && task.title.trim() && (
-              <button className="btn btn-sm btn-soft" onClick={() => addSubtasks(assistant.breakdown(task))}>
-                <Icon name="sparkles" size={14} />
-                Sugerir passos
-              </button>
-            )}
-          </div>
-          {task.subtasks.length > 0 && <ProgressBar value={subDone / task.subtasks.length} label="Passos concluídos" />}
-          <SubtaskList
-            subtasks={task.subtasks}
-            onChange={(subtasks) => upd({ subtasks })}
-            // Fazer não é editar: fora de um rascunho, marcar um passo vale na hora
-            onToggle={!editing ? (sid) => actions.toggleSubtask(task.id, sid) : undefined}
-          />
-          <form
-            className="subtask"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (newSub.trim()) addSubtasks([newSub.trim()]);
-              setNewSub('');
-            }}
-          >
-            <Icon name="plus" size={18} className="faint" />
-            <input value={newSub} onChange={(e) => setNewSub(e.target.value)} placeholder={task.subtasks.length ? 'Adicionar passo' : 'Qual é o primeiro passo?'} aria-label="Novo passo" enterKeyHint="done" />
-            {newSub.trim() && (
-              <button type="submit" className="btn btn-sm btn-soft">Adicionar</button>
-            )}
-          </form>
-        </div>
-      )}
-
-      <div className="props">
-        <Section
-          icon="folder"
-          label="Projeto"
-          value={project ? `${project.emoji} ${project.name}` : ''}
-          placeholder="Nenhum"
-          open={open === 'project'}
-          onToggle={() => toggle('project')}
-        >
-          <div className="chips">
-            <button className={`chip${!task.projectId ? ' on' : ''}`} aria-pressed={!task.projectId} onClick={() => { upd({ projectId: undefined }); setOpen(undefined); }}>
-              Nenhum
-            </button>
-            {projects.filter((p) => !p.archived || p.id === task.projectId).map((p) => (
-              <button key={p.id} className={`chip${task.projectId === p.id ? ' on' : ''}`} aria-pressed={task.projectId === p.id} onClick={() => { upd({ projectId: p.id }); setOpen(undefined); }}>
-                {p.emoji} {p.name}
-              </button>
-            ))}
-          </div>
-          {projects.length === 0 && <p className="xs faint">Você ainda não tem projetos. Crie um na aba Projetos.</p>}
-        </Section>
-
-        {task.kind === 'task' && (
-          <Section
-            icon="hourglass"
-            label="Prazo"
-            value={task.due ? formatDay(task.due, today) : ''}
-            placeholder="Sem prazo"
-            tone={task.due && task.due < today && !isDone ? 'warn' : undefined}
-            open={open === 'due'}
-            onToggle={() => toggle('due')}
-          >
-            <p className="xs faint">Data-limite para entregar. É diferente do dia em que você planeja fazer.</p>
-            <div className="row" style={{ gap: 8 }}>
-              <input type="date" className="input num grow" value={task.due ?? ''} onChange={(e) => upd({ due: e.target.value || undefined })} aria-label="Prazo" />
-              {task.due && (
-                <button className="btn btn-sm btn-ghost" onClick={() => upd({ due: undefined })}>Tirar prazo</button>
+        {!isEvent && (
+          <div className="field">
+            <div className="row" style={{ justifyContent: 'space-between', minHeight: 32 }}>
+              <span className="label">
+                Passos{task.subtasks.length > 0 && <span className="num"> · {subDone}/{task.subtasks.length}</span>}
+              </span>
+              {task.subtasks.length === 0 && task.title.trim() && (
+                <button className="btn btn-sm btn-soft" onClick={() => addSubtasks(assistant.breakdown(task))}>
+                  <Icon name="sparkles" size={14} />
+                  Sugerir passos
+                </button>
               )}
             </div>
-          </Section>
+            {task.subtasks.length > 0 && <ProgressBar value={subDone / task.subtasks.length} label="Passos concluídos" />}
+            <div>
+              <SubtaskList
+                subtasks={task.subtasks}
+                onChange={(subtasks) => upd({ subtasks })}
+                // Fazer não é editar: fora de um rascunho, marcar um passo vale na hora
+                onToggle={!editing ? (sid) => actions.toggleSubtask(task.id, sid) : undefined}
+              />
+              <form
+                className="subtask"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newSub.trim()) addSubtasks([newSub.trim()]);
+                  setNewSub('');
+                }}
+              >
+                <Icon name="plus" size={18} className="faint" />
+                <input value={newSub} onChange={(e) => setNewSub(e.target.value)} placeholder={task.subtasks.length ? 'Adicionar passo' : 'Qual é o primeiro passo?'} aria-label="Novo passo" enterKeyHint="done" />
+                {newSub.trim() && (
+                  <button type="submit" className="btn btn-sm btn-soft">Adicionar</button>
+                )}
+              </form>
+              {task.subtasks.length > 1 && <p className="xs faint">Arraste pela alça <Icon name="grip" size={12} stroke={2.6} /> para mudar a ordem.</p>}
+            </div>
+          </div>
         )}
 
-        <Section
-          icon="note"
-          label="Notas"
-          value={task.notes?.trim().split('\n')[0] ?? ''}
-          placeholder="Adicionar"
-          open={open === 'notes'}
-          onToggle={() => toggle('notes')}
-        >
-          <textarea className="input" rows={4} autoFocus value={task.notes ?? ''} placeholder="Detalhes, links, ideias…" onChange={(e) => upd({ notes: e.target.value })} aria-label="Notas" />
-        </Section>
+        <div className="field">
+          <label className="label" htmlFor="project">Projeto</label>
+          <select id="project" className="input" value={task.projectId ?? ''} onChange={(e) => upd({ projectId: e.target.value || undefined })}>
+            <option value="">Nenhum</option>
+            {projects.filter((p) => !p.archived || p.id === task.projectId).map((p) => (
+              <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
+            ))}
+          </select>
+        </div>
 
-        {!inbox && (
-          <Section icon="list" label="Tipo" value={KIND_LABEL[task.kind]} open={open === 'kind'} onToggle={() => toggle('kind')}>
-            <Segmented<Kind>
-              label="Tipo"
-              value={task.kind}
-              onChange={setKind}
-              options={[
-                { value: 'task', label: 'Tarefa' },
-                { value: 'event', label: 'Compromisso' },
-                { value: 'habit', label: 'Hábito' },
-              ]}
-            />
-          </Section>
+        {task.kind === 'task' && (
+          <div className="field">
+            <label className="label" htmlFor="due">Prazo final</label>
+            <div className="inline-field">
+              <input id="due" type="date" className="input num" value={task.due ?? ''} onChange={(e) => upd({ due: e.target.value || undefined })} />
+              {task.due && (
+                <button className="link-btn xs" onClick={() => upd({ due: undefined })}>Tirar prazo</button>
+              )}
+            </div>
+            <span className="xs faint">Data-limite para entregar — diferente do dia em que você planeja fazer.</span>
+          </div>
         )}
+
+        <div className="field">
+          <label className="label" htmlFor="notes">Notas</label>
+          <textarea id="notes" className="input" rows={3} value={task.notes ?? ''} placeholder="Detalhes, links, ideias…" onChange={(e) => upd({ notes: e.target.value })} />
+        </div>
       </div>
 
       {(task.focusMinutes ?? 0) > 0 && (
@@ -631,35 +560,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         </p>
       )}
     </BottomSheet>
-  );
-}
-
-/** Uma linha do resumo: rótulo à esquerda, valor atual à direita; tocar abre o ajuste logo abaixo. */
-function Section({ icon, label, value, placeholder, note, tone, open, onToggle, children }: {
-  icon: IconName;
-  label: string;
-  value: ReactNode;
-  placeholder?: string;
-  /** complemento curto ao lado do valor (ex.: “atrasada”) */
-  note?: string;
-  tone?: 'warn';
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`prop${open ? ' open' : ''}`}>
-      <button type="button" className="prop-head" aria-expanded={open} onClick={onToggle}>
-        <Icon name={icon} size={18} className="prop-icon" />
-        <span className="prop-label">{label}</span>
-        <span className={`prop-value${value ? '' : ' placeholder'}${tone ? ' warn' : ''}`}>
-          {value || placeholder}
-          {note && ` · ${note}`}
-        </span>
-        <Icon name="chevron-down" size={16} className="prop-chevron" />
-      </button>
-      {open && <div className="prop-body">{children}</div>}
-    </div>
   );
 }
 
