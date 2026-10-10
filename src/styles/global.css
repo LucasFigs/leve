@@ -2570,118 +2570,27 @@ input[type='time'] {
   text-decoration: none;
 }
 
-/* ---------- Detalhes da tarefa: resumo em linhas que abrem ---------- */
-.props {
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  overflow: hidden;
-}
-
-.prop + .prop {
-  border-top: 1px solid var(--border);
-}
-
-.prop-head {
+/* ---------- Detalhes da tarefa ---------- */
+/* Rótulo curto + campo no tamanho natural dele (data e hora não esticam) */
+.inline-field {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 12px 8px 14px;
-  text-align: left;
-}
-
-.prop-icon {
-  color: var(--text-3);
-  flex-shrink: 0;
-}
-
-.prop-label {
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: var(--fs-sm);
   color: var(--text-2);
-  flex-shrink: 0;
 }
 
-.prop-value {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
-  font-weight: 600;
-  font-size: var(--fs-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.inline-field input[type='date'] {
+  width: 172px;
 }
 
-.prop-value.placeholder {
-  font-weight: 500;
-  color: var(--text-3);
+.inline-field input[type='time'] {
+  width: 122px;
 }
 
-.prop-value.warn {
+.warn-text {
   color: var(--red);
-}
-
-.prop-value .prio {
-  display: inline-flex;
-}
-
-.prop-chevron {
-  color: var(--text-3);
-  flex-shrink: 0;
-  transition: transform var(--dur) var(--ease);
-}
-
-.prop.open .prop-chevron {
-  transform: rotate(180deg);
-}
-
-.prop.open {
-  background: var(--surface);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.prop-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 4px 14px 16px;
-  animation: screen-in 180ms var(--ease);
-}
-
-/* rótulo curto à esquerda, controle à direita */
-.prop-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-
-.prop-line.top {
-  align-items: flex-start;
-}
-
-.prop-line > span:first-child {
-  width: 64px;
-  flex-shrink: 0;
-}
-
-.prop-line.top > span:first-child {
-  padding-top: 6px;
-}
-
-.prop-line > .input {
-  flex: 1;
-  min-width: 0;
-}
-
-.steps-block {
-  margin: 18px 0 14px;
-}
-
-.steps-block .progress {
-  margin: 2px 0 4px;
 }
 
 .task-hint {
@@ -2707,6 +2616,7 @@ input[type='time'] {
 
 .task-hint.accent {
   margin-top: 0;
+  margin-bottom: 2px;
   background: var(--accent-soft);
 }
 
@@ -2732,21 +2642,4 @@ input[type='time'] {
 
 .foot-actions .btn {
   min-height: 44px;
-}
-
-.props + .props {
-  margin-top: 12px;
-}
-
-/* Horário início–fim lado a lado: sem o ícone do relógio para o número não cortar (tocar no campo já abre o seletor) */
-.prop-line input[type='time'] {
-  flex: 1;
-  min-width: 0;
-  padding-left: 10px;
-  padding-right: 6px;
-  text-align: center;
-}
-
-.prop-line input[type='time']::-webkit-calendar-picker-indicator {
-  display: none;
 }
