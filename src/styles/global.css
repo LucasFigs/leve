@@ -1581,6 +1581,51 @@ input[type='time'] {
   color: var(--on-accent);
 }
 
+/* ── Accordion da visão semana ── */
+.week-accordion {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color var(--dur);
+}
+
+.week-accordion.open {
+  border-color: var(--border-strong);
+}
+
+.week-accordion-head {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  gap: 8px;
+  background: var(--surface-2);
+  transition: background var(--dur);
+  cursor: pointer;
+}
+
+.week-accordion-head:hover {
+  background: var(--surface-3);
+}
+
+.week-accordion.open .week-accordion-head {
+  background: var(--surface-3);
+}
+
+.week-acc-chevron {
+  transition: transform var(--dur) var(--ease);
+  flex-shrink: 0;
+}
+
+.week-acc-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.week-accordion-body {
+  padding: 8px 10px 10px;
+  animation: screen-in 180ms var(--ease);
+}
+
 .dots {
   display: flex;
   gap: 3px;

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   addDays, formatDay, formatDuration, fromISODate, monthMatrix, MONTHS_LONG, startOfWeek, toISODate, todayISO, WEEKDAYS_SHORT,
 } from '../domain/dates';
@@ -136,7 +136,7 @@ function DayView({ date }: { date: string }) {
   );
 }
 
-function WeekView({ date, onPick }: { date: string; onPick: (d: string) => void }) {
+function WeekView({ date, onPick: _onPick }: { date: string; onPick: (d: string) => void }) {
   const tasks = useStore((s) => s.tasks);
   const fallback = useStore((s) => s.settings.defaultDuration);
   const today = todayISO();
@@ -146,39 +146,100 @@ function WeekView({ date, onPick }: { date: string; onPick: (d: string) => void 
     [tasks, start, fallback],
   );
 
+  // Dias expandidos: começa com o dia de hoje (se estiver na semana atual)
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const todayInWeek = days.some((d) => d.date === today);
+    return new Set(todayInWeek ? [today] : [days[0]?.date ?? '']);
+  });
+
+  // Ao navegar para outra semana, reinicia o estado de expansão
+  useEffect(() => {
+    const todayInWeek = days.some((d) => d.date === today);
+    setExpanded(new Set(todayInWeek ? [today] : [days[0]?.date ?? '']));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start]);
+
+  const toggle = (d: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+
+  // Ordena tasks cronologicamente: com horário primeiro (por HH:mm), depois sem horário
+  const sortItems = (items: ReturnType<typeof itemsForDate>) =>
+    [...items].sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time);
+      if (a.time) return -1;
+      if (b.time) return 1;
+      return 0;
+    });
+
   return (
     <>
       <div className="week-strip" style={{ marginBottom: 16 }}>
         {days.map(({ date: d, items }) => (
-          <button key={d} className={`week-day${d === today ? ' today' : ''}`} aria-pressed={false} onClick={() => onPick(d)} aria-label={`${formatDay(d, today, { long: true })}, ${items.length} itens`}>
+          <button
+            key={d}
+            className={`week-day${d === today ? ' today' : ''}${expanded.has(d) ? ' active' : ''}`}
+            aria-pressed={expanded.has(d)}
+            onClick={() => toggle(d)}
+            aria-label={`${formatDay(d, today, { long: true })}, ${items.length} itens`}
+          >
             {WEEKDAYS_SHORT[fromISODate(d).getDay()]}
             <b className="num">{fromISODate(d).getDate()}</b>
             <Dots items={items} />
           </button>
         ))}
       </div>
-      <div className="stack" style={{ gap: 20 }}>
-        {days.map(({ date: d, items }) => (
-          <section key={d}>
-            <SectionHead
-              title={<span style={{ color: d === today ? 'var(--accent)' : undefined }}>{formatDay(d, today, { long: true })}</span>}
-              action={
-                <button className="btn btn-sm btn-ghost" onClick={() => openSheet({ type: 'quickAdd', defaults: { date: d } })} aria-label={`Adicionar em ${formatDay(d, today)}`}>
-                  <Icon name="plus" size={16} />
-                </button>
-              }
-            />
-            {items.length ? (
-              <div className="list">
-                {items.map((i) => (
-                  <TaskCard key={i.task.id + d} task={i.task} date={d} done={i.done} showTime={items.some((x) => x.time)} exitOnDone={false} />
-                ))}
-              </div>
-            ) : (
-              <p className="small faint" style={{ padding: '4px 2px' }}>Livre</p>
-            )}
-          </section>
-        ))}
+
+      <div className="stack" style={{ gap: 8 }}>
+        {days.map(({ date: d, items }) => {
+          const isOpen = expanded.has(d);
+          const sorted = sortItems(items);
+          const showTime = items.some((x) => x.time);
+          return (
+            <section key={d} className={`week-accordion${isOpen ? ' open' : ''}`}>
+              <button
+                className="week-accordion-head"
+                aria-expanded={isOpen}
+                onClick={() => toggle(d)}
+              >
+                <span style={{ color: d === today ? 'var(--accent)' : undefined, fontWeight: 650, fontSize: 'var(--fs-sm)' }}>
+                  {formatDay(d, today, { long: true })}
+                </span>
+                <span className="row" style={{ gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+                  {items.length > 0 && (
+                    <span className="xs faint">{items.filter((i) => !i.done).length > 0 ? `${items.filter((i) => !i.done).length} pendente${items.filter((i) => !i.done).length !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
+                  )}
+                  <button
+                    className="icon-btn sm"
+                    onClick={(e) => { e.stopPropagation(); openSheet({ type: 'quickAdd', defaults: { date: d } }); }}
+                    aria-label={`Adicionar em ${formatDay(d, today)}`}
+                  >
+                    <Icon name="plus" size={15} />
+                  </button>
+                  <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="week-accordion-body">
+                  {sorted.length ? (
+                    <div className="list">
+                      {sorted.map((i) => (
+                        <TaskCard key={i.task.id + d} task={i.task} date={d} done={i.done} showTime={showTime} exitOnDone={false} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="small faint" style={{ padding: '4px 2px 8px' }}>Dia livre 🌤️</p>
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
     </>
   );
