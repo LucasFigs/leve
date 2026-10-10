@@ -10,6 +10,8 @@ import { Segmented, SectionHead, Switch } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
 import { formatPhone } from '../domain/phone';
+import { reminderPermission, requestReminderPermission } from '../services/reminders';
+import { disablePush, enablePush, pushConfigured } from '../services/push';
 
 const LUNCH_DURATIONS = [30, 45, 60, 90, 120];
 
@@ -145,6 +147,63 @@ export function ProfileScreen() {
             <Switch checked={settings.nudges} onChange={(v) => set({ nudges: v })} label="Sugestões inteligentes" />
           </div>
         </div>
+      </section>
+
+      <section className="section">
+        <SectionHead title="Lembretes" />
+        <div className="list">
+          <div className="settings-row">
+            <span>
+              Avisar antes do horário
+              <span className="xs faint" style={{ display: 'block' }}>Notificação de tarefas e compromissos com hora marcada</span>
+            </span>
+            <Switch
+              checked={!!settings.reminders && reminderPermission() === 'granted'}
+              label="Avisar antes do horário"
+              onChange={async (v) => {
+                if (!v) {
+                  set({ reminders: false });
+                  disablePush();
+                  return;
+                }
+                if (await requestReminderPermission()) {
+                  set({ reminders: true });
+                  const push = await enablePush();
+                  toast(
+                    push === 'ok'
+                      ? 'Lembretes ligados — chegam mesmo com o app fechado'
+                      : push === 'error'
+                        ? 'Lembretes ligados, mas não consegui registrar este aparelho para avisos com o app fechado. Tente de novo com internet.'
+                        : 'Lembretes ligados neste aparelho',
+                  );
+                } else {
+                  toast(
+                    reminderPermission() === 'unsupported'
+                      ? 'Este navegador não permite notificações. No iPhone, instale o app na tela inicial primeiro.'
+                      : 'As notificações estão bloqueadas. Libere nas configurações do navegador ou do app.',
+                  );
+                }
+              }}
+            />
+          </div>
+          {settings.reminders && reminderPermission() === 'granted' && (
+            <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+              <span>Quanto tempo antes</span>
+              <div className="chips">
+                {[5, 10, 15, 30, 60].map((m) => (
+                  <button key={m} className={`chip${(settings.reminderLead ?? 10) === m ? ' on' : ''}`} aria-pressed={(settings.reminderLead ?? 10) === m} onClick={() => set({ reminderLead: m })}>
+                    {formatDuration(m)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <p className="xs faint" style={{ marginTop: 8 }}>
+          {pushConfigured
+            ? 'Os avisos chegam mesmo com o app fechado. Ligue em cada aparelho em que quiser receber. No iPhone, o app precisa estar instalado na tela inicial.'
+            : 'Os avisos chegam enquanto o app está aberto ou em segundo plano há pouco tempo. Com o app totalmente fechado, o celular não deixa avisar.'}
+        </p>
       </section>
 
       <section className="section">

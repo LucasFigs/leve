@@ -18,6 +18,8 @@ import { TaskSheet } from './sheets/TaskSheet';
 import { BreakdownSheet, EventMissedSheet, PlanSheet, ReplanSheet, ReviewSheet, WeekSheet } from './sheets/PlanningSheets';
 import { ProjectSheet, QuickAddSheet, SearchSheet } from './sheets/OtherSheets';
 import { AccountMenuSheet } from './sheets/AccountMenu';
+import { startReminders } from './services/reminders';
+import { refreshPush } from './services/push';
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'today', label: 'Hoje', icon: 'sun' },
@@ -95,6 +97,7 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
 export default function App() {
   useTheme();
   useShortcuts();
+  useEffect(() => startReminders(), []);
   const onboarded = useStore((s) => s.settings.onboarded);
   const tasks = useStore((s) => s.tasks);
   const tab = useUI((u) => u.tab);
@@ -103,6 +106,9 @@ export default function App() {
   const auth = useCloud((c) => c.auth);
   const recovery = useCloud((c) => c.recovery);
   const syncStatus = useCloud((c) => c.status);
+  useEffect(() => {
+    if (auth === 'in') refreshPush();
+  }, [auth]);
 
   if (cloudEnabled) {
     if (auth === 'loading') return <Splash text="" />;

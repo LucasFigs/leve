@@ -68,5 +68,24 @@ src/
   sheets/      Detalhe da tarefa, Organizar dia/semana/capturas, Replanejar, Dividir, Busca
 ```
 
-Próximos passos naturais: `Assistant` com LLM,
-integração com Google/Apple Calendar, notificações push via service worker, widgets.
+## Lembretes (notificação antes do horário)
+
+Em **Perfil › Lembretes** o app avisa alguns minutos antes de tarefas e compromissos com hora marcada.
+
+- **Sem configuração extra:** o aviso só chega com o app aberto (ou há pouco em segundo plano).
+- **Com push:** chega mesmo com o app fechado, no Android e no iPhone (iOS 16.4+, com o app instalado na tela inicial).
+
+Para ligar o push (uma vez por projeto):
+
+1. No `.env.local`, preencha `SUPABASE_ACCESS_TOKEN` (o mesmo do `setup:supabase`).
+2. Rode `npm run setup:push`. Ele gera as chaves, cria as tabelas (`supabase/push.sql`), publica a função
+   `send-reminders` e agenda a execução a cada minuto.
+3. Copie a `VITE_VAPID_PUBLIC_KEY` que o script mostra para as variáveis de ambiente da Vercel e faça um novo deploy.
+4. Em cada aparelho: Perfil › Lembretes › ligue “Avisar antes do horário”.
+
+Como funciona: cada aparelho guarda sua inscrição em `push_subscriptions`. A cada minuto o Supabase chama a função
+(`supabase/functions/send-reminders`), que usa as mesmas regras do app (`src/domain/reminders.ts`) para achar o que
+está para começar e envia a notificação. Mudou alguma regra em `src/domain`? Rode `npm run setup:push` de novo para
+republicar a função.
+
+Próximos passos naturais: `Assistant` com LLM, integração com Google/Apple Calendar, widgets.

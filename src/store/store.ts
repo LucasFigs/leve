@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lunchStart: '12:00',
   lunchEnd: '13:00',
   nudges: true,
+  reminders: false,
+  reminderLead: 10,
   onboarded: false,
 };
 

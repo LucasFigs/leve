@@ -507,6 +507,8 @@ export async function signOut() {
   // Envia o que faltava antes de sair
   await enqueue(push);
   stop();
+  // Este aparelho deixa de receber os lembretes desta conta
+  await import('../services/push').then((m) => m.disablePush()).catch(() => {});
   await supabase.auth.signOut().catch(() => {});
   writeJournal({ dirty: [], deleted: [] });
   localRepository.clear();
