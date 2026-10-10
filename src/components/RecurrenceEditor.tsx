@@ -1,11 +1,11 @@
 /** Editor de repetição no estilo Google Agenda / Teams: atalhos + “Personalizado…”. */
 import { useState } from 'react';
 import type { Freq, Recurrence } from '../domain/types';
-import { addDays, formatDay, fromISODate, MONTHS_LONG, todayISO, WEEKDAYS_LONG, WEEKDAYS_SHORT } from '../domain/dates';
+import { addDays, formatDay, fromISODate, MONTHS_LONG, todayISO, WEEKDAYS_SHORT } from '../domain/dates';
 import { freqOf, intervalOf, nextOccurrence, nthOfMonth, ordinalWeekday, recurrenceError, recurrenceLabel, UNIT_LABEL } from '../domain/recurrence';
 import { NumberField } from './ui';
 
-type Preset = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'monthlyNth' | 'monthlyLast' | 'yearly' | 'custom';
+type Preset = 'none' | 'daily' | 'weekdays' | 'weekly' | 'custom';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -16,47 +16,26 @@ function anchorNth(anchor: string) {
 }
 
 function presetRule(p: Preset, anchor: string): Recurrence | undefined {
-  const d = fromISODate(anchor);
   switch (p) {
     case 'daily':
       return { freq: 'daily', anchor };
     case 'weekdays':
       return { freq: 'weekly', weekdays: [1, 2, 3, 4, 5], anchor };
     case 'weekly':
-      return { freq: 'weekly', weekdays: [d.getDay()], anchor };
-    case 'monthly':
-      return { freq: 'monthly', monthDay: d.getDate(), anchor };
-    case 'monthlyNth':
-      return { freq: 'monthly', nth: anchorNth(anchor), weekday: d.getDay(), anchor };
-    case 'monthlyLast':
-      return { freq: 'monthly', nth: -1, weekday: d.getDay(), anchor };
-    case 'yearly':
-      return { freq: 'yearly', month: d.getMonth(), monthDay: d.getDate(), anchor };
+      return { freq: 'weekly', weekdays: [fromISODate(anchor).getDay()], anchor };
     default:
       return undefined;
   }
 }
 
-/** Só a regra (sem início/fim), para comparar com os atalhos. */
-function shape(r: Recurrence) {
-  const a = fromISODate(r.anchor);
-  const f = freqOf(r);
-  return JSON.stringify({
-    f,
-    n: intervalOf(r),
-    w: f === 'weekly' ? [...(r.weekdays?.length ? r.weekdays : [a.getDay()])].sort() : undefined,
-    md: f === 'monthly' || f === 'yearly' ? (r.nth != null ? undefined : r.monthDay ?? a.getDate()) : undefined,
-    nth: r.nth,
-    wd: r.nth != null ? r.weekday : undefined,
-    m: f === 'yearly' ? r.month ?? a.getMonth() : undefined,
-  });
-}
-
+/** Atalho que corresponde à regra; o resto (a cada N, mensal, anual…) é “Personalizado”. */
 function detectPreset(r?: Recurrence): Preset {
   if (!r) return 'none';
-  const s = shape(r);
-  const presets: Preset[] = ['daily', 'weekdays', 'weekly', 'monthly', 'monthlyNth', 'monthlyLast', 'yearly'];
-  return presets.find((p) => shape(presetRule(p, r.anchor)!) === s) ?? 'custom';
+  if (intervalOf(r) !== 1) return 'custom';
+  const f = freqOf(r);
+  if (f === 'daily') return 'daily';
+  if (f !== 'weekly') return 'custom';
+  return [...(r.weekdays ?? [])].sort().join() === '1,2,3,4,5' ? 'weekdays' : 'weekly';
 }
 
 /** Regra base de uma frequência, a partir da data de início. */
@@ -92,42 +71,36 @@ interface Props {
 
 export function RecurrenceEditor({ value, onChange, defaultAnchor }: Props) {
   const detected = detectPreset(value);
-  const [custom, setCustom] = useState(detected === 'custom');
-  const preset: Preset = !value ? 'none' : custom ? 'custom' : detected;
+  // A opção escolhida fica fixa enquanto você ajusta (marcar seg–sex em “Dias da semana” não troca de modo)
+  const [mode, setMode] = useState<Preset>(detected);
+  const preset: Preset = !value ? 'none' : mode === 'none' ? detected : mode;
+  const custom = preset === 'custom';
   const anchor = value?.anchor ?? defaultAnchor;
-  const d = fromISODate(anchor);
-  const wd = d.getDay();
-  const { last } = nthOfMonth(anchor);
-  const nth = anchorNth(anchor);
   const ends = value ? { until: value.until, count: value.count } : {};
 
   const pick = (p: Preset) => {
     if (p === 'custom') {
-      setCustom(true);
+      setMode('custom');
       onChange(value ?? { ...presetRule('weekly', anchor)!, ...ends });
       return;
     }
-    setCustom(false);
+    setMode(p);
     const r = presetRule(p, anchor);
     onChange(r && { ...r, ...ends });
   };
 
   const setAnchor = (iso: string) => {
     if (!value || !iso) return;
-    const r = custom ? reanchor(value, iso) : { ...presetRule(detected, iso)!, until: value.until, count: value.count };
-    onChange(r);
+    // Nos atalhos, os dias escolhidos ficam como estão; no personalizado, o dia do mês/ano acompanha o início
+    onChange(custom ? reanchor(value, iso) : { ...value, anchor: iso });
   };
 
   const options: { value: Preset; label: string }[] = [
     { value: 'none', label: 'Não repete' },
     { value: 'daily', label: 'Todo dia' },
     { value: 'weekdays', label: 'Dias úteis (seg a sex)' },
-    { value: 'weekly', label: `Toda semana ${wd === 0 || wd === 6 ? 'no' : 'na'} ${WEEKDAYS_LONG[wd]}` },
-    { value: 'monthly', label: `Todo mês no dia ${d.getDate()}` },
-    { value: 'monthlyNth', label: `Todo mês ${wd === 0 || wd === 6 ? 'no' : 'na'} ${ordinalWeekday(nth, wd)}` },
-    ...(last && nth !== -1 ? [{ value: 'monthlyLast' as Preset, label: `Todo mês ${wd === 0 || wd === 6 ? 'no' : 'na'} ${ordinalWeekday(-1, wd)}` }] : []),
-    { value: 'yearly', label: `Todo ano em ${d.getDate()} de ${MONTHS_LONG[d.getMonth()]}` },
-    { value: 'custom', label: 'Personalizado…' },
+    { value: 'weekly', label: 'Dias da semana…' },
+    { value: 'custom', label: 'Personalizado (a cada N dias, mensal, anual…)' },
   ];
 
   const error = recurrenceError(value);
@@ -157,6 +130,7 @@ export function RecurrenceEditor({ value, onChange, defaultAnchor }: Props) {
             <input type="date" className="input num grow" value={anchor} onChange={(e) => setAnchor(e.target.value)} aria-label="Começa em" />
           </label>
 
+          {preset === 'weekly' && <WeekdayChips value={value} onChange={onChange} />}
           {preset === 'custom' && <CustomRule value={value} onChange={onChange} />}
 
           <EndsField value={value} onChange={onChange} />
@@ -216,25 +190,7 @@ function CustomRule({ value, onChange }: { value: Recurrence; onChange: (r: Recu
         </select>
       </div>
 
-      {f === 'weekly' && (
-        <div className="chips" role="group" aria-label="Dias da semana">
-          {[1, 2, 3, 4, 5, 6, 0].map((day) => {
-            const cur = value.weekdays ?? [wd];
-            const on = cur.includes(day);
-            return (
-              <button
-                key={day}
-                type="button"
-                className={`chip${on ? ' on' : ''}`}
-                aria-pressed={on}
-                onClick={() => onChange({ ...value, weekdays: on ? cur.filter((x) => x !== day) : [...cur, day] })}
-              >
-                {WEEKDAYS_SHORT[day]}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {f === 'weekly' && <WeekdayChips value={value} onChange={onChange} />}
 
       {(f === 'monthly' || f === 'yearly') && (
         <div className="chips" role="group" aria-label="Em qual dia">
@@ -249,6 +205,28 @@ function CustomRule({ value, onChange }: { value: Recurrence; onChange: (r: Recu
       {(f === 'monthly' || f === 'yearly') && (
         <p className="xs faint" style={{ marginTop: -4 }}>O dia vem da data de início — mude “Começa em” para escolher outro.</p>
       )}
+    </div>
+  );
+}
+
+function WeekdayChips({ value, onChange }: { value: Recurrence; onChange: (r: Recurrence) => void }) {
+  const cur = value.weekdays ?? [fromISODate(value.anchor).getDay()];
+  return (
+    <div className="chips" role="group" aria-label="Dias da semana">
+      {[1, 2, 3, 4, 5, 6, 0].map((day) => {
+        const on = cur.includes(day);
+        return (
+          <button
+            key={day}
+            type="button"
+            className={`chip${on ? ' on' : ''}`}
+            aria-pressed={on}
+            onClick={() => onChange({ ...value, weekdays: on ? cur.filter((x) => x !== day) : [...cur, day] })}
+          >
+            {WEEKDAYS_SHORT[day]}
+          </button>
+        );
+      })}
     </div>
   );
 }

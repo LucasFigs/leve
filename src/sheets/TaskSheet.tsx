@@ -405,7 +405,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
             </>
           )}
           <div className="inline-field">
-            <span>{task.time ? 'Das' : 'Hora'}</span>
+            <span>Hora</span>
             <input
               type="time"
               className="input num"
@@ -414,29 +414,11 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
               aria-label="Horário de início"
             />
             {task.time ? (
-              <>
-                <span>até</span>
-                <input
-                  type="time"
-                  className="input num"
-                  value={endTime}
-                  onChange={(e) => {
-                    if (!e.target.value || !task.time) return;
-                    const diff = timeToMin(e.target.value) - timeToMin(task.time);
-                    if (diff > 0) upd({ duration: diff });
-                  }}
-                  aria-label="Horário de término"
-                />
-              </>
+              <button className="link-btn xs" onClick={() => upd({ time: undefined })}>Tirar o horário</button>
             ) : (
               <span className="faint">opcional</span>
             )}
           </div>
-          {task.time && (
-            <button className="link-btn xs" style={{ alignSelf: 'flex-start' }} onClick={() => upd({ time: undefined })}>
-              Tirar o horário
-            </button>
-          )}
           <span className={`xs ${overdue ? 'warn-text' : 'faint'}`} aria-live="polite">
             {task.recurrence
               ? task.time ? `${task.time}–${endTime} nos dias em que repete` : 'Sem horário fixo'

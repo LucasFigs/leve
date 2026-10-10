@@ -802,6 +802,24 @@ input[type='time'] {
   border-radius: 8px;
 }
 
+/* Compromisso: quadrado na cor de destaque, com um calendário enquanto não foi marcado */
+.check.event {
+  border-radius: 7px;
+  border-color: var(--accent);
+}
+
+.check.event.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.check svg.check-hint {
+  position: absolute;
+  opacity: 0.85;
+  transform: none;
+  color: var(--accent);
+}
+
 @keyframes check-pop {
   40% {
     transform: scale(1.18);
