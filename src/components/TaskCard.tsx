@@ -3,7 +3,7 @@ import type { Task } from '../domain/types';
 import { formatDay, formatDuration, todayISO } from '../domain/dates';
 import { recurrenceLabel } from '../domain/parser';
 import { actions, useStore } from '../store/store';
-import { openSheet } from '../store/ui';
+import { openSheet, toast } from '../store/ui';
 import { Checkbox, PriorityBadge } from './ui';
 import { Icon } from './Icon';
 import { completeWithFeedback } from './feedback';
@@ -44,15 +44,28 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
     } else completeWithFeedback(task.id, occurrence);
   };
 
+  /** Compromisso: um toque marca que aconteceu (para “não aconteceu”, abra o compromisso). */
+  const toggleEvent = () => {
+    if (isDone && !missed) {
+      actions.markEvent(task.id, occurrence);
+      return;
+    }
+    actions.markEvent(task.id, occurrence, 'held');
+    toast('Marcado como realizado', { label: 'Desfazer', run: () => actions.undo() });
+  };
+
   const label = `${task.title}${task.time ? `, às ${task.time}` : ''}`;
 
   return (
     <div className={`task${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`}>
       {showTime && <span className="task-time num">{task.time ?? '—'}</span>}
       {isEvent ? (
-        <span className="check" style={{ borderStyle: 'dashed', opacity: isDone ? 0.4 : 1 }} aria-hidden="true">
-          <Icon name="calendar" size={12} className="faint" />
-        </span>
+        <Checkbox
+          checked={isDone && !missed}
+          onToggle={toggleEvent}
+          event
+          label={`${isDone && !missed ? 'Desmarcar' : 'Marcar que aconteceu'}: ${task.title}`}
+        />
       ) : (
         <Checkbox
           checked={isDone || leaving}

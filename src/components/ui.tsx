@@ -56,11 +56,13 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
   return <button type="button" role="switch" className="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} />;
 }
 
-export function Checkbox({ checked, onToggle, tone, habit, label }: {
+export function Checkbox({ checked, onToggle, tone, habit, event, label }: {
   checked: boolean;
   onToggle: () => void;
   tone?: Priority;
   habit?: boolean;
+  /** compromisso: quadrado com calendário, para não confundir com tarefa */
+  event?: boolean;
   label: string;
 }) {
   return (
@@ -69,7 +71,7 @@ export function Checkbox({ checked, onToggle, tone, habit, label }: {
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
-      className={`check${checked ? ' on' : ''}${tone && !checked ? ' ' + tone : ''}${habit ? ' habit' : ''}`}
+      className={`check${checked ? ' on' : ''}${tone && !checked ? ' ' + tone : ''}${habit ? ' habit' : ''}${event ? ' event' : ''}`}
       onClick={(e) => {
         e.stopPropagation();
         if (!checked && navigator.vibrate) navigator.vibrate(8);
@@ -77,6 +79,7 @@ export function Checkbox({ checked, onToggle, tone, habit, label }: {
       }}
     >
       <Icon name="check" size={14} stroke={3} />
+      {event && !checked && <Icon name="calendar" size={13} stroke={2} className="check-hint" />}
     </button>
   );
 }
