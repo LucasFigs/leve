@@ -7,7 +7,7 @@ import { durationOf, inboxTasks } from '../domain/selectors';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
 import { actions, getState, uid, useStore } from '../store/store';
-import { closeSheet, openSheet, toast } from '../store/ui';
+import { closeAllSheets, closeSheet, openSheet, toast } from '../store/ui';
 import { BottomSheet } from '../components/BottomSheet';
 import { Checkbox, EmptyState, Option } from '../components/ui';
 import { Icon } from '../components/Icon';
@@ -385,12 +385,12 @@ export function ReplanSheet({ id, date }: { id: string; date: string }) {
 
   const move = (d: string, time?: string) => {
     actions.postpone(id, 'custom', { date: d, time }, date);
-    closeSheet();
+    closeAllSheets();
     toast(`Movida para ${formatDay(d).toLowerCase()}${time ? ` às ${time}` : ' · sem horário'}`, { label: 'Desfazer', run: () => actions.undo() });
   };
   const run = (mode: 'later' | 'unschedule' | 'tomorrow') => {
     const label = actions.postpone(id, mode, undefined, date);
-    closeSheet();
+    closeAllSheets();
     toast(label, { label: 'Desfazer', run: () => actions.undo() });
   };
   const chooseDay = (d: string) => {
@@ -630,7 +630,7 @@ export function EventMissedSheet({ id, date }: { id: string; date: string }) {
 
   const reschedule = (d: string, time: string) => {
     actions.postpone(id, 'custom', { date: d, time }, date);
-    closeSheet();
+    closeAllSheets();
     toast(`Remarcado para ${formatDay(d).toLowerCase()} às ${time}${task.recurrence ? ' (só esta vez)' : ''}`, { label: 'Desfazer', run: () => actions.undo() });
   };
 
@@ -661,7 +661,7 @@ export function EventMissedSheet({ id, date }: { id: string; date: string }) {
           sub="Fica registrado que não aconteceu"
           onClick={() => {
             actions.markEvent(id, date, 'missed');
-            closeSheet();
+            closeAllSheets();
             toast('Marcado como “não aconteceu”', { label: 'Desfazer', run: () => actions.undo() });
           }}
         />

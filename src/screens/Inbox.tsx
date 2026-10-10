@@ -170,6 +170,9 @@ function InboxItem({ task }: { task: Task }) {
         <button className="icon-btn sm" onClick={() => openSheet({ type: 'task', id: task.id })} aria-label={`Editar ${task.title}`}>
           <Icon name="edit" size={16} />
         </button>
+        <button className="icon-btn sm btn-danger" onClick={() => removeWithFeedback(task.id)} aria-label={`Excluir ${task.title}`} title="Excluir">
+          <Icon name="trash" size={16} />
+        </button>
       </div>
 
       {open && !leaving && (

@@ -44,3 +44,39 @@ self.addEventListener('fetch', (e) => {
     }),
   );
 });
+
+// Lembrete enviado pelo servidor (chega mesmo com o app fechado)
+self.addEventListener('push', (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch (_) {
+    d = { body: e.data && e.data.text() };
+  }
+  e.waitUntil(
+    self.registration.showNotification(d.title || 'Leve', {
+      body: d.body || '',
+      tag: d.tag,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: d.data || {},
+    }),
+  );
+});
+
+// Toque num lembrete: traz o app para a frente e abre a tarefa
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const data = e.notification.data || {};
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const client = list[0];
+      if (client) {
+        client.postMessage({ type: 'open-task', taskId: data.taskId, date: data.date });
+        return client.focus();
+      }
+      const q = data.taskId ? `/?task=${encodeURIComponent(data.taskId)}${data.date ? `&date=${data.date}` : ''}` : '/';
+      return self.clients.openWindow(q);
+    }),
+  );
+});

@@ -71,6 +71,11 @@ export function closeSheet() {
   });
 }
 
+/** Fecha tudo, inclusive a folha de onde esta foi aberta (ex.: reagendou a tarefa — pronto). */
+export function closeAllSheets() {
+  setUI({ sheet: undefined, sheetStack: [] });
+}
+
 export function goTo(tab: Tab) {
   setUI({
     tab,

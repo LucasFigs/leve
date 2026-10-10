@@ -95,6 +95,10 @@ export interface Settings {
   lunchStart: string;
   lunchEnd: string;
   nudges: boolean;
+  /** avisar antes de tarefas e compromissos com horário */
+  reminders?: boolean;
+  /** quantos minutos antes avisar */
+  reminderLead?: number;
   onboarded: boolean;
 }
 
