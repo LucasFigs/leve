@@ -7,6 +7,8 @@ import { Icon } from './Icon';
 interface Props {
   subtasks: Subtask[];
   onChange: (subtasks: Subtask[]) => void;
+  /** marcar/desmarcar um passo por fora do rascunho (vale na hora) */
+  onToggle?: (id: string) => void;
 }
 
 const moveItem = <T,>(list: T[], from: number, to: number) => {
@@ -16,7 +18,7 @@ const moveItem = <T,>(list: T[], from: number, to: number) => {
   return next;
 };
 
-export function SubtaskList({ subtasks, onChange }: Props) {
+export function SubtaskList({ subtasks, onChange, onToggle }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const [dragId, setDragId] = useState<string>();
   // Refs para os ouvintes da janela sempre verem a lista atual
@@ -83,7 +85,7 @@ export function SubtaskList({ subtasks, onChange }: Props) {
           )}
           <Checkbox
             checked={s.done}
-            onToggle={() => onChange(subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))}
+            onToggle={() => (onToggle ? onToggle(s.id) : onChange(subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x))))}
             label={`Concluir passo: ${s.title}`}
           />
           <input value={s.title} onChange={(e) => onChange(subtasks.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))} aria-label="Passo" />

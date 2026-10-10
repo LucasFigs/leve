@@ -2569,3 +2569,184 @@ input[type='time'] {
 .task.missed .task-title {
   text-decoration: none;
 }
+
+/* ---------- Detalhes da tarefa: resumo em linhas que abrem ---------- */
+.props {
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.prop + .prop {
+  border-top: 1px solid var(--border);
+}
+
+.prop-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px 8px 14px;
+  text-align: left;
+}
+
+.prop-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.prop-label {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.prop-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-value.placeholder {
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.prop-value.warn {
+  color: var(--red);
+}
+
+.prop-value .prio {
+  display: inline-flex;
+}
+
+.prop-chevron {
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: transform var(--dur) var(--ease);
+}
+
+.prop.open .prop-chevron {
+  transform: rotate(180deg);
+}
+
+.prop.open {
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.prop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 14px 16px;
+  animation: screen-in 180ms var(--ease);
+}
+
+/* rótulo curto à esquerda, controle à direita */
+.prop-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.prop-line.top {
+  align-items: flex-start;
+}
+
+.prop-line > span:first-child {
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.prop-line.top > span:first-child {
+  padding-top: 6px;
+}
+
+.prop-line > .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.steps-block {
+  margin: 18px 0 14px;
+}
+
+.steps-block .progress {
+  margin: 2px 0 4px;
+}
+
+.task-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.task-hint b {
+  color: var(--text);
+}
+
+.task-hint > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.task-hint.accent {
+  margin-top: 0;
+  background: var(--accent-soft);
+}
+
+/* Rodapé: uma ação principal em cima, ações secundárias discretas embaixo */
+.foot-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.foot-actions {
+  display: flex;
+  justify-content: space-around;
+  gap: 4px;
+}
+
+.foot-actions .btn {
+  flex: 1;
+  padding: 0 6px;
+  color: var(--text-2);
+}
+
+.foot-actions .btn {
+  min-height: 44px;
+}
+
+.props + .props {
+  margin-top: 12px;
+}
+
+/* Horário início–fim lado a lado: sem o ícone do relógio para o número não cortar (tocar no campo já abre o seletor) */
+.prop-line input[type='time'] {
+  flex: 1;
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 6px;
+  text-align: center;
+}
+
+.prop-line input[type='time']::-webkit-calendar-picker-indicator {
+  display: none;
+}
