@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   addDays, formatDay, formatDuration, fromISODate, monthMatrix, MONTHS_LONG, startOfWeek, toISODate, todayISO, WEEKDAYS_SHORT,
 } from '../domain/dates';
@@ -159,7 +159,7 @@ function WeekStrip({ date }: { date: string }) {
   const setOpenDay = (d: string | null) => setUI({ agendaOpenDay: d });
 
   return (
-    <div className="week-strip" style={{ marginTop: 14 }}>
+    <div className="week-strip" style={{ marginTop: 14, marginBottom: 12 }}>
       {days.map(({ date: d, items }) => (
         <button
           key={d}
@@ -199,6 +199,34 @@ function WeekAccordions({ date }: { date: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start]);
 
+  return (
+    <div className="stack" style={{ gap: 8, paddingBottom: 24 }}>
+      {days.map(({ date: d, items }) => (
+        <WeekAccordionDay 
+          key={d} 
+          d={d} 
+          items={items} 
+          today={today} 
+          isOpen={openDay === d} 
+          setOpenDay={setOpenDay} 
+        />
+      ))}
+    </div>
+  );
+}
+
+function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, items: DayItem[], today: string, isOpen: boolean, setOpenDay: (d: string | null) => void }) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (isOpen && ref.current) {
+      // Pequeno atraso para a animação começar e o scroll calcular a posição certa
+      setTimeout(() => {
+        ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [isOpen]);
+
   // Ordena tasks cronologicamente: com horário primeiro, depois sem horário
   const sortItems = (items: ReturnType<typeof itemsForDate>) =>
     [...items].sort((a, b) => {
@@ -208,55 +236,49 @@ function WeekAccordions({ date }: { date: string }) {
       return 0;
     });
 
-  return (
-    <div className="stack" style={{ gap: 8 }}>
-      {days.map(({ date: d, items }) => {
-        const isOpen = openDay === d;
-        const sorted = sortItems(items);
-        const showTime = items.some((x) => x.time);
-        const pending = items.filter((i) => !i.done).length;
-        return (
-          <section key={d} className={`week-accordion${isOpen ? ' open' : ''}`}>
-            <button
-              className="week-accordion-head"
-              aria-expanded={isOpen}
-              onClick={() => setOpenDay(isOpen ? null : d)}
-            >
-              <span style={{ color: d === today ? 'var(--accent)' : undefined, fontWeight: 650, fontSize: 'var(--fs-sm)' }}>
-                {formatDay(d, today, { long: true })}
-              </span>
-              <span className="row" style={{ gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
-                {items.length > 0 && (
-                  <span className="xs faint">{pending > 0 ? `${pending} pendente${pending !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
-                )}
-                <button
-                  className="icon-btn sm"
-                  onClick={(e) => { e.stopPropagation(); openSheet({ type: 'quickAdd', defaults: { date: d } }); }}
-                  aria-label={`Adicionar em ${formatDay(d, today)}`}
-                >
-                  <Icon name="plus" size={15} />
-                </button>
-                <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
-              </span>
-            </button>
+  const sorted = sortItems(items);
+  const showTime = items.some((x) => x.time);
+  const pending = items.filter((i) => !i.done).length;
 
-            {isOpen && (
-              <div className="week-accordion-body">
-                {sorted.length ? (
-                  <div className="list">
-                    {sorted.map((i) => (
-                      <TaskCard key={i.task.id + d} task={i.task} date={d} done={i.done} showTime={showTime} exitOnDone={false} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="small faint" style={{ padding: '4px 2px 8px' }}>Dia livre 🌤️</p>
-                )}
-              </div>
-            )}
-          </section>
-        );
-      })}
-    </div>
+  return (
+    <section ref={ref} className={`week-accordion${isOpen ? ' open' : ''}`}>
+      <button
+        className="week-accordion-head"
+        aria-expanded={isOpen}
+        onClick={() => setOpenDay(isOpen ? null : d)}
+      >
+        <span style={{ color: d === today ? 'var(--accent)' : undefined, fontWeight: 650, fontSize: 'var(--fs-sm)' }}>
+          {formatDay(d, today, { long: true })}
+        </span>
+        <span className="row" style={{ gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+          {items.length > 0 && (
+            <span className="xs faint">{pending > 0 ? `${pending} pendente${pending !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
+          )}
+          <button
+            className="icon-btn sm"
+            onClick={(e) => { e.stopPropagation(); openSheet({ type: 'quickAdd', defaults: { date: d } }); }}
+            aria-label={`Adicionar em ${formatDay(d, today)}`}
+          >
+            <Icon name="plus" size={15} />
+          </button>
+          <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="week-accordion-body">
+          {sorted.length ? (
+            <div className="list">
+              {sorted.map((i) => (
+                <TaskCard key={i.task.id + d} task={i.task} date={d} done={i.done} showTime={showTime} exitOnDone={false} />
+              ))}
+            </div>
+          ) : (
+            <p className="small faint" style={{ padding: '4px 2px 8px' }}>Dia livre 🌤️</p>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

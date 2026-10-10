@@ -218,22 +218,21 @@ p {
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-top: 14px;
-  /* margem negativa para compensar overflow: recuar das bordas laterais é tratado pelo .main */
+  /* padding-top removido para que o sticky header grude perfeitamente no topo sem deixar um buraco visual */
 }
 
 /* Subheader sticky dentro da agenda-body (visão dia) */
 .agenda-day-head {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 4; /* maior que o .now-line (z-index 3) para que a linha vermelha passe por baixo */
   background: var(--bg);
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding-bottom: 10px;
+  padding: 14px 0 10px;
   margin-bottom: 4px;
   /* sombra sutil para indicar que há conteúdo atrás */
 }
