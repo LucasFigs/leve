@@ -589,6 +589,7 @@ button.chip:active {
   background: var(--surface);
 }
 
+select,
 select.input {
   appearance: none;
   -webkit-appearance: none;
@@ -625,6 +626,20 @@ select.input {
 input[type='date'],
 input[type='time'] {
   min-height: 40px;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  margin-right: 4px;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator:hover,
+input[type='time']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .switch {
@@ -1263,18 +1278,26 @@ input[type='time'] {
 
 .sheet-handle {
   width: 100%;
-  padding: 8px 0 4px;
+  padding: 12px 0 8px;
   display: grid;
   place-items: center;
   cursor: grab;
   flex-shrink: 0;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sheet-handle:active {
+  cursor: grabbing;
 }
 
 .sheet-handle span {
-  width: 36px;
+  width: 44px;
   height: 5px;
   border-radius: 99px;
   background: var(--border-strong);
+  pointer-events: none;
 }
 
 .sheet-head {
@@ -1283,6 +1306,9 @@ input[type='time'] {
   gap: 8px;
   padding: 4px 12px 8px 20px;
   flex-shrink: 0;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .sheet-title {
@@ -2677,7 +2703,9 @@ input[type='time'] {
   min-height: 40px;
   font-size: var(--fs-sm);
   padding-left: 10px;
-  padding-right: 6px;
+  padding-right: 32px;
+  background-position: right 10px center;
+  background-size: 14px;
 }
 
 @media (max-width: 480px) {
