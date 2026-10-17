@@ -20,6 +20,7 @@ import { ProjectSheet, QuickAddSheet, SearchSheet } from './sheets/OtherSheets';
 import { AccountMenuSheet } from './sheets/AccountMenu';
 import { startReminders } from './services/reminders';
 import { refreshPush } from './services/push';
+import { initGoogleCalendarListener } from './services/googleCalendar';
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'today', label: 'Hoje', icon: 'sun' },
@@ -98,6 +99,7 @@ export default function App() {
   useTheme();
   useShortcuts();
   useEffect(() => startReminders(), []);
+  useEffect(() => initGoogleCalendarListener(), []);
   const onboarded = useStore((s) => s.settings.onboarded);
   const tasks = useStore((s) => s.tasks);
   const tab = useUI((u) => u.tab);

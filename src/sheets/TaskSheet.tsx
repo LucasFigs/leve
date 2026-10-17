@@ -14,6 +14,7 @@ import { RecurrenceEditor } from '../components/RecurrenceEditor';
 import { SubtaskList } from '../components/SubtaskList';
 import { completeWithFeedback, removeWithFeedback } from '../components/feedback';
 import { startTask } from '../components/focusFlow';
+import { useGoogleCalendar } from '../services/googleCalendar';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso', habit: 'Hábito' };
@@ -57,6 +58,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const started = occurrence < today || (occurrence === today && (!task.time || timeToMin(task.time) <= nowMin()));
   const noun = isEvent ? 'compromisso' : 'tarefa';
   const project = projects.find((p) => p.id === task.projectId);
+  const gcalConnected = useGoogleCalendar((s) => s.connected && s.autoSync);
 
   const upd = (patch: Partial<Task>) => setDraft({ ...task, ...patch });
   const addSubtasks = (titles: string[]) =>
@@ -429,6 +431,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
                     ? 'Vai para “Tarefas › Quando der”, sem data.'
                     : placed ? 'Sai do Inbox ao salvar.' : 'Sem dia definido, continua no Inbox.'
                   : 'Sem data: fica em “Tarefas › Quando der”.'}
+            {gcalConnected && (task.date || task.recurrence) && ' · 📅 Google Agenda'}
           </span>
         </div>
 

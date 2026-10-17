@@ -73,6 +73,8 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+  /** ID do evento correspondente no Google Agenda */
+  googleEventId?: string;
 }
 
 export interface Project {

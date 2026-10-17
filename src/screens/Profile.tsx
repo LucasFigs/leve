@@ -12,6 +12,14 @@ import { UserAvatar } from '../components/UserAvatar';
 import { formatPhone } from '../domain/phone';
 import { reminderPermission, requestReminderPermission } from '../services/reminders';
 import { disablePush, enablePush, pushConfigured } from '../services/push';
+import {
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  setGoogleTargetCalendar,
+  syncAllUpcomingTasks,
+  toggleGoogleAutoSync,
+  useGoogleCalendar,
+} from '../services/googleCalendar';
 
 const LUNCH_DURATIONS = [30, 45, 60, 90, 120];
 
@@ -48,6 +56,7 @@ export function ProfileScreen() {
       </div>
 
       {cloudEnabled && <AccountSection />}
+      <GoogleCalendarSection />
       <InstallSection />
 
       <section className="section">
@@ -450,3 +459,146 @@ function InstallSection() {
     </section>
   );
 }
+
+function GoogleLogo({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+  );
+}
+
+function GoogleCalendarSection() {
+  const gcal = useGoogleCalendar();
+  const [syncing, setSyncing] = useState(false);
+
+  const handleConnect = async () => {
+    const ok = await connectGoogleCalendar();
+    if (!ok && gcal.error) {
+      toast(gcal.error);
+    }
+  };
+
+  const handleDisconnect = () => {
+    if (confirm('Desconectar o Google Agenda? Seus eventos já criados no Google Agenda permanecerão lá.')) {
+      disconnectGoogleCalendar();
+    }
+  };
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    try {
+      await syncAllUpcomingTasks();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const tone = gcal.status === 'error' ? 'var(--red)' : gcal.connected ? 'var(--green)' : 'var(--text-3)';
+
+  return (
+    <section className="section">
+      <SectionHead title="Google Agenda" />
+      <div className="list">
+        {!gcal.connected ? (
+          <div className="settings-row" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <span className="row grow" style={{ gap: 12 }}>
+              <GoogleLogo size={24} />
+              <span className="grow">
+                <span style={{ fontWeight: 600, display: 'block' }}>Conectar ao Google Agenda</span>
+                <span className="xs faint" style={{ display: 'block' }}>
+                  Tarefas e compromissos criados e editados sobem direto para a sua agenda Google
+                </span>
+              </span>
+            </span>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleConnect}
+              disabled={gcal.status === 'syncing'}
+            >
+              {gcal.status === 'syncing' ? 'Conectando…' : 'Conectar'}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="settings-row">
+              <span className="row grow" style={{ gap: 12 }}>
+                <GoogleLogo size={22} />
+                <span className="grow">
+                  <span style={{ fontWeight: 600, display: 'block' }}>{gcal.email || 'Conta Google'}</span>
+                  <span className="xs" style={{ display: 'block', color: tone }}>
+                    {gcal.status === 'syncing' || syncing
+                      ? 'Sincronizando…'
+                      : gcal.status === 'error'
+                      ? gcal.error || 'Erro na sincronização'
+                      : `Conectado${gcal.lastSync ? ` · ${timeAgo(gcal.lastSync)}` : ''}`}
+                  </span>
+                </span>
+              </span>
+              <button
+                className="btn btn-sm btn-soft"
+                onClick={handleManualSync}
+                disabled={gcal.status === 'syncing' || syncing}
+              >
+                Sincronizar
+              </button>
+            </div>
+
+            <div className="settings-row">
+              <span>
+                Sincronização automática
+                <span className="xs faint" style={{ display: 'block' }}>
+                  Atualiza o Google Agenda sempre que criar ou editar algo
+                </span>
+              </span>
+              <Switch
+                checked={gcal.autoSync}
+                onChange={toggleGoogleAutoSync}
+                label="Sincronização automática"
+              />
+            </div>
+
+            {gcal.calendars.length > 1 && (
+              <label className="settings-row" style={{ flexWrap: 'wrap' }}>
+                <span>
+                  Calendário de destino
+                  <span className="xs faint" style={{ display: 'block' }}>Onde os eventos serão criados</span>
+                </span>
+                <select
+                  className="input"
+                  style={{ minWidth: 160 }}
+                  value={gcal.calendarId}
+                  onChange={(e) => setGoogleTargetCalendar(e.target.value)}
+                >
+                  {gcal.calendars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.summary} {c.primary ? '(Principal)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <button
+              className="settings-row"
+              style={{ width: '100%', color: 'var(--red)' }}
+              onClick={handleDisconnect}
+            >
+              <span>Desconectar Google Agenda</span>
+              <Icon name="logout" size={18} />
+            </button>
+          </>
+        )}
+      </div>
+      {gcal.error && (
+        <p className="xs" role="alert" style={{ color: 'var(--red)', marginTop: 8 }}>
+          {gcal.error}
+        </p>
+      )}
+    </section>
+  );
+}
+
