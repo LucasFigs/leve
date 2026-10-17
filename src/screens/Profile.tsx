@@ -258,6 +258,15 @@ export function ProfileScreen() {
             ? 'Seus dados ficam na sua conta e neste aparelho. Sem internet, tudo continua funcionando e sincroniza quando a conexão voltar.'
             : 'Seus dados ficam salvos neste aparelho e funcionam offline.'}
         </p>
+        <p className="xs faint" style={{ marginTop: 8, textAlign: 'center' }}>
+          <a href="/privacidade.html" target="_blank" rel="noopener" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
+            Privacidade
+          </a>
+          {' · '}
+          <a href="/termos.html" target="_blank" rel="noopener" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
+            Termos de Uso
+          </a>
+        </p>
       </section>
 
     </div>
