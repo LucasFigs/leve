@@ -164,12 +164,17 @@ export function Login() {
   return (
     <main className="onboarding">
       <div className="ob-slide" key={mode} style={{ justifyContent: mode === 'signup' ? 'flex-start' : undefined, paddingTop: mode === 'signup' ? 8 : 0 }}>
-        {mode !== 'signup' && (
-          <div className="ob-art">
-            <Icon name="leaf" size={40} stroke={1.6} />
-          </div>
-        )}
-        <h1 className="ob-title">{titles[mode][0]}</h1>
+        <div style={{ textAlign: 'center', marginBottom: 12 }}>
+          <span className="brand-mark" style={{ display: 'inline-flex', padding: 8, borderRadius: 12, background: 'var(--accent-soft)', color: 'var(--accent)', marginBottom: 6 }}>
+            <Icon name="leaf" size={28} stroke={2.2} />
+          </span>
+          <div style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Leve</div>
+          <p className="xs faint" style={{ maxWidth: 320, margin: '4px auto 0' }}>
+            Gerenciador de tarefas, planejamento diário e compromissos sincronizados com o Google Agenda.
+          </p>
+        </div>
+
+        <h1 className="ob-title" style={{ fontSize: '1.25rem' }}>{titles[mode][0]}</h1>
         <p className="ob-text">{titles[mode][1]}</p>
 
         <form className="stack" style={{ marginTop: 24, gap: 12 }} onSubmit={submit}>
@@ -274,6 +279,16 @@ export function Login() {
           </button>
         )}
       </div>
+
+      <p className="xs faint" style={{ marginTop: 24, textAlign: 'center' }}>
+        <a href="/privacidade.html" target="_blank" rel="noopener" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
+          Política de Privacidade
+        </a>
+        {' · '}
+        <a href="/termos.html" target="_blank" rel="noopener" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
+          Termos de Uso
+        </a>
+      </p>
     </main>
   );
 }

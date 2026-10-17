@@ -15,6 +15,7 @@ const CLIENT_ID =
   '862478611976-heidd1qqrghiar660jiujnge4ehmoctl.apps.googleusercontent.com';
 
 const SCOPES = [
+  'email',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
 ].join(' ');
@@ -184,20 +185,25 @@ export async function connectGoogleCalendar(): Promise<boolean> {
           const calendars = await fetchCalendarList(resp.access_token);
           const email = await fetchUserEmail(resp.access_token, calendars);
 
+          const errorFound = gcalState.error;
           updateGcalState({
             connected: true,
             email,
             calendars,
             calendarId: gcalState.calendarId || 'primary',
-            status: 'synced',
-            error: undefined,
+            status: errorFound ? 'error' : 'synced',
+            error: errorFound,
             lastSync: Date.now(),
           });
 
-          toast('Google Agenda conectado com sucesso!');
+          if (errorFound) {
+            toast(errorFound);
+          } else {
+            toast('Google Agenda conectado com sucesso!');
+            // Sincroniza tarefas com data existentes
+            syncAllUpcomingTasks().catch(() => {});
+          }
 
-          // Sincroniza tarefas com data existentes
-          syncAllUpcomingTasks().catch(() => {});
           resolve(true);
         },
         error_callback: (err: unknown) => {
@@ -255,14 +261,28 @@ async function fetchCalendarList(token: string): Promise<GoogleCalendarItem[]> {
     const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return [{ id: 'primary', summary: 'Principal', primary: true }];
+    if (!res.ok) {
+      let errDetail = '';
+      try {
+        const errJson = await res.json();
+        errDetail = errJson?.error?.message || '';
+      } catch {
+        /* fallback */
+      }
+      console.warn('[Google Calendar] Falha ao listar calendários:', res.status, errDetail);
+      if (res.status === 403 && (errDetail.toLowerCase().includes('has not been used') || errDetail.toLowerCase().includes('disabled'))) {
+        updateGcalState({ error: 'A Google Calendar API precisa ser ativada no Google Cloud Console.' });
+      }
+      return [{ id: 'primary', summary: 'Principal', primary: true }];
+    }
     const data = await res.json();
     return (data.items || []).map((item: any) => ({
       id: item.id,
       summary: item.summary,
       primary: !!item.primary,
     }));
-  } catch {
+  } catch (err) {
+    console.warn('[Google Calendar] Erro de rede ao buscar calendários:', err);
     return [{ id: 'primary', summary: 'Principal', primary: true }];
   }
 }
@@ -345,7 +365,41 @@ function recurrenceToRRule(r: Recurrence): string | undefined {
   return `RRULE:${parts.join(';')}`;
 }
 
-function taskToGoogleEventPayload(task: Task, timeZone: string) {
+/**
+ * Converte data e hora para formato RFC 3339 completo com fuso horário local.
+ * Exemplo: 2026-10-17T14:30:00-03:00
+ */
+export function toRfc3339(dateStr: string, timeStr: string, durMin: number = 30): { start: string; end: string } {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [rawH, rawM] = (timeStr || '09:00').split(':').map(Number);
+  const h = isNaN(rawH) ? 0 : Math.max(0, Math.min(23, rawH));
+  const min = isNaN(rawM) ? 0 : Math.max(0, Math.min(59, rawM));
+
+  const startDate = new Date(y, m - 1, d, h, min, 0);
+  const duration = Math.max(5, durMin || 30);
+  const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+
+  const formatWithOffset = (dt: Date): string => {
+    const offsetMin = -dt.getTimezoneOffset();
+    const sign = offsetMin >= 0 ? '+' : '-';
+    const absOffset = Math.abs(offsetMin);
+    const offH = String(Math.floor(absOffset / 60)).padStart(2, '0');
+    const offM = String(absOffset % 60).padStart(2, '0');
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    return (
+      `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T` +
+      `${pad(dt.getHours())}:${pad(dt.getMinutes())}:00${sign}${offH}:${offM}`
+    );
+  };
+
+  return {
+    start: formatWithOffset(startDate),
+    end: formatWithOffset(endDate),
+  };
+}
+
+export function taskToGoogleEventPayload(task: Task, timeZone: string) {
   const isDone = task.status === 'done';
   const summary = isDone ? `✓ ${task.title}` : task.title;
 
@@ -365,24 +419,14 @@ function taskToGoogleEventPayload(task: Task, timeZone: string) {
   if (!date) return null;
 
   if (task.time) {
-    // Horário específico
-    const startIso = `${date}T${task.time}:00`;
-    const durMin = task.duration || 30;
-    const [h, m] = task.time.split(':').map(Number);
-    const endMinutes = h * 60 + m + durMin;
-    const endH = Math.floor(endMinutes / 60) % 24;
-    const endM = endMinutes % 60;
-    const extraDays = Math.floor(endMinutes / (24 * 60));
-    const endDate = extraDays > 0 ? addDays(date, extraDays) : date;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const endIso = `${endDate}T${pad(endH)}:${pad(endM)}:00`;
-
-    payload.start = { dateTime: startIso, timeZone };
-    payload.end = { dateTime: endIso, timeZone };
+    // Horário específico com RFC 3339 completo (inclui fuso horário explícito)
+    const { start, end } = toRfc3339(date, task.time, task.duration || 30);
+    payload.start = { dateTime: start, timeZone };
+    payload.end = { dateTime: end, timeZone };
   } else {
-    // Dia inteiro
+    // Dia inteiro: no Google Calendar, o fim de evento de dia inteiro é exclusivo (dia seguinte)
     payload.start = { date };
-    payload.end = { date: addDays(date, 1) }; // No Google Calendar, o fim de evento de dia inteiro é exclusivo
+    payload.end = { date: addDays(date, 1) };
   }
 
   if (task.recurrence) {
@@ -397,10 +441,13 @@ function taskToGoogleEventPayload(task: Task, timeZone: string) {
 /* Operações de Sincronização                                         */
 /* ------------------------------------------------------------------ */
 
-export async function syncTaskToGoogle(task: Task): Promise<void> {
-  if (!gcalState.connected || !gcalState.autoSync) return;
+export async function syncTaskToGoogle(task: Task): Promise<boolean> {
+  if (!gcalState.connected) return false;
   const token = await getValidToken();
-  if (!token) return;
+  if (!token) {
+    console.warn('[Google Calendar] Sem token de acesso válido para sincronizar.');
+    return false;
+  }
 
   const calendarId = encodeURIComponent(gcalState.calendarId || 'primary');
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
@@ -411,17 +458,19 @@ export async function syncTaskToGoogle(task: Task): Promise<void> {
       await deleteGoogleEvent(task.googleEventId);
       actions.update(task.id, { googleEventId: undefined });
     }
-    return;
+    return true;
   }
 
   const payload = taskToGoogleEventPayload(task, timeZone);
-  if (!payload) return;
+  if (!payload) return false;
 
   try {
+    let res: Response;
+
     if (task.googleEventId) {
       // Atualiza evento existente
-      const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${task.googleEventId}`;
-      const res = await fetch(url, {
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(task.googleEventId)}`;
+      res = await fetch(url, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -432,7 +481,7 @@ export async function syncTaskToGoogle(task: Task): Promise<void> {
 
       if (res.status === 404) {
         // Evento foi excluído no Google: recria
-        const createRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
+        res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -440,14 +489,10 @@ export async function syncTaskToGoogle(task: Task): Promise<void> {
           },
           body: JSON.stringify(payload),
         });
-        if (createRes.ok) {
-          const created = await createRes.json();
-          actions.update(task.id, { googleEventId: created.id });
-        }
       }
     } else {
       // Cria novo evento
-      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
+      res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -455,16 +500,49 @@ export async function syncTaskToGoogle(task: Task): Promise<void> {
         },
         body: JSON.stringify(payload),
       });
-
-      if (res.ok) {
-        const created = await res.json();
-        actions.update(task.id, { googleEventId: created.id });
-      }
     }
 
-    updateGcalState({ lastSync: Date.now(), error: undefined });
+    if (!res.ok) {
+      let errorMsg = `Erro ${res.status}`;
+      try {
+        const errJson = await res.json();
+        if (errJson?.error?.message) {
+          errorMsg = errJson.error.message;
+        }
+      } catch {
+        /* fallback */
+      }
+
+      console.error('[Google Calendar API Error]', res.status, errorMsg, { taskId: task.id, title: task.title, payload });
+
+      if (res.status === 401) {
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        updateGcalState({ status: 'error', error: 'Sessão do Google expirada. Conecte novamente.' });
+      } else if (res.status === 403) {
+        const isApiDisabled = errorMsg.toLowerCase().includes('has not been used') || errorMsg.toLowerCase().includes('disabled');
+        const msg = isApiDisabled
+          ? 'Google Calendar API desativada. Ative-a no Google Cloud Console.'
+          : `Permissão negada no Google Agenda: ${errorMsg}`;
+        updateGcalState({ status: 'error', error: msg });
+      } else {
+        updateGcalState({ status: 'error', error: `Falha ao salvar no Google Agenda (${res.status}): ${errorMsg}` });
+      }
+
+      return false;
+    }
+
+    const created = await res.json();
+    if (created?.id && created.id !== task.googleEventId) {
+      actions.update(task.id, { googleEventId: created.id });
+    }
+
+    updateGcalState({ lastSync: Date.now(), error: undefined, status: 'synced' });
+    return true;
   } catch (err) {
-    console.warn('Erro ao sincronizar com Google Agenda:', err);
+    const msg = (err as Error)?.message || 'Erro ao sincronizar com Google Agenda.';
+    console.error('[Google Calendar Network Error]', err);
+    updateGcalState({ status: 'error', error: msg });
+    return false;
   }
 }
 
@@ -475,7 +553,7 @@ export async function deleteGoogleEvent(googleEventId: string): Promise<void> {
 
   const calendarId = encodeURIComponent(gcalState.calendarId || 'primary');
   try {
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${googleEventId}`, {
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -487,22 +565,37 @@ export async function deleteGoogleEvent(googleEventId: string): Promise<void> {
 /** Sincroniza todas as tarefas ativas com data para o Google Agenda. */
 export async function syncAllUpcomingTasks(): Promise<number> {
   if (!gcalState.connected) return 0;
-  updateGcalState({ status: 'syncing' });
+  updateGcalState({ status: 'syncing', error: undefined });
 
   const tasks = getState().tasks.filter((t) => (t.date || t.recurrence) && t.status !== 'archived');
   let count = 0;
+  let hasErrors = false;
 
   for (const t of tasks) {
     try {
-      await syncTaskToGoogle(t);
-      count++;
+      const ok = await syncTaskToGoogle(t);
+      if (ok) {
+        count++;
+      } else {
+        hasErrors = true;
+      }
     } catch {
-      /* continue */
+      hasErrors = true;
     }
   }
 
-  updateGcalState({ status: 'synced', lastSync: Date.now() });
-  toast(`${count} ${count === 1 ? 'item sincronizado' : 'itens sincronizados'} com o Google Agenda`);
+  if (hasErrors && count === 0 && tasks.length > 0) {
+    updateGcalState({ status: 'error' });
+    toast(gcalState.error || 'Erro ao sincronizar tarefas com o Google Agenda.');
+  } else {
+    updateGcalState({ status: 'synced', lastSync: Date.now() });
+    if (tasks.length === 0) {
+      toast('Nenhuma tarefa com data para sincronizar.');
+    } else {
+      toast(`${count} ${count === 1 ? 'item sincronizado' : 'itens sincronizados'} com o Google Agenda`);
+    }
+  }
+
   return count;
 }
 
