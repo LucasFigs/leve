@@ -8,15 +8,16 @@ import { assistant } from '../services/assistant';
 import { actions, uid, useStore, type SeriesScope } from '../store/store';
 import { closeSheet, openSheet, toast } from '../store/ui';
 import { BottomSheet } from '../components/BottomSheet';
-import { NumberField, Option, ProgressBar, Segmented } from '../components/ui';
+import { Option, ProgressBar, Segmented } from '../components/ui';
 import { Icon, type IconName } from '../components/Icon';
 import { RecurrenceEditor } from '../components/RecurrenceEditor';
 import { SubtaskList } from '../components/SubtaskList';
+import { CATEGORIES } from '../domain/category';
 import { completeWithFeedback, removeWithFeedback } from '../components/feedback';
 import { startTask } from '../components/focusFlow';
 import { useGoogleCalendar } from '../services/googleCalendar';
 
-const DURATIONS = [15, 30, 45, 60, 90, 120];
+const DURATIONS = [15, 30, 45, 60, 90, 120, 150, 180, 240];
 const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso', habit: 'Hábito' };
 
 /**
@@ -444,10 +445,67 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
               </button>
             ))}
           </div>
-          <div className="inline-field">
-            <span>Outro</span>
-            <NumberField label="Duração em minutos" value={task.duration} onChange={(v) => upd({ duration: v || undefined })} width={72} />
-            <span>min</span>
+          <div className="inline-field" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <span>Personalizado</span>
+            <label className="row" style={{ gap: 4, alignItems: 'center' }}>
+              <input
+                type="number"
+                min={0}
+                max={24}
+                className="input num"
+                style={{ width: 56, textAlign: 'center', padding: '4px 6px' }}
+                value={task.duration !== undefined ? Math.floor(task.duration / 60) : ''}
+                placeholder="0"
+                onChange={(e) => {
+                  const hours = parseInt(e.target.value, 10) || 0;
+                  const mins = (task.duration ?? 0) % 60;
+                  const total = hours * 60 + mins;
+                  upd({ duration: total > 0 ? total : undefined });
+                }}
+                aria-label="Horas de duração"
+              />
+              <span className="xs">h</span>
+            </label>
+            <label className="row" style={{ gap: 4, alignItems: 'center' }}>
+              <input
+                type="number"
+                min={0}
+                max={59}
+                step={5}
+                className="input num"
+                style={{ width: 56, textAlign: 'center', padding: '4px 6px' }}
+                value={task.duration !== undefined ? (task.duration % 60) : ''}
+                placeholder="0"
+                onChange={(e) => {
+                  const mins = parseInt(e.target.value, 10) || 0;
+                  const hours = Math.floor((task.duration ?? 0) / 60);
+                  const total = hours * 60 + mins;
+                  upd({ duration: total > 0 ? total : undefined });
+                }}
+                aria-label="Minutos de duração"
+              />
+              <span className="xs">min</span>
+            </label>
+            {task.duration ? (
+              <span className="xs faint">({formatDuration(task.duration)})</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="field">
+          <span className="label">Categoria</span>
+          <div className="chips">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                className={`chip${task.category === cat.id ? ' on' : ''}`}
+                aria-pressed={task.category === cat.id}
+                onClick={() => upd({ category: task.category === cat.id ? undefined : cat.id })}
+              >
+                <span>{cat.icon}</span>
+                {cat.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -500,7 +558,32 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
                 }}
               >
                 <Icon name="plus" size={18} className="faint" />
-                <input value={newSub} onChange={(e) => setNewSub(e.target.value)} placeholder={task.subtasks.length ? 'Adicionar passo' : 'Qual é o primeiro passo?'} aria-label="Novo passo" enterKeyHint="done" />
+                <textarea
+                  ref={(el) => {
+                    if (el) {
+                      el.style.height = 'auto';
+                      el.style.height = `${el.scrollHeight}px`;
+                    }
+                  }}
+                  rows={1}
+                  value={newSub}
+                  onChange={(e) => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                    setNewSub(e.target.value.replace(/\n/g, ' '));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (newSub.trim()) {
+                        addSubtasks([newSub.trim()]);
+                        setNewSub('');
+                      }
+                    }
+                  }}
+                  placeholder={task.subtasks.length ? 'Adicionar passo' : 'Qual é o primeiro passo?'}
+                  aria-label="Novo passo"
+                />
                 {newSub.trim() && (
                   <button type="submit" className="btn btn-sm btn-soft">Adicionar</button>
                 )}

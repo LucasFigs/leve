@@ -400,7 +400,8 @@ export function toRfc3339(dateStr: string, timeStr: string, durMin: number = 30)
 }
 
 export function taskToGoogleEventPayload(task: Task, timeZone: string) {
-  const isDone = task.status === 'done';
+  // Uma série recorrente mestre no Google Agenda não deve ter '✓' geral no título
+  const isDone = !task.recurrence && task.status === 'done';
   const summary = isDone ? `✓ ${task.title}` : task.title;
 
   const notes = task.notes ? task.notes.trim() : '';

@@ -1862,6 +1862,7 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   flex-direction: column;
   padding: calc(var(--safe-t) + 12px) var(--gutter) calc(var(--safe-b) + 20px);
   animation: focus-in 360ms var(--ease);
+  overflow-y: auto;
 }
 
 @keyframes focus-in {
@@ -1965,6 +1966,119 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 .focus-steps i.current {
   background: var(--accent);
+}
+
+.focus-pomo-tabs {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: 99px;
+  margin: 10px 0 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.focus-pomo-tab {
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 160ms var(--ease);
+}
+
+.focus-pomo-tab:hover {
+  color: var(--text);
+}
+
+.focus-pomo-tab.active {
+  background: var(--surface-1);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  font-weight: 650;
+}
+
+.focus-checklist {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin: 12px 0 20px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focus-checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.focus-checklist-items {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.focus-subtask-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 150ms;
+}
+
+.focus-subtask-row:hover {
+  background: var(--surface-1);
+}
+
+.focus-subtask-text {
+  flex: 1;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  word-break: break-word;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.focus-subtask-text.done {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.focus-add-subtask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.focus-add-subtask input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: var(--fs-sm);
+  color: var(--text);
 }
 
 /* ---------- Onboarding ---------- */
@@ -2097,28 +2211,42 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 .subtask {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   min-height: 44px;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
 .subtask .check {
   width: 20px;
   height: 20px;
+  margin-top: 6px;
+  flex-shrink: 0;
 }
 
-.subtask input {
+.subtask .drag-handle {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.subtask input,
+.subtask textarea {
   flex: 1;
   border: 0;
   outline: none;
   background: transparent;
+  font-family: inherit;
   font-size: var(--fs-md);
   padding: 6px 0;
   min-width: 0;
+  resize: none;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-y: hidden;
 }
 
-.subtask.done input {
+.subtask.done input,
+.subtask.done textarea {
   color: var(--text-3);
   text-decoration: line-through;
 }
