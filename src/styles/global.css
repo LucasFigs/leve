@@ -2794,3 +2794,237 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .foot-actions .btn {
   min-height: 44px;
 }
+
+/* ==========================================================================
+   Tela de Hábitos (HabitsScreen)
+   ========================================================================== */
+
+.habit-list {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 32px;
+}
+
+/* Card individual */
+.habit-card {
+  background: var(--surface);
+  border: 1px solid var(--habit-border, var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: box-shadow var(--dur) var(--ease);
+}
+
+.habit-card.habit-done {
+  opacity: 0.75;
+}
+
+/* Header: ícone + título + botão de check */
+.habit-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 10px;
+}
+
+.habit-icon-wrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--habit-bg, var(--accent-soft));
+  color: var(--habit-primary, var(--accent));
+  display: grid;
+  place-items: center;
+}
+
+.habit-title-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.habit-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+}
+
+.habit-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.habit-check-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--habit-primary, var(--accent));
+  background: transparent;
+  color: var(--habit-primary, var(--accent));
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform 100ms var(--ease-spring);
+}
+
+.habit-check-btn:active {
+  transform: scale(0.92);
+}
+
+.habit-check-btn.done {
+  background: var(--habit-primary, var(--accent));
+  color: #fff;
+}
+
+/* Heatmap grid */
+.habit-grid-wrap {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px 8px;
+  overflow: hidden;
+}
+
+.habit-grid-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  padding-top: 16px; /* aligns with the month row */
+}
+
+.habit-day-label {
+  height: 10px;
+  font-size: 9px;
+  color: var(--text-3);
+  line-height: 10px;
+  display: flex;
+  align-items: center;
+  width: 22px;
+}
+
+.habit-grid-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+.habit-grid-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Month labels row */
+.habit-month-row {
+  display: flex;
+  gap: 2px;
+  height: 16px;
+  margin-bottom: 2px;
+}
+
+.habit-month-cell {
+  width: 10px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.habit-month-label {
+  font-size: 9px;
+  color: var(--text-3);
+  white-space: nowrap;
+  position: absolute;
+  left: 0;
+}
+
+/* Week columns */
+.habit-grid-cols {
+  display: flex;
+  gap: 2px;
+}
+
+.habit-grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Individual cells */
+.habit-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: var(--surface-3);
+}
+
+.habit-cell-done {
+  background: var(--habit-primary, var(--accent));
+}
+
+.habit-cell-missed {
+  background: var(--habit-bg, var(--accent-soft));
+  outline: 1px solid var(--habit-border, var(--border));
+  outline-offset: -1px;
+}
+
+.habit-cell-future {
+  background: transparent;
+}
+
+.habit-cell-na {
+  background: var(--surface-3);
+  opacity: 0.3;
+}
+
+.habit-cell-today {
+  outline: 1.5px solid var(--habit-primary, var(--accent));
+  outline-offset: -1.5px;
+}
+
+/* Footer: streak + target */
+.habit-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px 12px;
+}
+
+.habit-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.habit-stat svg {
+  color: var(--habit-primary, var(--accent));
+  opacity: 0.85;
+}
+
+/* Dark mode overrides */
+[data-theme='dark'] .habit-card {
+  background: var(--surface);
+}
+
+[data-theme='dark'] .habit-cell {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='dark'] .habit-cell-done {
+  background: var(--habit-primary, var(--accent));
+}

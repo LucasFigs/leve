@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 import type { Task } from '../domain/types';
 import type { CaptureDefaults } from './store';
 
-export type Tab = 'today' | 'agenda' | 'inbox' | 'tasks' | 'projects' | 'profile';
+export type Tab = 'today' | 'agenda' | 'habits' | 'inbox' | 'tasks' | 'projects' | 'profile';
 export type AgendaView = 'day' | 'week' | 'month';
 
 export type Sheet =

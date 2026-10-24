@@ -18,6 +18,7 @@ export interface Candidate {
   item: DayItem;
   score: number;
   reason: string;
+  ongoing?: boolean;
 }
 
 export interface RankContext {
@@ -29,7 +30,7 @@ export interface RankContext {
   settings: Settings;
 }
 
-const BASE: Record<Priority | 'none', number> = { essential: 50, important: 30, none: 22, optional: 8 };
+const BASE: Record<Priority | 'none', number> = { essential: 25, important: 15, none: 10, optional: 0 };
 
 export function nextEventAfter(items: DayItem[], now: number): DayItem | undefined {
   return items.find((i) => i.task.kind === 'event' && i.time && timeToMin(i.time) >= now && !i.done);
@@ -39,42 +40,57 @@ export function scoreItem(item: DayItem, ctx: RankContext & { now: number }): Ca
   const t = item.task;
   const reasons: [number, string][] = [];
   let score = BASE[t.priority ?? 'none'];
-  if (t.priority === 'essential') reasons.push([5, 'Essencial']);
+  let ongoing = false;
 
-  // Atraso
-  if (item.date < ctx.today) {
-    const days = diffDays(ctx.today, item.date);
-    score += 35 + Math.min(days * 3, 15);
-    reasons.push([40, days === 1 ? 'Ficou de ontem' : `Pendente há ${days} dias`]);
-  }
+  if (t.priority === 'essential') reasons.push([5, 'Essencial']);
 
   // Prazo
   if (t.due) {
     const d = diffDays(t.due, ctx.today);
     if (d <= 0) {
-      score += 30;
+      score += 20;
       reasons.push([35, d < 0 ? 'Prazo vencido' : 'Prazo hoje']);
     } else if (d === 1) {
-      score += 15;
+      score += 10;
       reasons.push([20, 'Prazo amanhã']);
-    } else if (d <= 3) score += 6;
+    } else if (d <= 3) score += 4;
   }
 
-  // Planejada para hoje / horário
-  if (item.date === ctx.today) score += 12;
-  if (item.time) {
-    const delta = timeToMin(item.time) - ctx.now;
-    if (delta >= -30 && delta <= 30) {
-      score += 30;
-      reasons.push([45, delta <= 0 ? `Planejada para ${item.time}` : `Começa às ${item.time}`]);
-    } else if (delta > 30) score -= Math.min(delta, 240) / 12;
-    else score += 10;
+  // 1. Tarefa com horário marcado para hoje
+  if (item.date === ctx.today && item.time) {
+    const start = timeToMin(item.time);
+    const end = start + item.duration;
+
+    if (ctx.now >= start && ctx.now < end) {
+      // Acontecendo AGORA: prioridade máxima absoluta
+      score += 2000 + (end - ctx.now);
+      reasons.push([100, `Planejada para agora (${item.time})`]);
+      ongoing = true;
+    } else if (start >= ctx.now) {
+      // Próxima hoje: ordenada rigorosamente pelo horário de início (mais cedo = maior pontuação)
+      const diff = start - ctx.now;
+      score += 1000 - Math.min(diff, 900);
+      reasons.push([90, diff <= 30 ? `Começa às ${item.time}` : `Próxima hoje, às ${item.time}`]);
+    } else {
+      // Horário passou antes hoje e ainda não foi concluída
+      const passed = ctx.now - end;
+      score += 500 - Math.min(passed, 200);
+      reasons.push([80, `Era para às ${item.time} · pendente hoje`]);
+    }
+  } else if (item.date === ctx.today) {
+    // 2. Tarefa para hoje sem horário
+    score += 200;
+  } else if (item.date < ctx.today) {
+    // 3. Atrasada de dias anteriores
+    const days = diffDays(ctx.today, item.date);
+    score += 120 + Math.min(days * 2, 20);
+    reasons.push([40, days === 1 ? 'Ficou de ontem' : `Pendente há ${days} dias`]);
   }
 
   // Encaixe antes do próximo compromisso
   const next = nextEventAfter(ctx.items, ctx.now);
   const duration = item.duration;
-  if (next?.time) {
+  if (next?.time && !item.time) {
     const gap = timeToMin(next.time) - ctx.now;
     if (duration <= gap - 5) {
       score += 8;
@@ -91,9 +107,9 @@ export function scoreItem(item: DayItem, ctx: RankContext & { now: number }): Ca
     score += t.dayPart === part ? 6 : -15;
   }
 
-  // Procrastinação: quanto mais adiada, mais ela sobe
+  // Procrastinação
   if (t.postponed > 0) {
-    score += Math.min(t.postponed * 3, 12);
+    score += Math.min(t.postponed * 2, 8);
     if (t.postponed >= 2) reasons.push([30, `Adiada ${t.postponed} vezes — que tal só começar?`]);
   }
 
@@ -104,7 +120,7 @@ export function scoreItem(item: DayItem, ctx: RankContext & { now: number }): Ca
   }
 
   reasons.sort((a, b) => b[0] - a[0]);
-  return { item, score, reason: reasons[0]?.[1] ?? (t.kind === 'habit' ? 'Hábito do dia' : 'Próxima da sua lista') };
+  return { item, score, reason: reasons[0]?.[1] ?? (t.kind === 'habit' ? 'Hábito do dia' : 'Próxima da sua lista'), ongoing };
 }
 
 /** Lista ordenada do que faz sentido fazer agora. */

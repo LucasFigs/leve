@@ -403,13 +403,13 @@ export const actions = {
       label = 'Horário atualizado';
     }
     set(
-      (s) => {
-        let next = patchTask(id, (t) => ({ ...patch, status: 'active', missed: undefined, completedAt: undefined, postponed: t.postponed + 1 }))(s);
-        // Recalcula o restante do dia
-        const updates = reflowDay(next.tasks, next.settings);
-        for (const u of updates) next = patchTask(u.id, { time: u.time })(next);
-        return next;
-      },
+      patchTask(id, (t) => ({
+        ...patch,
+        status: 'active',
+        missed: undefined,
+        completedAt: undefined,
+        postponed: t.postponed + 1,
+      })),
       { undoable: true },
     );
     return label;

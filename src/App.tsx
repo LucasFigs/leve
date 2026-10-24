@@ -6,6 +6,7 @@ import { Icon, type IconName } from './components/Icon';
 import { Toasts } from './components/ui';
 import { TodayScreen } from './screens/Today';
 import { AgendaScreen } from './screens/Agenda';
+import { HabitsScreen } from './screens/Habits';
 import { InboxScreen } from './screens/Inbox';
 import { ProjectsScreen } from './screens/Projects';
 import { TasksScreen } from './screens/Tasks';
@@ -25,6 +26,7 @@ import { initGoogleCalendarListener } from './services/googleCalendar';
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'today', label: 'Hoje', icon: 'sun' },
   { id: 'agenda', label: 'Agenda', icon: 'calendar' },
+  { id: 'habits', label: 'Hábitos', icon: 'repeat' },
   { id: 'inbox', label: 'Inbox', icon: 'inbox' },
   { id: 'tasks', label: 'Tarefas', icon: 'list' },
   { id: 'projects', label: 'Projetos', icon: 'folder' },
@@ -122,6 +124,7 @@ export default function App() {
   const screen = {
     today: <TodayScreen />,
     agenda: <AgendaScreen />,
+    habits: <HabitsScreen />,
     inbox: <InboxScreen />,
     tasks: <TasksScreen />,
     projects: <ProjectsScreen />,
@@ -158,18 +161,19 @@ export default function App() {
         {screen}
       </main>
 
+      {/* Bottom tab bar — mobile: Hoje | Agenda | + | Inbox | Tarefas */}
       <nav className="tabbar" aria-label="Navegação principal">
         <div className="tabbar-inner">
-          {TABS.slice(0, 2).map((t) => (
-            <TabButton key={t.id} tab={t} active={tab === t.id} />
-          ))}
+          <TabButton tab={TABS.find((t) => t.id === 'today')!} active={tab === 'today'} />
+          <TabButton tab={TABS.find((t) => t.id === 'agenda')!} active={tab === 'agenda'} />
           <button className="fab" onClick={() => openSheet({ type: 'quickAdd' })} aria-label="Adicionar">
             <Icon name="plus" size={26} stroke={2.2} />
           </button>
-          {/* No celular, “Tarefas” também dá acesso aos projetos (abas no topo da tela) */}
-          {TABS.slice(2, 4).map((t) => (
-            <TabButton key={t.id} tab={t} active={tab === t.id || (t.id === 'tasks' && tab === 'projects')} badge={t.id === 'inbox' ? inboxCount : 0} />
-          ))}
+          <TabButton tab={TABS.find((t) => t.id === 'inbox')!} active={tab === 'inbox'} badge={inboxCount} />
+          <TabButton
+            tab={TABS.find((t) => t.id === 'tasks')!}
+            active={tab === 'tasks' || tab === 'habits' || tab === 'projects'}
+          />
         </div>
       </nav>
 
