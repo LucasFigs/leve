@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Subtask, Task } from '../domain/types';
-import { addDays, nowMin, todayISO } from '../domain/dates';
+import { addDays, formatDay, nowMin, todayISO } from '../domain/dates';
 import { durationOf, overdueTasks } from '../domain/selectors';
-import { nextFreeSlot, reflowDay, type DayPlan, type WeekAssignment } from '../domain/planner';
+import { nextFreeSlot, reflowDay, slotsByPart, type DayPlan, type WeekAssignment } from '../domain/planner';
 import { occurrencesBefore } from '../domain/recurrence';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
 import { localRepository } from './persistence';
+import { toast } from './ui';
 
 export const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -144,6 +145,7 @@ function detach(s: AppState, id: string, date: string, patch: Partial<Task> = {}
     doneDates: undefined,
     skipDates: undefined,
     missedDates: undefined,
+    googleEventId: undefined,
     date,
     status: done || missed ? 'done' : 'active',
     completedAt: done || missed ? now : undefined,
@@ -192,6 +194,7 @@ function splitSeries(s: AppState, id: string, date: string, draft: Task): AppSta
     ? {
         ...draft,
         id: uid(),
+        googleEventId: undefined,
         recurrence: {
           ...nr,
           // Mantém a contagem total: se eram 10 vezes e 4 já passaram, faltam 6
@@ -205,7 +208,7 @@ function splitSeries(s: AppState, id: string, date: string, draft: Task): AppSta
         updatedAt: now,
       }
     : // Deixou de repetir: a partir daqui vira uma tarefa só, nesta data
-      { ...draft, id: uid(), date: draft.date ?? date, doneDates: undefined, skipDates: undefined, missedDates: undefined, createdAt: now, updatedAt: now };
+      { ...draft, id: uid(), googleEventId: undefined, date: draft.date ?? date, doneDates: undefined, skipDates: undefined, missedDates: undefined, createdAt: now, updatedAt: now };
   return { ...old, tasks: [next, ...old.tasks] };
 }
 
@@ -235,10 +238,33 @@ export const actions = {
     const raw = text.trim();
     const p = assistant.interpret(raw, { defaultDuration: state.settings.defaultDuration });
     const has = (k: string) => !ignore.has(k);
-    const date = (has('date') ? p.date : undefined) ?? defaults.date;
-    const time = (has('time') ? p.time : undefined) ?? defaults.time;
+    let date = (has('date') ? p.date : undefined) ?? defaults.date;
+    let time = (has('time') ? p.time : undefined) ?? defaults.time;
+    const dayPart = has('dayPart') ? p.dayPart : undefined;
     const recurrence = has('recurrence') ? p.recurrence : undefined;
     const kind = has('kind') ? p.kind : 'task';
+
+    // Se o usuário especificou período (manhã, tarde, noite) sem horário exato:
+    // encaixa no primeiro horário livre do período naquela data; se não houver, notifica
+    if (dayPart && !time && !recurrence) {
+      const targetDate = date ?? defaults.date ?? todayISO();
+      const dur = p.duration ?? state.settings.defaultDuration;
+      const parts = slotsByPart(state.tasks, targetDate, dur, state.settings);
+      const match = parts.find((pt) => pt.part === dayPart);
+      if (match?.slot) {
+        time = match.slot;
+        date = targetDate;
+      } else {
+        date = targetDate;
+        const partLabel = dayPart === 'morning' ? 'manhã' : dayPart === 'afternoon' ? 'tarde' : 'noite';
+        const alt = parts.find((pt) => pt.slot && !pt.outside);
+        const msg = alt
+          ? `Sem horário livre na ${partLabel}. Sugestão: ${alt.slot} (${alt.label.toLowerCase()})`
+          : `Sem horário livre na ${partLabel} de ${formatDay(targetDate).toLowerCase()}. Deseja alterar?`;
+        toast(msg);
+      }
+    }
+
     const organized = !!(date || time || recurrence || defaults.projectId || kind === 'event');
     // Se o usuário descartou alguma interpretação, o texto volta inteiro para o título
     const title = ignore.size ? raw.charAt(0).toUpperCase() + raw.slice(1) : p.title;
@@ -249,7 +275,7 @@ export const actions = {
       date: recurrence ? undefined : date ?? (time ? todayISO() : undefined),
       time,
       due: has('due') ? p.due : undefined,
-      dayPart: p.dayPart,
+      dayPart,
       duration: p.duration,
       priority: has('priority') ? p.priority : undefined,
       recurrence,

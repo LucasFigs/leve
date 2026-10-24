@@ -1,6 +1,7 @@
 /** Todas as tarefas num lugar só, para gerir tudo (filtros + grupos por quando). */
 import { useMemo, useState } from 'react';
-import type { Kind, Priority, Task } from '../domain/types';
+import type { Category, Kind, Priority, Task } from '../domain/types';
+import { CATEGORIES } from '../domain/category';
 import { addDays, timeToMin, todayISO } from '../domain/dates';
 import { nextOccurrence } from '../domain/recurrence';
 import { normalize } from '../domain/parser';
@@ -55,6 +56,7 @@ export function TasksScreen() {
   const [kind, setKind] = useState<Kind | ''>('');
   const [priority, setPriority] = useState<Priority | 'none' | ''>('');
   const [projectId, setProjectId] = useState('');
+  const [category, setCategory] = useState<Category | 'none' | ''>('');
   const [showAllDone, setShowAllDone] = useState(false);
   const today = todayISO();
 
@@ -64,7 +66,8 @@ export function TasksScreen() {
       (!needle || normalize(`${t.title} ${t.notes ?? ''} ${t.subtasks.map((s) => s.title).join(' ')}`).includes(needle)) &&
       (!kind || t.kind === kind) &&
       (!priority || (priority === 'none' ? !t.priority : t.priority === priority)) &&
-      (!projectId || (projectId === 'none' ? !t.projectId : t.projectId === projectId));
+      (!projectId || (projectId === 'none' ? !t.projectId : t.projectId === projectId)) &&
+      (!category || (category === 'none' ? !t.category : t.category === category));
     const list = tasks.filter(match);
     const week = addDays(today, 7);
     const ended = (t: Task) => !!t.recurrence && !nextOccurrence(t.recurrence, today, t.skipDates);
@@ -93,10 +96,10 @@ export function TasksScreen() {
     }
     for (const x of g) if (x.key !== 'done') x.tasks.sort(byWhen);
     return g.filter((x) => x.tasks.length);
-  }, [tasks, q, status, kind, priority, projectId, today]);
+  }, [tasks, q, status, kind, priority, projectId, category, today]);
 
   const total = groups.reduce((s, x) => s + x.tasks.length, 0);
-  const filtered = !!(q || kind || priority || projectId);
+  const filtered = !!(q || kind || priority || projectId || category);
 
   return (
     <div className="screen">
@@ -154,6 +157,13 @@ export function TasksScreen() {
             <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
           ))}
         </select>
+        <select className="input" value={category} onChange={(e) => setCategory(e.target.value as Category | 'none' | '')} aria-label="Categoria">
+          <option value="">Todas as categorias</option>
+          {CATEGORIES.map((c) => (
+            <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+          ))}
+          <option value="none">Sem categoria</option>
+        </select>
       </div>
 
       <p className="xs faint" style={{ margin: '10px 2px 0' }} aria-live="polite">
@@ -161,7 +171,7 @@ export function TasksScreen() {
         {filtered && (
           <>
             {' · '}
-            <button className="link-btn" onClick={() => { setQ(''); setKind(''); setPriority(''); setProjectId(''); }}>limpar filtros</button>
+            <button className="link-btn" onClick={() => { setQ(''); setKind(''); setPriority(''); setProjectId(''); setCategory(''); }}>limpar filtros</button>
           </>
         )}
       </p>

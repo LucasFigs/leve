@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Task } from '../domain/types';
 import { formatDay, formatDuration, todayISO } from '../domain/dates';
 import { recurrenceLabel } from '../domain/parser';
+import { CATEGORY_MAP } from '../domain/category';
 import { actions, useStore } from '../store/store';
 import { openSheet, toast } from '../store/ui';
 import { Checkbox, PriorityBadge } from './ui';
@@ -103,6 +104,11 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
             <span>
               <Icon name="list" size={12} />
               {subDone}/{task.subtasks.length}
+            </span>
+          )}
+          {task.category && CATEGORY_MAP[task.category] && (
+            <span>
+              {CATEGORY_MAP[task.category].icon} {CATEGORY_MAP[task.category].label}
             </span>
           )}
           {showProject && project && (

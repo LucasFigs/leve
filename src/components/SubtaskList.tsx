@@ -88,7 +88,22 @@ export function SubtaskList({ subtasks, onChange, onToggle }: Props) {
             onToggle={() => (onToggle ? onToggle(s.id) : onChange(subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x))))}
             label={`Concluir passo: ${s.title}`}
           />
-          <input value={s.title} onChange={(e) => onChange(subtasks.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))} aria-label="Passo" />
+          <textarea
+            ref={(el) => {
+              if (el) {
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight}px`;
+              }
+            }}
+            rows={1}
+            value={s.title}
+            onChange={(e) => {
+              e.target.style.height = 'auto';
+              e.target.style.height = `${e.target.scrollHeight}px`;
+              onChange(subtasks.map((x) => (x.id === s.id ? { ...x, title: e.target.value.replace(/\n/g, ' ') } : x)));
+            }}
+            aria-label="Passo"
+          />
           <button type="button" className="icon-btn sm" onClick={() => onChange(subtasks.filter((x) => x.id !== s.id))} aria-label={`Remover ${s.title}`}>
             <Icon name="x" size={16} />
           </button>
