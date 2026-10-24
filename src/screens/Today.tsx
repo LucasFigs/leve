@@ -366,9 +366,16 @@ function NowCard() {
   return (
     <div className="now-card">
       <div key={t.id} className="swap-enter">
-        <div className="eyebrow">Próxima ação</div>
+        <div className="eyebrow">
+          {c.ongoing ? 'Acontecendo agora' : c.item.time ? `Próxima hoje · às ${c.item.time}` : 'Próxima ação'}
+        </div>
         <div className="now-title">{t.title}</div>
         <div className="now-meta">
+          {c.item.time && (
+            <span className="num">
+              <Icon name="clock" size={12} /> {c.item.time}
+            </span>
+          )}
           <span className="num">{formatDuration(c.item.duration)}</span>
           {t.priority && t.priority !== 'optional' && <span className={`prio ${t.priority}`}>{PRIORITY_META[t.priority].label}</span>}
           {project && (

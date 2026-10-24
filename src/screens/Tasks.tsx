@@ -29,16 +29,17 @@ function byWhen(a: Task, b: Task) {
   return (PRIO_ORDER[a.priority ?? 'optional'] ?? 2) - (PRIO_ORDER[b.priority ?? 'optional'] ?? 2) || b.createdAt - a.createdAt;
 }
 
-/** Abas Tarefas/Projetos no celular (no computador elas ficam na barra lateral). */
-export function TasksProjectsSwitch({ current }: { current: 'tasks' | 'projects' }) {
+/** Abas Tarefas/Hábitos/Projetos no celular (no computador elas ficam na barra lateral). */
+export function TasksProjectsSwitch({ current }: { current: 'tasks' | 'habits' | 'projects' }) {
   return (
     <div className="mobile-only" style={{ marginBottom: 14 }}>
-      <Segmented<'tasks' | 'projects'>
+      <Segmented<'tasks' | 'habits' | 'projects'>
         label="Ver"
         value={current}
         onChange={(v) => v !== current && goTo(v)}
         options={[
-          { value: 'tasks', label: 'Todas as tarefas' },
+          { value: 'tasks', label: 'Tarefas' },
+          { value: 'habits', label: 'Hábitos' },
           { value: 'projects', label: 'Projetos' },
         ]}
       />
