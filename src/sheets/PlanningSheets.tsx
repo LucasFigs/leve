@@ -545,19 +545,21 @@ export function BreakdownSheet({ id, thenFocus }: { id: string; thenFocus?: bool
 
   return (
     <BottomSheet
-      title={thenFocus ? 'Essa tarefa parece grande' : 'Dividir em passos'}
+      title={thenFocus ? 'Preparar Pomodoro' : 'Dividir em passos'}
       onClose={closeSheet}
       footer={
         thenFocus ? (
-          <>
-            <button className="btn btn-secondary" onClick={() => { save(); closeSheet(); actions.startFocus(id); }}>
-              Só começar
-            </button>
-            <button className="btn btn-primary grow" onClick={() => { save(); closeSheet(); actions.startFocus(id, todayISO(), 10); }}>
-              <Icon name="play" size={16} fill />
-              Começar por 10 min
-            </button>
-          </>
+          <button
+            className="btn btn-primary btn-block btn-lg"
+            onClick={() => {
+              save();
+              closeSheet();
+              actions.startFocus(id, todayISO(), undefined, false);
+            }}
+          >
+            <Icon name="play" size={18} fill />
+            Ir para o Pomodoro
+          </button>
         ) : (
           <button
             className="btn btn-primary btn-block"
@@ -575,7 +577,7 @@ export function BreakdownSheet({ id, thenFocus }: { id: string; thenFocus?: bool
     >
       <p className="small muted" style={{ marginBottom: 12 }}>
         {thenFocus ? (
-          <>Quer começar por só 10 minutos? Marque os passos que fazem sentido para “{task.title}” — o primeiro já é suficiente.</>
+          <>Selecione os passos que você quer focar neste Pomodoro para “{task.title}”. Depois, é só dar o start no cronômetro.</>
         ) : (
           <>Marque os passos sugeridos que quiser incluir em “{task.title}”.</>
         )}
@@ -585,7 +587,22 @@ export function BreakdownSheet({ id, thenFocus }: { id: string; thenFocus?: bool
         {steps.map((s, i) => (
           <div key={i} className="subtask">
             <Checkbox checked={s.on} label={`Incluir: ${s.title}`} onToggle={() => setSteps((l) => l.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))} />
-            <input value={s.title} onChange={(e) => setSteps((l) => l.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} aria-label="Passo" />
+            <textarea
+              ref={(el) => {
+                if (el) {
+                  el.style.height = 'auto';
+                  el.style.height = `${el.scrollHeight}px`;
+                }
+              }}
+              rows={1}
+              value={s.title}
+              onChange={(e) => {
+                e.target.style.height = 'auto';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+                setSteps((l) => l.map((x, j) => (j === i ? { ...x, title: e.target.value.replace(/\n/g, ' ') } : x)));
+              }}
+              aria-label="Passo"
+            />
             {s.id ? (
               <span className="chip" style={{ minHeight: 24, fontSize: 12 }}>{s.done ? 'feito' : 'seu'}</span>
             ) : (
@@ -602,7 +619,33 @@ export function BreakdownSheet({ id, thenFocus }: { id: string; thenFocus?: bool
           }}
         >
           <Icon name="plus" size={18} className="faint" />
-          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Adicionar outro passo" aria-label="Novo passo" />
+          <textarea
+            ref={(el) => {
+              if (el) {
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight}px`;
+              }
+            }}
+            rows={1}
+            value={extra}
+            onChange={(e) => {
+              e.target.style.height = 'auto';
+              e.target.style.height = `${e.target.scrollHeight}px`;
+              setExtra(e.target.value.replace(/\n/g, ' '));
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (extra.trim()) setSteps((l) => [...l, { title: extra.trim(), on: true }]);
+                setExtra('');
+              }
+            }}
+            placeholder="Adicionar outro passo"
+            aria-label="Novo passo"
+          />
+          {extra.trim() && (
+            <button type="submit" className="btn btn-sm btn-soft">Adicionar</button>
+          )}
         </form>
       </div>
     </BottomSheet>

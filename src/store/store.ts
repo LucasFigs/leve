@@ -568,8 +568,8 @@ export const actions = {
   },
 
   /* ---------- Foco ---------- */
-  startFocus(taskId: string, date = todayISO(), target?: number) {
-    set((s) => ({ ...s, focus: { taskId, date, startedAt: Date.now(), elapsedBefore: 0, running: true, target } }));
+  startFocus(taskId: string, date = todayISO(), target?: number, running = false) {
+    set((s) => ({ ...s, focus: { taskId, date, startedAt: Date.now(), elapsedBefore: 0, running, target } }));
   },
   pauseFocus() {
     set((s) =>
