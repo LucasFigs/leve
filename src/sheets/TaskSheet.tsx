@@ -196,9 +196,9 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   let hint: ReactNode = null;
   if (acting && task.postponed >= 2) {
     hint = (
-      <Hint icon="bolt" text={<>Adiada <b>{task.postponed} vezes</b>. Começar é a parte mais difícil — experimente só 10 minutos.</>}>
-        <button className="btn btn-sm btn-soft" onClick={() => { closeSheet(); actions.startFocus(task.id, occurrence, 10); }}>
-          Fazer só 10 min
+      <Hint icon="bolt" text={<>Adiada <b>{task.postponed} vezes</b>. Começar é a parte mais difícil — que tal um Pomodoro?</>}>
+        <button className="btn btn-sm btn-soft" onClick={() => { closeSheet(); startTask(task.id, occurrence); }}>
+          Iniciar Pomodoro
         </button>
       </Hint>
     );
@@ -298,13 +298,9 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
       <div className="foot-stack">
         <button className="btn btn-primary btn-block" onClick={() => { closeSheet(); startTask(task.id, occurrence); }}>
           <Icon name="play" size={16} fill />
-          Começar agora
+          Começar com Pomodoro
         </button>
         <div className="foot-actions">
-          <button className="btn btn-sm btn-ghost" onClick={() => { closeSheet(); actions.startFocus(task.id, occurrence, 10); }}>
-            <Icon name="clock" size={16} />
-            Só 10 min
-          </button>
           <button className="btn btn-sm btn-ghost" onClick={() => { closeSheet(); completeWithFeedback(task.id, occurrence); }}>
             <Icon name="check" size={16} />
             Concluir

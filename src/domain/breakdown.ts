@@ -21,7 +21,7 @@ const TEMPLATES: [RegExp, string[]][] = [
 const GENERIC = [
   'Definir o primeiro passo concreto',
   'Separar o que você precisa',
-  'Fazer a primeira parte (10 min)',
+  'Fazer o primeiro bloco de foco',
   'Continuar até um bom ponto de parada',
   'Revisar e concluir',
 ];
