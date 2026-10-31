@@ -16,6 +16,7 @@ import { Onboarding } from './screens/Onboarding';
 import { Login, Splash } from './screens/Login';
 import { canUseOffline, cloudEnabled, useCloud } from './store/sync';
 import { TaskSheet } from './sheets/TaskSheet';
+import { HabitCalendarSheet } from './sheets/HabitCalendarSheet';
 import { BreakdownSheet, EventMissedSheet, PlanSheet, ReplanSheet, ReviewSheet, WeekSheet } from './sheets/PlanningSheets';
 import { ProjectSheet, QuickAddSheet, SearchSheet } from './sheets/OtherSheets';
 import { AccountMenuSheet } from './sheets/AccountMenu';
@@ -88,6 +89,8 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
       return <ReplanSheet id={sheet.id} date={sheet.date} />;
     case 'breakdown':
       return <BreakdownSheet id={sheet.id} thenFocus={sheet.thenFocus} />;
+    case 'habitCalendar':
+      return <HabitCalendarSheet key={sheet.id} id={sheet.id} />;
     case 'project':
       return <ProjectSheet id={sheet.id} />;
     case 'search':

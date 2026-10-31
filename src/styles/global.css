@@ -3208,3 +3208,255 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 [data-theme='dark'] .habit-cell-done {
   background: var(--habit-primary, var(--accent));
 }
+
+/* ---------- Habit Calendar Detail Sheet (Visão Mensal) ---------- */
+.habit-grid-touch {
+  cursor: pointer;
+  transition: transform 140ms var(--ease), opacity 140ms var(--ease);
+  border-radius: var(--radius-md);
+}
+
+.habit-grid-touch:hover {
+  opacity: 0.95;
+}
+
+.habit-calendar-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0 20px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.habit-cal-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 4px;
+}
+
+.habit-cal-icon-wrap {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: var(--habit-bg, var(--surface-2));
+  color: var(--habit-primary, var(--accent));
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.habit-cal-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.habit-cal-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0;
+  color: var(--text);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.habit-cal-notes {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  margin: 4px 0 0;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.habit-cal-summary-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.habit-cal-badges {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.habit-cal-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 16px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.habit-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  font-weight: 500;
+  padding-bottom: 2px;
+}
+
+.habit-cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.habit-cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.habit-cal-cell {
+  aspect-ratio: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: transform 120ms var(--ease), background 120ms var(--ease);
+  padding: 0;
+  user-select: none;
+}
+
+.habit-cal-cell:hover:not(:disabled) {
+  background: var(--surface-3);
+  transform: scale(1.06);
+}
+
+.habit-cal-cell:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.habit-cal-cell.habit-cal-other-month {
+  color: var(--text-3);
+  opacity: 0.35;
+}
+
+.habit-cal-cell.habit-cal-future {
+  cursor: default;
+  opacity: 0.25;
+}
+
+.habit-cal-num {
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* Célula de hoje: borda verde arredondada */
+.habit-cal-cell.habit-cal-today {
+  outline: 2px solid var(--habit-primary, var(--accent));
+  outline-offset: -2px;
+  font-weight: 700;
+}
+
+/* Célula concluída (como nos prints dos dias 28 e 29) */
+.habit-cal-cell.habit-cal-done {
+  background: var(--habit-bg, rgba(16, 185, 129, 0.15));
+  color: var(--text);
+}
+
+.habit-cal-cell.habit-cal-done .habit-cal-num {
+  font-weight: 700;
+}
+
+.habit-cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--habit-primary, var(--accent));
+  margin-top: 3px;
+  box-shadow: 0 0 6px var(--habit-glow, rgba(16, 185, 129, 0.5));
+}
+
+.habit-cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.habit-cal-month-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.habit-cal-native-month {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.habit-cal-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.habit-cal-nav-btn {
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 150ms var(--ease);
+  display: grid;
+  place-items: center;
+}
+
+.habit-cal-nav-btn.pill {
+  padding: 5px 14px;
+  border-radius: 99px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.habit-cal-nav-btn.icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 99px;
+  padding: 0;
+}
+
+.habit-cal-nav-btn:hover {
+  background: var(--surface-3);
+}
+
+.habit-cal-hint {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  margin: 0;
+}

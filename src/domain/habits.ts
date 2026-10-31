@@ -152,3 +152,53 @@ export function buildHabitGrid(today: string, totalWeeks = 22): GridWeek[] {
   return weeks;
 }
 
+export interface MonthCalendarCell {
+  date: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+/**
+ * Constrói a matriz mensal para o calendário de hábitos (iniciando em Domingo = 0 até Sábado = 6).
+ */
+export function buildMonthCalendar(year: number, month: number, today: string): MonthCalendarCell[][] {
+  const firstDate = new Date(year, month, 1);
+  const firstDayOfWeek = firstDate.getDay(); // 0 = Domingo
+
+  // Recua até o domingo anterior ou o próprio domingo se dia 1 for domingo
+  const startDate = new Date(year, month, 1 - firstDayOfWeek);
+  const weeks: MonthCalendarCell[][] = [];
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+
+  for (let w = 0; w < 6; w++) {
+    const week: MonthCalendarCell[] = [];
+    for (let d = 0; d < 7; d++) {
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const day = String(cursor.getDate()).padStart(2, '0');
+      const iso = `${y}-${m}-${day}`;
+
+      week.push({
+        date: iso,
+        dayNumber: cursor.getDate(),
+        isCurrentMonth: cursor.getMonth() === month,
+        isToday: iso === today,
+        isFuture: iso > today,
+      });
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+
+    // Se a próxima semana já pertence ao próximo mês e já temos pelo menos 4 semanas completas:
+    if (cursor.getMonth() !== month && weeks.length >= 4) {
+      break;
+    }
+  }
+
+  return weeks;
+}
+
+
