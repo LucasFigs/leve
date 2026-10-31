@@ -7,23 +7,23 @@
  *  - Sequência atual (streak) e frequência alvo
  */
 import { useMemo } from 'react';
-import type { Task } from '../domain/types';
-import { todayISO } from '../domain/dates';
-import { nextOccurrence, occursOn } from '../domain/recurrence';
-import { actions, newTask, useStore } from '../store/store';
-import { openSheet, toast } from '../store/ui';
-import { Icon } from '../components/Icon';
-import { EmptyState } from '../components/ui';
-import { completeWithFeedback } from '../components/feedback';
-import { TopActions } from './TopActions';
-import { TasksProjectsSwitch } from './Tasks';
+import type { Task } from "../domain/types";
+import { todayISO } from "../domain/dates";
+import { nextOccurrence, occursOn } from "../domain/recurrence";
+import { actions, newTask, useStore } from "../store/store";
+import { openSheet, toast } from "../store/ui";
+import { Icon } from "../components/Icon";
+import { EmptyState } from "../components/ui";
+import { completeWithFeedback } from "../components/feedback";
+import { TopActions } from "./TopActions";
+import { TasksProjectsSwitch } from "./Tasks";
 import {
   buildHabitGrid,
   getHabitIcon,
   getHabitStreak,
   getHabitTargetLabel,
   getHabitTheme,
-} from '../domain/habits';
+} from "../domain/habits";
 
 /* ------------------------------------------------------------------ */
 /* Tela principal                                                      */
@@ -37,9 +37,9 @@ export function HabitsScreen() {
     return tasks
       .filter(
         (t) =>
-          t.kind === 'habit' &&
-          t.status !== 'archived' &&
-          t.status !== 'done' &&
+          t.kind === "habit" &&
+          t.status !== "archived" &&
+          t.status !== "done" &&
           t.recurrence &&
           nextOccurrence(t.recurrence, today, t.skipDates),
       )
@@ -48,17 +48,17 @@ export function HabitsScreen() {
         const aDone = a.doneDates?.includes(today) ?? false;
         const bDone = b.doneDates?.includes(today) ?? false;
         if (aDone !== bDone) return aDone ? 1 : -1;
-        return a.title.localeCompare(b.title, 'pt-BR');
+        return a.title.localeCompare(b.title, "pt-BR");
       });
   }, [tasks, today]);
 
   const handleNewHabit = () => {
     openSheet({
-      type: 'newTask',
+      type: "newTask",
       task: newTask({
-        title: '',
-        kind: 'habit',
-        recurrence: { freq: 'daily', anchor: today },
+        title: "",
+        kind: "habit",
+        recurrence: { freq: "daily", anchor: today },
       }),
     });
   };
@@ -107,7 +107,15 @@ export function HabitsScreen() {
 /* Card de hábito individual                                           */
 /* ------------------------------------------------------------------ */
 
-function HabitCard({ task, today, index }: { task: Task; today: string; index: number }) {
+function HabitCard({
+  task,
+  today,
+  index,
+}: {
+  task: Task;
+  today: string;
+  index: number;
+}) {
   const theme = useMemo(() => getHabitTheme(task, index), [task, index]);
   const icon = useMemo(() => getHabitIcon(task), [task]);
   const streak = useMemo(() => getHabitStreak(task, today), [task, today]);
@@ -117,7 +125,7 @@ function HabitCard({ task, today, index }: { task: Task; today: string; index: n
   const toggle = () => {
     if (isDoneToday) {
       actions.reopen(task.id, today);
-      toast('Desmarcado', { label: 'Desfazer', run: () => actions.undo() });
+      toast("Desmarcado", { label: "Desfazer", run: () => actions.undo() });
     } else {
       completeWithFeedback(task.id, today);
     }
@@ -125,36 +133,40 @@ function HabitCard({ task, today, index }: { task: Task; today: string; index: n
 
   return (
     <div
-      className={`habit-card${isDoneToday ? ' habit-done' : ''}`}
-      style={{
-        '--habit-primary': theme.primary,
-        '--habit-glow': theme.glow,
-        '--habit-bg': theme.bgLight,
-        '--habit-border': theme.border,
-      } as React.CSSProperties}
+      className={`habit-card${isDoneToday ? " habit-done" : ""}`}
+      style={
+        {
+          "--habit-primary": theme.primary,
+          "--habit-glow": theme.glow,
+          "--habit-bg": theme.bgLight,
+          "--habit-border": theme.border,
+        } as React.CSSProperties
+      }
     >
       {/* Header */}
       <div className="habit-header">
         <div
           className="habit-icon-wrap"
-          onClick={() => openSheet({ type: 'habitCalendar', id: task.id })}
-          style={{ cursor: 'pointer' }}
+          onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
+          style={{ cursor: "pointer" }}
         >
           <Icon name={icon} size={20} />
         </div>
         <button
           className="habit-title-btn"
-          onClick={() => openSheet({ type: 'habitCalendar', id: task.id })}
+          onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
         >
           <span className="habit-name">{task.title}</span>
-          {task.notes && (
-            <span className="habit-desc">{task.notes}</span>
-          )}
+          {task.notes && <span className="habit-desc">{task.notes}</span>}
         </button>
         <button
-          className={`habit-check-btn${isDoneToday ? ' done' : ''}`}
+          className={`habit-check-btn${isDoneToday ? " done" : ""}`}
           onClick={toggle}
-          aria-label={isDoneToday ? 'Desmarcar hábito hoje' : 'Marcar hábito como feito hoje'}
+          aria-label={
+            isDoneToday
+              ? "Desmarcar hábito hoje"
+              : "Marcar hábito como feito hoje"
+          }
         >
           {isDoneToday ? (
             <Icon name="check" size={18} />
@@ -167,7 +179,7 @@ function HabitCard({ task, today, index }: { task: Task; today: string; index: n
       {/* Heatmap grid — ao clicar abre o calendário completo */}
       <div
         className="habit-grid-touch"
-        onClick={() => openSheet({ type: 'habitCalendar', id: task.id })}
+        onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
         role="button"
         tabIndex={0}
         aria-label={`Abrir calendário de ${task.title}`}
@@ -196,12 +208,15 @@ function HabitCard({ task, today, index }: { task: Task; today: string; index: n
 /* Heatmap Grid                                                        */
 /* ------------------------------------------------------------------ */
 
-const WEEK_DAY_LABELS = ['Dom', 'Ter', 'Qui', 'Sáb'];
+const WEEK_DAY_LABELS = ["Dom", "Ter", "Qui", "Sáb"];
 const WEEK_DAY_POSITIONS = [0, 2, 4, 6]; // Índices no array que têm rótulo
 
 function HabitGrid({ task, today }: { task: Task; today: string }) {
   const weeks = useMemo(() => buildHabitGrid(today, 22), [today]);
-  const doneDates = useMemo(() => new Set(task.doneDates ?? []), [task.doneDates]);
+  const doneDates = useMemo(
+    () => new Set(task.doneDates ?? []),
+    [task.doneDates],
+  );
 
   // Auto-scroll para a direita (semana atual) no mount
   const refCallback = (el: HTMLDivElement | null) => {
@@ -210,15 +225,22 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
     }
   };
 
-  const getCellState = (dateStr: string, isFuture: boolean): 'future' | 'done' | 'missed' | 'na' => {
-    if (isFuture) return 'future';
-    if (doneDates.has(dateStr)) return 'done';
+  const getCellState = (
+    dateStr: string,
+    isFuture: boolean,
+  ): "future" | "done" | "missed" | "na" => {
+    if (isFuture) return "future";
+    if (doneDates.has(dateStr)) return "done";
 
     // Se a regra de recorrência deveria ocorrer naquele dia mas não foi feito
-    if (task.recurrence && occursOn(task.recurrence, dateStr) && !task.skipDates?.includes(dateStr)) {
-      return 'missed';
+    if (
+      task.recurrence &&
+      occursOn(task.recurrence, dateStr) &&
+      !task.skipDates?.includes(dateStr)
+    ) {
+      return "missed";
     }
-    return 'na'; // Não era esperado naquele dia
+    return "na"; // Não era esperado naquele dia
   };
 
   return (
@@ -227,7 +249,9 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
       <div className="habit-grid-labels" aria-hidden="true">
         {[0, 1, 2, 3, 4, 5, 6].map((d) => (
           <span key={d} className="habit-day-label">
-            {WEEK_DAY_POSITIONS.includes(d) ? WEEK_DAY_LABELS[WEEK_DAY_POSITIONS.indexOf(d)] : ''}
+            {WEEK_DAY_POSITIONS.includes(d)
+              ? WEEK_DAY_LABELS[WEEK_DAY_POSITIONS.indexOf(d)]
+              : ""}
           </span>
         ))}
       </div>
@@ -254,7 +278,7 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
                 return (
                   <div
                     key={day.date}
-                    className={`habit-cell habit-cell-${state}${day.isToday ? ' habit-cell-today' : ''}`}
+                    className={`habit-cell habit-cell-${state}${day.isToday ? " habit-cell-today" : ""}`}
                     title={day.date}
                   />
                 );
