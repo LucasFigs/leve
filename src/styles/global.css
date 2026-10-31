@@ -3096,6 +3096,58 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   border-radius: 2px;
   flex-shrink: 0;
   background: var(--surface-3);
+  border: none;
+  padding: 0;
+  cursor: default;
+  display: block;
+}
+
+.habit-cell.habit-cell-clickable {
+  cursor: pointer;
+  transition: transform 120ms var(--ease), filter 120ms var(--ease);
+}
+
+.habit-cell.habit-cell-clickable:hover {
+  transform: scale(1.5);
+  filter: brightness(1.15);
+  z-index: 2;
+  position: relative;
+}
+
+.habit-cell.habit-cell-clickable:active {
+  transform: scale(1.3);
+}
+
+.habit-cell-pending {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px;
+  animation: habit-pulse 700ms ease-in-out infinite alternate;
+}
+
+@keyframes habit-pulse {
+  from { opacity: 0.7; }
+  to   { opacity: 1; }
+}
+
+/* Tooltip de confirmação de dia passado */
+.habit-date-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  margin: 0 14px 10px;
+  font-size: var(--fs-xs);
+}
+
+.btn-xs {
+  font-size: var(--fs-xs);
+  padding: 3px 10px;
+  min-height: 26px;
+  border-radius: 99px;
 }
 
 .habit-cell-done {
