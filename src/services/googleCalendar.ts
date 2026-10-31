@@ -108,7 +108,6 @@ function getStoredToken(): string | null {
     if (!raw) return null;
     const token = JSON.parse(raw) as StoredToken;
     if (Date.now() >= token.expiresAt) {
-      localStorage.removeItem(STORAGE_KEY_TOKEN);
       return null;
     }
     return token.accessToken;
@@ -118,9 +117,15 @@ function getStoredToken(): string | null {
 }
 
 function saveToken(accessToken: string, expiresIn: number) {
-  const expiresAt = Date.now() + Math.max(300, expiresIn - 120) * 1000;
+  // Margem segura de 30 segundos antes da expiração de 3600s (~1 hora)
+  const safeMarginSec = Math.min(30, Math.max(5, Math.floor(expiresIn * 0.05)));
+  const expiresAt = Date.now() + Math.max(60, expiresIn - safeMarginSec) * 1000;
   localStorage.setItem(STORAGE_KEY_TOKEN, JSON.stringify({ accessToken, expiresAt }));
 }
+
+let tokenRefreshPromise: Promise<string | null> | null = null;
+let lastSilentAuthFailure = 0;
+const SILENT_AUTH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos de espera após falha silenciosa
 
 /* ------------------------------------------------------------------ */
 /* Google Identity Services (GIS) Loader                              */
@@ -169,6 +174,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
+        hint: gcalState.email || undefined,
         callback: async (resp: { access_token?: string; error?: string; expires_in?: number }) => {
           if (resp.error || !resp.access_token) {
             updateGcalState({
@@ -180,6 +186,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
           }
 
           saveToken(resp.access_token, resp.expires_in || 3600);
+          lastSilentAuthFailure = 0;
 
           // Obtém lista de calendários e perfil
           const calendars = await fetchCalendarList(resp.access_token);
@@ -188,7 +195,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
           const errorFound = gcalState.error;
           updateGcalState({
             connected: true,
-            email,
+            email: email || gcalState.email,
             calendars,
             calendarId: gcalState.calendarId || 'primary',
             status: errorFound ? 'error' : 'synced',
@@ -201,7 +208,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
           } else {
             toast('Google Agenda conectado com sucesso!');
             // Sincroniza tarefas com data existentes
-            syncAllUpcomingTasks().catch(() => {});
+            syncAllUpcomingTasks(false).catch(() => {});
           }
 
           resolve(true);
@@ -213,7 +220,16 @@ export async function connectGoogleCalendar(): Promise<boolean> {
         },
       });
 
-      client.requestAccessToken({ prompt: 'consent' });
+      // Se já temos a conta conectada previamente, usa hint para pular o seletor de contas
+      const reqOptions: any = {};
+      if (gcalState.email) {
+        reqOptions.hint = gcalState.email;
+        reqOptions.prompt = '';
+      } else {
+        reqOptions.prompt = 'select_account';
+      }
+
+      client.requestAccessToken(reqOptions);
     });
   } catch (err) {
     const msg = (err as Error)?.message || 'Erro ao conectar ao Google.';
@@ -232,12 +248,14 @@ export function disconnectGoogleCalendar() {
     }
   }
   localStorage.removeItem(STORAGE_KEY_TOKEN);
+  lastSilentAuthFailure = 0;
   updateGcalState({
     connected: false,
     email: undefined,
     status: 'idle',
     error: undefined,
     calendars: [],
+    lastSync: undefined,
   });
   toast('Google Agenda desconectado.');
 }
@@ -303,37 +321,95 @@ async function fetchUserEmail(token: string, calendars: GoogleCalendarItem[]): P
   return primary && primary.id.includes('@') ? primary.id : undefined;
 }
 
-async function getValidToken(): Promise<string | null> {
+async function getValidToken(interactive = false): Promise<string | null> {
   const existing = getStoredToken();
   if (existing) return existing;
   if (!gcalState.connected) return null;
 
-  // Token expirado: tenta renovar silenciosamente
-  try {
-    await loadGis();
-    const google = (window as any).google;
-    if (!google?.accounts?.oauth2) return null;
-
-    return new Promise((resolve) => {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (resp: any) => {
-          if (resp.access_token) {
-            saveToken(resp.access_token, resp.expires_in || 3600);
-            updateGcalState({ error: undefined });
-            resolve(resp.access_token);
-          } else {
-            updateGcalState({ status: 'error', error: 'Sessão do Google expirada. Conecte novamente.' });
-            resolve(null);
-          }
-        },
-      });
-      client.requestAccessToken({ prompt: '' });
-    });
-  } catch {
+  // Se for em segundo plano e já falhou silenciosamente recentemente, espera o cooldown
+  if (!interactive && Date.now() - lastSilentAuthFailure < SILENT_AUTH_COOLDOWN_MS) {
     return null;
   }
+
+  // Deduplicação: se já existe uma renovação em andamento, aguarda a mesma
+  if (tokenRefreshPromise) {
+    return tokenRefreshPromise;
+  }
+
+  tokenRefreshPromise = (async () => {
+    try {
+      await loadGis();
+      const google = (window as any).google;
+      if (!google?.accounts?.oauth2) return null;
+
+      return await new Promise<string | null>((resolve) => {
+        let finished = false;
+        const done = (val: string | null) => {
+          if (!finished) {
+            finished = true;
+            resolve(val);
+          }
+        };
+
+        // Timeout para chamadas em segundo plano (evita travar o app se a janela for bloqueada)
+        const timer = !interactive
+          ? setTimeout(() => {
+              lastSilentAuthFailure = Date.now();
+              done(null);
+            }, 6000)
+          : undefined;
+
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          hint: gcalState.email || undefined,
+          callback: (resp: any) => {
+            if (timer) clearTimeout(timer);
+            if (resp?.access_token) {
+              saveToken(resp.access_token, resp.expires_in || 3600);
+              lastSilentAuthFailure = 0;
+              updateGcalState({ error: undefined, status: 'synced' });
+              done(resp.access_token);
+            } else {
+              if (!interactive) lastSilentAuthFailure = Date.now();
+              updateGcalState({
+                status: 'error',
+                error: 'Sessão do Google expirada. Clique em Sincronizar para reconectar.',
+              });
+              done(null);
+            }
+          },
+          error_callback: (err: any) => {
+            if (timer) clearTimeout(timer);
+            if (!interactive) lastSilentAuthFailure = Date.now();
+            console.warn('[Google Calendar] Falha na obtenção do token:', err);
+            done(null);
+          },
+        });
+
+        const reqOptions: any = {};
+        if (gcalState.email) {
+          reqOptions.hint = gcalState.email;
+        }
+
+        if (interactive) {
+          reqOptions.prompt = gcalState.email ? '' : 'select_account';
+        } else {
+          // Em segundo plano: estritamente silencioso
+          reqOptions.prompt = '';
+        }
+
+        client.requestAccessToken(reqOptions);
+      });
+    } catch (err) {
+      console.warn('[Google Calendar] Erro ao renovar token:', err);
+      return null;
+    } finally {
+      tokenRefreshPromise = null;
+    }
+  })();
+
+  return tokenRefreshPromise;
 }
 
 /* ------------------------------------------------------------------ */
@@ -442,11 +518,10 @@ export function taskToGoogleEventPayload(task: Task, timeZone: string) {
 /* Operações de Sincronização                                         */
 /* ------------------------------------------------------------------ */
 
-export async function syncTaskToGoogle(task: Task): Promise<boolean> {
+export async function syncTaskToGoogle(task: Task, existingToken?: string): Promise<boolean> {
   if (!gcalState.connected) return false;
-  const token = await getValidToken();
+  const token = existingToken || (await getValidToken(false));
   if (!token) {
-    console.warn('[Google Calendar] Sem token de acesso válido para sincronizar.');
     return false;
   }
 
@@ -456,7 +531,7 @@ export async function syncTaskToGoogle(task: Task): Promise<boolean> {
   // Se a tarefa não tem data nem recorrência, ou foi arquivada, remove do Google Calendar se já existia
   if ((!task.date && !task.recurrence) || task.status === 'archived') {
     if (task.googleEventId) {
-      await deleteGoogleEvent(task.googleEventId);
+      await deleteGoogleEvent(task.googleEventId, token);
       actions.update(task.id, { googleEventId: undefined });
     }
     return true;
@@ -518,7 +593,7 @@ export async function syncTaskToGoogle(task: Task): Promise<boolean> {
 
       if (res.status === 401) {
         localStorage.removeItem(STORAGE_KEY_TOKEN);
-        updateGcalState({ status: 'error', error: 'Sessão do Google expirada. Conecte novamente.' });
+        updateGcalState({ status: 'error', error: 'Sessão do Google expirada. Clique em Sincronizar para reconectar.' });
       } else if (res.status === 403) {
         const isApiDisabled = errorMsg.toLowerCase().includes('has not been used') || errorMsg.toLowerCase().includes('disabled');
         const msg = isApiDisabled
@@ -547,9 +622,9 @@ export async function syncTaskToGoogle(task: Task): Promise<boolean> {
   }
 }
 
-export async function deleteGoogleEvent(googleEventId: string): Promise<void> {
+export async function deleteGoogleEvent(googleEventId: string, existingToken?: string): Promise<void> {
   if (!gcalState.connected) return;
-  const token = await getValidToken();
+  const token = existingToken || (await getValidToken(false));
   if (!token) return;
 
   const calendarId = encodeURIComponent(gcalState.calendarId || 'primary');
@@ -564,9 +639,18 @@ export async function deleteGoogleEvent(googleEventId: string): Promise<void> {
 }
 
 /** Sincroniza todas as tarefas ativas com data para o Google Agenda. */
-export async function syncAllUpcomingTasks(): Promise<number> {
+export async function syncAllUpcomingTasks(interactive = false): Promise<number> {
   if (!gcalState.connected) return 0;
   updateGcalState({ status: 'syncing', error: undefined });
+
+  const token = await getValidToken(interactive);
+  if (!token) {
+    updateGcalState({
+      status: 'error',
+      error: 'Sessão do Google expirada. Clique em Sincronizar para reconectar.',
+    });
+    return 0;
+  }
 
   const tasks = getState().tasks.filter((t) => (t.date || t.recurrence) && t.status !== 'archived');
   let count = 0;
@@ -574,7 +658,7 @@ export async function syncAllUpcomingTasks(): Promise<number> {
 
   for (const t of tasks) {
     try {
-      const ok = await syncTaskToGoogle(t);
+      const ok = await syncTaskToGoogle(t, token);
       if (ok) {
         count++;
       } else {
@@ -619,19 +703,28 @@ function processQueue() {
     return;
   }
 
+  // Se já sabemos que a sessão falhou recentemente, não fica bombardeando em background
+  if (gcalState.status === 'error' && Date.now() - lastSilentAuthFailure < SILENT_AUTH_COOLDOWN_MS) {
+    return;
+  }
+
   const tasksToSync = Array.from(queuedTasks);
   const eventsToDelete = Array.from(queuedDeletions);
   queuedTasks.clear();
   queuedDeletions.clear();
 
   (async () => {
+    // Valida o token uma única vez para toda a fila em segundo plano (não interativo)
+    const token = await getValidToken(false);
+    if (!token) return;
+
     for (const eventId of eventsToDelete) {
-      await deleteGoogleEvent(eventId);
+      await deleteGoogleEvent(eventId, token);
     }
     const state = getState();
     for (const taskId of tasksToSync) {
       const task = state.tasks.find((t) => t.id === taskId);
-      if (task) await syncTaskToGoogle(task);
+      if (task) await syncTaskToGoogle(task, token);
     }
   })().catch(() => {});
 }

@@ -500,7 +500,7 @@ function GoogleCalendarSection() {
   const handleManualSync = async () => {
     setSyncing(true);
     try {
-      await syncAllUpcomingTasks();
+      await syncAllUpcomingTasks(true);
     } finally {
       setSyncing(false);
     }
