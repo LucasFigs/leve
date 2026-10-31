@@ -17,6 +17,7 @@ export type Sheet =
   | { type: 'week' }
   | { type: 'replan'; id: string; date: string }
   | { type: 'breakdown'; id: string; thenFocus?: boolean }
+  | { type: 'habitCalendar'; id: string }
   | { type: 'project'; id?: string }
   | { type: 'search' }
   | { type: 'account' };
