@@ -3,10 +3,10 @@
  * Mostra um card por hábito com:
  *  - Ícone + título + descrição (notes)
  *  - Botão para marcar hoje como feito
- *  - Grid de calor (heatmap) das últimas ~22 semanas
+ *  - Grid de calor (heatmap) das últimas ~22 semanas (clicável para marcar dias passados)
  *  - Sequência atual (streak) e frequência alvo
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Task } from '../domain/types';
 import { todayISO } from '../domain/dates';
 import { nextOccurrence, occursOn } from '../domain/recurrence';
@@ -191,6 +191,9 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
   const weeks = useMemo(() => buildHabitGrid(today, 22), [today]);
   const doneDates = useMemo(() => new Set(task.doneDates ?? []), [task.doneDates]);
 
+  // Tooltip de confirmação: quando o usuário clica em uma célula passada
+  const [pendingDate, setPendingDate] = useState<string | null>(null);
+
   // Auto-scroll para a direita (semana atual) no mount
   const refCallback = (el: HTMLDivElement | null) => {
     if (el) {
@@ -209,8 +212,55 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
     return 'na'; // Não era esperado naquele dia
   };
 
+  const handleCellClick = (dateStr: string, isFuture: boolean, state: 'future' | 'done' | 'missed' | 'na') => {
+    if (isFuture) return; // Dias futuros não são clicáveis
+
+    if (state === 'done') {
+      // Desmarcar
+      actions.reopen(task.id, dateStr);
+      toast('Desmarcado', { label: 'Desfazer', run: () => actions.undo() });
+      setPendingDate(null);
+    } else if (state === 'missed' || state === 'na') {
+      if (pendingDate === dateStr) {
+        // Confirmação: segundo clique marca como feito
+        actions.complete(task.id, dateStr);
+        toast(`✓ Marcado para ${dateStr}`, { label: 'Desfazer', run: () => actions.undo() });
+        setPendingDate(null);
+      } else {
+        // Primeiro clique: mostra tooltip de confirmação
+        setPendingDate(dateStr);
+      }
+    }
+  };
+
+  // Formatar data para exibição amigável
+  const formatCellDate = (dateStr: string): string => {
+    try {
+      const d = new Date(dateStr + 'T12:00:00');
+      return d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <div className="habit-grid-wrap">
+      {/* Tooltip de confirmação */}
+      {pendingDate && (
+        <div className="habit-date-confirm" role="status">
+          <span className="xs">Marcar <b>{formatCellDate(pendingDate)}</b> como feito?</span>
+          <button
+            className="btn btn-xs btn-primary"
+            onClick={() => handleCellClick(pendingDate, false, getCellState(pendingDate, false))}
+          >
+            Confirmar
+          </button>
+          <button className="btn btn-xs btn-ghost" onClick={() => setPendingDate(null)}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
       {/* Day-of-week labels column */}
       <div className="habit-grid-labels" aria-hidden="true">
         {[0, 1, 2, 3, 4, 5, 6].map((d) => (
@@ -221,7 +271,7 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
       </div>
 
       {/* Scrollable grid */}
-      <div className="habit-grid-scroll" ref={refCallback} aria-hidden="true">
+      <div className="habit-grid-scroll" ref={refCallback}>
         {/* Month labels row */}
         <div className="habit-month-row">
           {weeks.map((week, wi) => (
@@ -239,11 +289,28 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
             <div key={wi} className="habit-grid-col">
               {week.days.map((day) => {
                 const state = getCellState(day.date, day.isFuture);
+                const isPending = pendingDate === day.date;
+                const isClickable = !day.isFuture;
                 return (
-                  <div
+                  <button
                     key={day.date}
-                    className={`habit-cell habit-cell-${state}${day.isToday ? ' habit-cell-today' : ''}`}
-                    title={day.date}
+                    className={`habit-cell habit-cell-${state}${day.isToday ? ' habit-cell-today' : ''}${isPending ? ' habit-cell-pending' : ''}${isClickable ? ' habit-cell-clickable' : ''}`}
+                    onClick={() => handleCellClick(day.date, day.isFuture, state)}
+                    aria-label={
+                      day.isFuture
+                        ? day.date
+                        : state === 'done'
+                        ? `${formatCellDate(day.date)} — feito (clique para desmarcar)`
+                        : `${formatCellDate(day.date)} — clique para marcar como feito`
+                    }
+                    title={
+                      day.isFuture
+                        ? undefined
+                        : state === 'done'
+                        ? `${formatCellDate(day.date)} ✓ feito`
+                        : `${formatCellDate(day.date)} — marcar como feito`
+                    }
+                    disabled={day.isFuture}
                   />
                 );
               })}
