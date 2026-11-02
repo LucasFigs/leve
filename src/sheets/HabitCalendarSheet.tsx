@@ -255,7 +255,7 @@ function HabitMiniGrid({
   recurrence?: any;
   skipDates?: string[];
 }) {
-  const weeks = useMemo(() => buildHabitGrid(today, 24), [today]);
+  const weeks = useMemo(() => buildHabitGrid(today, 16), [today]);
 
   const getCellState = (dateStr: string, isFuture: boolean): 'future' | 'done' | 'missed' | 'na' => {
     if (isFuture) return 'future';

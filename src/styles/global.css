@@ -3061,6 +3061,7 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .habit-month-row {
   display: flex;
   width: 100%;
+  gap: 2px;
   height: 16px;
   margin-bottom: 2px;
 }
@@ -3083,6 +3084,7 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .habit-grid-cols {
   display: flex;
   width: 100%;
+  gap: 2px;
 }
 
 .habit-grid-col {
@@ -3098,7 +3100,6 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .habit-cell {
   width: 100%;
   aspect-ratio: 1;
-  max-width: 14px;
   border-radius: 2px;
   background: var(--surface-3);
   border: none;
