@@ -3125,6 +3125,31 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   transform: scale(1.3);
 }
 
+/* ── Desktop: células fixas pequenas (não crescem com o card largo) ── */
+@media (min-width: 640px) {
+  .habit-grid-cols {
+    width: auto;
+  }
+  .habit-month-row {
+    width: auto;
+  }
+  .habit-grid-col {
+    flex: none;
+    width: 10px;
+    min-width: unset;
+  }
+  .habit-month-cell {
+    flex: none;
+    width: 10px;
+    min-width: unset;
+  }
+  .habit-cell {
+    width: 10px;
+    height: 10px;
+    aspect-ratio: unset;
+  }
+}
+
 .habit-cell-pending {
   outline: 2px solid var(--accent) !important;
   outline-offset: 1px;
