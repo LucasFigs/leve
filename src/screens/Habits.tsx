@@ -212,7 +212,7 @@ const WEEK_DAY_LABELS = ["Dom", "Ter", "Qui", "Sáb"];
 const WEEK_DAY_POSITIONS = [0, 2, 4, 6]; // Índices no array que têm rótulo
 
 function HabitGrid({ task, today }: { task: Task; today: string }) {
-  const weeks = useMemo(() => buildHabitGrid(today, 16), [today]);
+  const weeks = useMemo(() => buildHabitGrid(today, 22), [today]);
   const doneDates = useMemo(
     () => new Set(task.doneDates ?? []),
     [task.doneDates],
