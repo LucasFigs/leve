@@ -212,18 +212,11 @@ const WEEK_DAY_LABELS = ["Dom", "Ter", "Qui", "Sáb"];
 const WEEK_DAY_POSITIONS = [0, 2, 4, 6]; // Índices no array que têm rótulo
 
 function HabitGrid({ task, today }: { task: Task; today: string }) {
-  const weeks = useMemo(() => buildHabitGrid(today, 22), [today]);
+  const weeks = useMemo(() => buildHabitGrid(today, 24), [today]);
   const doneDates = useMemo(
     () => new Set(task.doneDates ?? []),
     [task.doneDates],
   );
-
-  // Auto-scroll para a direita (semana atual) no mount
-  const refCallback = (el: HTMLDivElement | null) => {
-    if (el) {
-      el.scrollLeft = el.scrollWidth;
-    }
-  };
 
   const getCellState = (
     dateStr: string,
@@ -256,8 +249,8 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
         ))}
       </div>
 
-      {/* Scrollable grid */}
-      <div className="habit-grid-scroll" ref={refCallback} aria-hidden="true">
+      {/* Grid sem scroll — preenche toda a largura */}
+      <div className="habit-grid-scroll" aria-hidden="true">
         {/* Month labels row */}
         <div className="habit-month-row">
           {weeks.map((week, wi) => (

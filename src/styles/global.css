@@ -3030,7 +3030,8 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   flex-direction: column;
   gap: 2px;
   flex-shrink: 0;
-  padding-top: 16px; /* aligns with the month row */
+  padding-top: 18px; /* aligns with the month row */
+  justify-content: space-between;
 }
 
 .habit-day-label {
@@ -3044,10 +3045,11 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 }
 
 .habit-grid-scroll {
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   scrollbar-width: none;
   flex: 1;
+  min-width: 0;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -3058,14 +3060,14 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 /* Month labels row */
 .habit-month-row {
   display: flex;
-  gap: 2px;
+  width: 100%;
   height: 16px;
   margin-bottom: 2px;
 }
 
 .habit-month-cell {
-  width: 10px;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   position: relative;
 }
 
@@ -3080,26 +3082,30 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 /* Week columns */
 .habit-grid-cols {
   display: flex;
-  gap: 2px;
+  width: 100%;
 }
 
 .habit-grid-col {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
 }
 
 /* Individual cells */
 .habit-cell {
-  width: 10px;
-  height: 10px;
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 14px;
   border-radius: 2px;
-  flex-shrink: 0;
   background: var(--surface-3);
   border: none;
   padding: 0;
   cursor: default;
   display: block;
+  flex-shrink: 0;
 }
 
 .habit-cell.habit-cell-clickable {
