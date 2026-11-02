@@ -255,11 +255,7 @@ function HabitMiniGrid({
   recurrence?: any;
   skipDates?: string[];
 }) {
-  const weeks = useMemo(() => buildHabitGrid(today, 18), [today]);
-
-  const refCallback = (el: HTMLDivElement | null) => {
-    if (el) el.scrollLeft = el.scrollWidth;
-  };
+  const weeks = useMemo(() => buildHabitGrid(today, 24), [today]);
 
   const getCellState = (dateStr: string, isFuture: boolean): 'future' | 'done' | 'missed' | 'na' => {
     if (isFuture) return 'future';
@@ -279,7 +275,7 @@ function HabitMiniGrid({
           </span>
         ))}
       </div>
-      <div className="habit-grid-scroll" ref={refCallback} aria-hidden="true">
+      <div className="habit-grid-scroll" aria-hidden="true">
         <div className="habit-month-row">
           {weeks.map((week, wi) => (
             <div key={wi} className="habit-month-cell">
