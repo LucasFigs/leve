@@ -6,7 +6,7 @@
  *  - Grid de calor (heatmap) das últimas ~22 semanas (clicável para marcar dias passados)
  *  - Sequência atual (streak) e frequência alvo
  */
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import type { Task } from "../domain/types";
 import { todayISO } from "../domain/dates";
 import { nextOccurrence, occursOn } from "../domain/recurrence";
@@ -211,8 +211,30 @@ function HabitCard({
 const WEEK_DAY_LABELS = ["Dom", "Ter", "Qui", "Sáb"];
 const WEEK_DAY_POSITIONS = [0, 2, 4, 6]; // Índices no array que têm rótulo
 
+/** Largura de cada coluna em px: célula (10) + gap (2) */
+const COL_WIDTH_PX = 12;
+
 function HabitGrid({ task, today }: { task: Task; today: string }) {
-  const weeks = useMemo(() => buildHabitGrid(today, 22), [today]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  // Mede a largura disponível do container e atualiza quando a janela redimensiona
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Calcula semanas para preencher exatamente o container com células de 10px + gap 2px
+  const totalWeeks = containerWidth > 0
+    ? Math.max(16, Math.min(78, Math.floor(containerWidth / COL_WIDTH_PX)))
+    : 22;
+
+  const weeks = useMemo(() => buildHabitGrid(today, totalWeeks), [today, totalWeeks]);
   const doneDates = useMemo(
     () => new Set(task.doneDates ?? []),
     [task.doneDates],
@@ -249,8 +271,8 @@ function HabitGrid({ task, today }: { task: Task; today: string }) {
         ))}
       </div>
 
-      {/* Grid sem scroll — preenche toda a largura */}
-      <div className="habit-grid-scroll" aria-hidden="true">
+      {/* Grid — preenche a largura disponível com células fixas de 10px */}
+      <div className="habit-grid-scroll" ref={scrollRef} aria-hidden="true">
         {/* Month labels row */}
         <div className="habit-month-row">
           {weeks.map((week, wi) => (

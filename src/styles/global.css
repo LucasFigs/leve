@@ -3060,15 +3060,14 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 /* Month labels row */
 .habit-month-row {
   display: flex;
-  width: 100%;
   gap: 2px;
   height: 16px;
   margin-bottom: 2px;
 }
 
 .habit-month-cell {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 10px;
   position: relative;
 }
 
@@ -3083,13 +3082,12 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 /* Week columns */
 .habit-grid-cols {
   display: flex;
-  width: 100%;
   gap: 2px;
 }
 
 .habit-grid-col {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3098,8 +3096,8 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 /* Individual cells */
 .habit-cell {
-  width: 100%;
-  aspect-ratio: 1;
+  width: 10px;
+  height: 10px;
   border-radius: 2px;
   background: var(--surface-3);
   border: none;
@@ -3123,31 +3121,6 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 .habit-cell.habit-cell-clickable:active {
   transform: scale(1.3);
-}
-
-/* ── Desktop: células fixas pequenas (não crescem com o card largo) ── */
-@media (min-width: 640px) {
-  .habit-grid-cols {
-    width: auto;
-  }
-  .habit-month-row {
-    width: auto;
-  }
-  .habit-grid-col {
-    flex: none;
-    width: 10px;
-    min-width: unset;
-  }
-  .habit-month-cell {
-    flex: none;
-    width: 10px;
-    min-width: unset;
-  }
-  .habit-cell {
-    width: 10px;
-    height: 10px;
-    aspect-ratio: unset;
-  }
 }
 
 .habit-cell-pending {

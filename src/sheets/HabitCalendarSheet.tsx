@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { todayISO } from '../domain/dates';
 import {
   buildHabitGrid,
@@ -243,7 +243,7 @@ export function HabitCalendarSheet({ id }: { id: string }) {
   );
 }
 
-/** Mini-grid de heatmap das últimas ~16 semanas dentro da ficha de detalhes */
+/** Mini-grid de heatmap dentro da ficha de detalhes — preenche toda a largura */
 function HabitMiniGrid({
   taskDoneDates,
   today,
@@ -255,7 +255,25 @@ function HabitMiniGrid({
   recurrence?: any;
   skipDates?: string[];
 }) {
-  const weeks = useMemo(() => buildHabitGrid(today, 22), [today]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const COL_WIDTH_PX = 12; // 10px célula + 2px gap
+  const totalWeeks = containerWidth > 0
+    ? Math.max(16, Math.min(78, Math.floor(containerWidth / COL_WIDTH_PX)))
+    : 22;
+
+  const weeks = useMemo(() => buildHabitGrid(today, totalWeeks), [today, totalWeeks]);
 
   const getCellState = (dateStr: string, isFuture: boolean): 'future' | 'done' | 'missed' | 'na' => {
     if (isFuture) return 'future';
@@ -275,7 +293,7 @@ function HabitMiniGrid({
           </span>
         ))}
       </div>
-      <div className="habit-grid-scroll" aria-hidden="true">
+      <div className="habit-grid-scroll" ref={scrollRef} aria-hidden="true">
         <div className="habit-month-row">
           {weeks.map((week, wi) => (
             <div key={wi} className="habit-month-cell">

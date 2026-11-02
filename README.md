@@ -1,91 +1,101 @@
 # Leve
 
-> Tire tudo da cabeça. O app ajuda você a decidir o que fazer, quando fazer e como começar.
+> Tire tudo da cabeça. O Leve ajuda você a decidir o que fazer, quando fazer e como começar.
 
-Assistente pessoal mobile-first para agenda, tarefas, priorização e execução.
+O Leve é um assistente pessoal para organizar tarefas, compromissos e hábitos sem transformar o planejamento em mais uma tarefa. Você registra o que está na cabeça, organiza o que importa e encontra um próximo passo possível para o seu dia.
 
-## Rodar
+## O que você ganha com o Leve
+
+- **Menos coisas para lembrar:** capture tarefas rapidamente e organize-as depois, no Inbox.
+- **Mais clareza para agir:** veja o que está planejado para hoje, o que está atrasado e qual tarefa faz sentido começar.
+- **Planos que cabem no dia:** organize o dia ou a semana considerando duração, pausas e disponibilidade; reorganize o que mudou.
+- **Acompanhamento em um só lugar:** reúna tarefas, compromissos, projetos e hábitos, com progresso e recorrências.
+- **Foco na execução:** comece uma tarefa em modo foco, com Pomodoro e passos menores para tarefas grandes.
+- **Acesso no celular e offline:** use como PWA instalável; os dados ficam no aparelho e o app pode ser usado sem uma conta.
+
+## Como usar
+
+1. **Capture:** no **Inbox**, anote rapidamente tudo o que precisa fazer. Você também pode criar uma tarefa com `N` ou usar a busca com `/` ou `Ctrl K`.
+2. **Organize:** revise as capturas e defina data, horário, duração, prioridade ou projeto. Quando uma tarefa não tiver data, deixe-a para “Quando der”.
+3. **Planeje:** em **Hoje** ou **Agenda**, organize o dia ou a semana. O Leve mostra o que está previsto e ajuda a escolher por onde começar.
+4. **Faça:** inicie uma tarefa, acompanhe os passos e marque-a como concluída. Se os planos mudarem, replaneje ou reorganize o restante do dia.
+5. **Acompanhe:** use **Projetos** para visualizar o progresso de objetivos maiores e **Hábitos** para registrar recorrências e sequências.
+
+Você pode escrever tarefas em linguagem natural em português, por exemplo: `Enviar o relatório amanhã às 14h`. O Leve interpreta informações como data, horário, duração, prioridade e recorrência para ajudar a preencher a tarefa.
+
+## Começar no computador
+
+Você precisa de [Node.js](https://nodejs.org/) e npm.
 
 ```bash
+git clone <url-do-repositorio>
+cd leve
 npm install
-npm run dev       # desenvolvimento (abre também na rede local: teste no celular)
-npm run build     # build de produção (PWA instalável, funciona offline)
-npm run preview   # serve o build
-npm test          # testes (interpretador de linguagem natural e planejamento)
-npm run setup:supabase  # configura o Supabase a partir do .env.local
+npm run dev
 ```
 
-## Nuvem (Supabase)
+Abra no navegador o endereço informado pelo Vite (normalmente `http://localhost:5173`). Para testar em um celular conectado à mesma rede, use o endereço de rede exibido pelo servidor.
+
+Comandos úteis:
+
+```bash
+npm test          # executa os testes
+npm run build     # verifica os tipos e gera o build de produção
+npm run preview   # abre localmente o build gerado
+```
+
+## Usar no celular
+
+Depois de publicar o app, abra o endereço no navegador do celular e instale-o na tela inicial:
+
+- **Android (Chrome):** menu ⋮ → **Instalar app**.
+- **iPhone (Safari):** **Compartilhar** → **Adicionar à Tela de Início**.
+
+## Sincronização e login (opcional)
+
+Sem configurar o Supabase, o Leve funciona no próprio aparelho e salva os dados localmente. Para usar login e sincronizar os dados entre dispositivos, configure um projeto Supabase:
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
-2. Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-   e `SUPABASE_ACCESS_TOKEN` (token pessoal, só para o script abaixo).
-3. Rode `npm run setup:supabase` — cria a tabela (`supabase/schema.sql`) com segurança por usuário,
-   liga o tempo real e configura o login (e o Google, se `GOOGLE_CLIENT_ID/SECRET` estiverem preenchidos).
+2. Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `SUPABASE_ACCESS_TOKEN`.
+3. Execute:
 
-Sem as variáveis `VITE_SUPABASE_*` o app funciona só no aparelho.
+   ```bash
+   npm run setup:supabase
+   ```
 
-## Deploy na Vercel
+O script configura o schema em `supabase/schema.sql`, as políticas de acesso por usuário, a sincronização em tempo real e o login. Para habilitar login com Google, configure também `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`.
 
-1. Suba o código para o GitHub.
-2. Em [vercel.com/new](https://vercel.com/new), importe o repositório (a Vercel detecta Vite; `vercel.json` já configura tudo).
-3. Em **Environment Variables**, adicione **só** `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
-   (a chave anon é pública por design; a segurança vem das regras RLS do banco).
-   Nunca coloque `SUPABASE_ACCESS_TOKEN` nem `GOOGLE_CLIENT_SECRET` na Vercel.
-4. Depois do primeiro deploy, coloque o endereço em `APP_URL` no `.env.local` e rode
-   `npm run setup:supabase` de novo — libera o login (e-mail e Google) nesse endereço.
+`SUPABASE_ACCESS_TOKEN` e `GOOGLE_CLIENT_SECRET` são usados apenas localmente pelo script. **Nunca os publique nem os configure na Vercel.** No app publicado, configure somente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`; o acesso aos dados é protegido pelas políticas RLS do banco.
 
-## Usar como app no celular
+## Publicar na Vercel
 
-Abra o endereço da Vercel no celular:
+1. Envie o repositório ao GitHub e importe-o em [vercel.com/new](https://vercel.com/new). A Vercel detecta o Vite e usa as configurações de `vercel.json`.
+2. Se configurou o Supabase, adicione `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` às variáveis de ambiente do projeto na Vercel.
+3. Depois do primeiro deploy, configure o endereço público como `APP_URL` no `.env.local` e execute `npm run setup:supabase` novamente para autorizar esse endereço no login.
 
-- **Android (Chrome):** avatar → Perfil → *Instalar app* (ou menu ⋮ → *Instalar app*).
-- **iPhone (Safari):** Compartilhar → *Adicionar à Tela de Início*.
+## Lembretes por notificação (opcional)
 
-Atalhos no desktop: `N` captura · `/` ou `Ctrl K` busca · `1`–`5` navegação.
+Em **Perfil → Lembretes**, escolha quantos minutos antes do horário quer ser avisado. Sem configurar push, o lembrete depende de o app estar aberto ou ter sido usado recentemente. Com push configurado, as notificações podem chegar com o app fechado; no iPhone, é necessário iOS 16.4 ou posterior e o app instalado na tela inicial.
 
-## Arquitetura
+Para configurar push uma vez por projeto:
 
-```
-src/
-  domain/      Regras puras, sem UI (testáveis)
-    parser.ts      Linguagem natural pt-BR → título, tipo, data, hora, duração, recorrência, prioridade
-    priority.ts    “Qual a próxima coisa que faz sentido fazer?” (score + motivo)
-    planner.ts     Organizar meu dia / semana, replanejamento, folgas e pausas
-    organize.ts    Sugestões para as capturas do Inbox
-    breakdown.ts   Quebra de tarefas grandes em passos
-    selectors.ts   Recorrência, itens do dia, atrasadas, progresso
-    search.ts      Busca global com linguagem natural
-  services/
-    assistant.ts   Fronteira da “inteligência”: troque por uma implementação com IA sem mexer na UI
-  store/
-    store.ts       Estado + ações (com desfazer)
-    persistence.ts Cache local (localStorage) — app abre e funciona offline
-    sync.ts        Login + sincronização com o Supabase (por item, tempo real)
-    ui.ts          Estado efêmero de interface (abas, sheets, toasts)
-  components/  Componentes reutilizáveis (TaskCard, QuickAdd, BottomSheet, DayTimeline…)
-  screens/     Hoje, Agenda, Inbox, Projetos, Perfil, Foco, Onboarding
-  sheets/      Detalhe da tarefa, Organizar dia/semana/capturas, Replanejar, Dividir, Busca
-```
+1. Configure `SUPABASE_ACCESS_TOKEN` no `.env.local`.
+2. Execute `npm run setup:push`. O script gera as chaves, cria as tabelas de `supabase/push.sql`, publica a função `send-reminders` e agenda sua execução.
+3. Adicione a variável `VITE_VAPID_PUBLIC_KEY` exibida pelo script às variáveis da Vercel e faça um novo deploy.
+4. Ative **Perfil → Lembretes** em cada aparelho.
 
-## Lembretes (notificação antes do horário)
+Se alterar as regras de lembrete em `src/domain`, execute `npm run setup:push` novamente para republicar a função.
 
-Em **Perfil › Lembretes** o app avisa alguns minutos antes de tarefas e compromissos com hora marcada.
+## Atalhos
 
-- **Sem configuração extra:** o aviso só chega com o app aberto (ou há pouco em segundo plano).
-- **Com push:** chega mesmo com o app fechado, no Android e no iPhone (iOS 16.4+, com o app instalado na tela inicial).
+- `N`: capturar uma tarefa.
+- `/` ou `Ctrl K`: abrir a busca.
+- `1`–`5`: navegar entre as telas principais.
 
-Para ligar o push (uma vez por projeto):
+## Estrutura do projeto
 
-1. No `.env.local`, preencha `SUPABASE_ACCESS_TOKEN` (o mesmo do `setup:supabase`).
-2. Rode `npm run setup:push`. Ele gera as chaves, cria as tabelas (`supabase/push.sql`), publica a função
-   `send-reminders` e agenda a execução a cada minuto.
-3. Copie a `VITE_VAPID_PUBLIC_KEY` que o script mostra para as variáveis de ambiente da Vercel e faça um novo deploy.
-4. Em cada aparelho: Perfil › Lembretes › ligue “Avisar antes do horário”.
-
-Como funciona: cada aparelho guarda sua inscrição em `push_subscriptions`. A cada minuto o Supabase chama a função
-(`supabase/functions/send-reminders`), que usa as mesmas regras do app (`src/domain/reminders.ts`) para achar o que
-está para começar e envia a notificação. Mudou alguma regra em `src/domain`? Rode `npm run setup:push` de novo para
-republicar a função.
-
-Próximos passos naturais: `Assistant` com LLM, integração com Google/Apple Calendar, widgets.
+- `src/domain`: regras de negócio testáveis, como interpretação de tarefas, prioridades, planejamento, recorrências e busca.
+- `src/services`: integração da interface com os serviços de assistência.
+- `src/store`: estado, ações, persistência local e sincronização com Supabase.
+- `src/components`, `src/screens` e `src/sheets`: componentes, telas e painéis da interface.
+- `supabase`: schema do banco, scripts SQL e função de lembretes.
