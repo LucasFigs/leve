@@ -15,6 +15,13 @@ describe('integridade local', () => {
     localRepository.save(fixture() as never);
     expect(localStorage.getItem('leve.state.v1')).toBe(raw);
   });
+  it('oferece recuperação de uma cópia legada sem apagá-la',async()=>{
+    const raw=JSON.stringify(fixture());localStorage.setItem('leve.recovery.v1',raw);
+    const persistence=await import('./persistence');expect(persistence.localRepository.load()).toBeUndefined();
+    expect(persistence.storageIssue()).toBe('recovery');
+    expect(JSON.parse(persistence.recoveryExport(fixture() as never)).preservedSnapshot).toBe(raw);
+    expect(localStorage.getItem('leve.recovery.v1')).toBe(raw);
+  });
   it('recusa captura longa na ação central sem alterar os dados', async () => {
     const {actions,getState}=await import('./store');
     const original=getState();
@@ -53,5 +60,18 @@ describe('integridade local', () => {
     const saved=actions.capture('😀'.repeat(500));expect(saved).toBeDefined();
     actions.update(saved!.id,{title:'x'.repeat(1001)});
     expect(getState().tasks[0].title.length).toBe(1000);
+  });
+  it('preserva exclusões Google pendentes após reload e só remove após confirmação',async()=>{
+    const {actions}=await import('./store');const {localRepository}=await import('./persistence');
+    actions.queueGoogleDeletion('event-fixture','calendar-fixture');
+    expect(localRepository.load()?.googleDeletions).toEqual([{eventId:'event-fixture',calendarId:'calendar-fixture'}]);
+    actions.acknowledgeGoogleDeletion('event-fixture','calendar-fixture');
+    expect(localRepository.load()?.googleDeletions).toEqual([]);
+  });
+  it('descartar horário/período e duração não mantém os campos rejeitados',async()=>{
+    const {actions}=await import('./store');
+    const captured=actions.capture('Revisar texto amanhã à tarde por 90 min',{},new Set(['time','duration']));
+    expect(captured?.date).toBeDefined();expect(captured?.time).toBeUndefined();expect(captured?.dayPart).toBeUndefined();
+    expect(captured?.duration).toBe(30);
   });
 });

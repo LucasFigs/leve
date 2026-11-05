@@ -18,6 +18,7 @@ export interface Reminder {
 export interface ReminderPrefs {
   reminderLead?: number;
   defaultDuration?: number;
+  discreetReminders?: boolean;
 }
 
 /**
@@ -37,9 +38,9 @@ export function dueReminders(tasks: Task[], prefs: ReminderPrefs, today: string,
       taskId: i.task.id,
       date: i.date,
       time: i.time,
-      title: i.task.title,
+      title: prefs.discreetReminders ? 'Leve' : i.task.title,
       left,
-      body: left > 0 ? `Começa às ${i.time} (em ${left} min)` : `Era às ${i.time} — está na hora`,
+      body: prefs.discreetReminders ? 'Você tem uma atividade planejada. Abra o Leve para ver.' : left > 0 ? `Começa às ${i.time} (em ${left} min)` : `Era às ${i.time} — está na hora`,
     });
   }
   return out;

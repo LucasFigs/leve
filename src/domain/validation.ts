@@ -2,6 +2,7 @@ import type { Task, Project } from './types';
 import { HABIT_COLORS, HABIT_ICONS } from './habits';
 
 export const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+export const isGoogleDeletions = (value: unknown): boolean => value == null || Array.isArray(value) && value.length <= 10000 && value.every(v => isObject(v) && typeof v.eventId === 'string' && v.eventId.length > 0 && v.eventId.length <= 1024 && typeof v.calendarId === 'string' && v.calendarId.length > 0 && v.calendarId.length <= 1024);
 const text = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
 const number = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
 const optional = (v: unknown, check: (v: unknown) => boolean) => v == null || check(v);
@@ -19,6 +20,7 @@ export function isTask(v: unknown): v is Task {
     !optional(v.notes, x => text(x, 50000)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) ||
     !optional(v.duration, x => integer(x, 1, 10080)) ||
     !optional(v.googleEventId, x => text(x, 1024)) ||
+    !optional(v.googleCalendarId, x => text(x, 1024)) ||
     !optional(v.doneDates, dates) || !optional(v.skipDates, dates) || !optional(v.missedDates, dates) ||
     !Array.isArray(v.subtasks) || v.subtasks.length > 1000 || !v.subtasks.every(s => isObject(s) && text(s.id, 200) && text(s.title, 1000) && typeof s.done === 'boolean')) return false;
   if (v.recurrence != null) {
@@ -41,7 +43,7 @@ export function isSettings(v: unknown): v is Record<string, unknown> {
   return optional(v.name, x => text(x, 1000)) && optional(v.theme, x => ['system', 'light', 'dark'].includes(x as string)) &&
     ['dayStart', 'dayEnd', 'lunchStart', 'lunchEnd'].every(k => optional(v[k], time)) &&
     optional(v.defaultDuration, x => integer(x, 1, 10080)) && optional(v.reminderLead, x => integer(x, 0, 1440)) &&
-    ['protectLunch', 'nudges', 'reminders', 'onboarded'].every(k => optional(v[k], x => typeof x === 'boolean'));
+    ['protectLunch', 'nudges', 'reminders', 'discreetReminders', 'onboarded'].every(k => optional(v[k], x => typeof x === 'boolean'));
 }
 
 export function isMeta(v: unknown): boolean {

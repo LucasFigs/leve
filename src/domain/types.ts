@@ -80,6 +80,8 @@ export interface Task {
   completedAt?: number;
   /** ID do evento correspondente no Google Agenda */
   googleEventId?: string;
+  /** Calendário ao qual o evento está vinculado; mudar o destino não move eventos existentes. */
+  googleCalendarId?: string;
 }
 
 export interface Project {
@@ -106,6 +108,7 @@ export interface Settings {
   reminders?: boolean;
   /** quantos minutos antes avisar */
   reminderLead?: number;
+  discreetReminders?: boolean;
   onboarded: boolean;
 }
 
@@ -128,6 +131,8 @@ export interface AppState {
   /** chave da sugestão → data em que foi dispensada */
   dismissed: Record<string, string>;
   focus?: FocusSession;
+  /** Outbox local da conta atual; não contém tokens e não é sincronizada como tarefa. */
+  googleDeletions?: {eventId: string; calendarId: string}[];
 }
 
 /** Uma ocorrência concreta de uma tarefa em um dia. */

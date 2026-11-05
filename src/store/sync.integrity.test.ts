@@ -32,6 +32,33 @@ async function ready() {
   return {store,sync};
 }
 describe('saída sem perda de dados',()=>{
+  it('grava o journal da captura antes do debounce do envio',async()=>{
+    const {store}=await ready();const task=store.actions.capture('Precisa sobreviver ao reload')!;
+    expect(JSON.parse(localStorage.getItem('leve.sync.v1')!).dirty).toContain(task.id);
+  });
+  it('não declara saída concluída se o Auth falhar',async()=>{
+    const {store,sync}=await ready();store.actions.capture('Fictícia');backend.signOut.mockResolvedValue({error:{message:'Auth indisponível'}});
+    expect(await sync.signOut()).toBe(false);expect(store.getState().tasks).toHaveLength(1);
+  });
+  it('falha isolada do journal fica visível e bloqueia logout destrutivo',async()=>{
+    const {store,sync}=await ready();const setter=Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype,'setItem').mockImplementation(function(this: Storage,key,value){if(key==='leve.sync.v1')throw new DOMException('Quota','QuotaExceededError');setter.call(this,key,value);});
+    store.actions.capture('Fictícia');const {storageIssue}=await import('./persistence');expect(storageIssue()).toBe('journal');
+    expect(await sync.signOut()).toBe(false);expect(store.getState().tasks).toHaveLength(1);
+  });
+  it('só descarta alterações não enviadas após a escolha explícita de sair mesmo assim',async()=>{
+    const {store,sync}=await ready();store.actions.capture('Fictícia');backend.upsert.mockResolvedValue({error:{message:'503'}});
+    vi.mocked(window.confirm).mockReturnValueOnce(true).mockReturnValueOnce(false);
+    expect(await sync.confirmSignOut()).toBe(false);expect(store.getState().tasks).toHaveLength(1);
+    vi.mocked(window.confirm).mockReturnValue(true);expect(await sync.confirmSignOut()).toBe(true);expect(store.getState().tasks).toEqual([]);
+  });
+  it('não limpa dados quando a primeira leitura da conta nunca foi confirmada',async()=>{
+    const store=await import('./store');const state=store.emptyState();state.settings.onboarded=true;store.replaceState(state);
+    backend.rows=[{id:'invalid',type:'task',data:null}];const sync=await import('./sync');
+    backend.authChange!('SIGNED_IN',{user:{id:'new-owner',user_metadata:{},app_metadata:{}}});await vi.advanceTimersByTimeAsync(1);
+    store.actions.capture('Ainda não enviada');
+    expect(await sync.signOut()).toBe(false);expect(store.getState().tasks).toHaveLength(1);
+  });
   it.each([401,403,503])('preserva alterações e sessão quando o envio falha com %s',async status=>{
     const {store,sync}=await ready(); store.actions.capture('Captura fictícia');
     backend.upsert.mockResolvedValue({error:{message:`HTTP ${status}`}});

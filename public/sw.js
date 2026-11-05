@@ -82,10 +82,10 @@ self.addEventListener('notificationclick', (e) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const client = list[0];
       if (client) {
-        client.postMessage({ type: 'open-task', taskId: data.taskId, date: data.date });
+        client.postMessage({ type: 'open-task', taskId: data.taskId, date: data.date, owner:data.owner });
         return client.focus();
       }
-      const q = data.taskId ? `/?task=${encodeURIComponent(data.taskId)}${data.date ? `&date=${data.date}` : ''}` : '/';
+      const q = data.taskId ? `/?task=${encodeURIComponent(data.taskId)}${data.date ? `&date=${encodeURIComponent(data.date)}` : ''}${data.owner ? `&owner=${encodeURIComponent(data.owner)}` : ''}` : '/';
       return self.clients.openWindow(q);
     }),
   );

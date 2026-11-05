@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { StorageNotice } from './components/StorageNotice';
+import { resumeNotification } from './services/notificationNavigation';
 import { inboxTasks } from './domain/selectors';
 import { useStore } from './store/store';
 import { goTo, openSheet, useUI, type Sheet, type Tab } from './store/ui';
@@ -15,7 +16,8 @@ import { ProfileScreen } from './screens/Profile';
 import { FocusMode } from './screens/Focus';
 import { Onboarding } from './screens/Onboarding';
 import { Login, Splash } from './screens/Login';
-import { canUseOffline, cloudEnabled, useCloud } from './store/sync';
+import { canUseOffline, cloudEnabled, localDataOwner, useCloud } from './store/sync';
+import { useStorageIssue } from './store/persistence';
 import { TaskSheet } from './sheets/TaskSheet';
 import { HabitCalendarSheet } from './sheets/HabitCalendarSheet';
 import { BreakdownSheet, EventMissedSheet, PlanSheet, ReplanSheet, ReviewSheet, WeekSheet } from './sheets/PlanningSheets';
@@ -114,6 +116,7 @@ export default function App() {
 }
 
 function Application() {
+  const storageProblem = useStorageIssue();
   useTheme();
   useShortcuts();
   useEffect(() => startReminders(), []);
@@ -125,9 +128,15 @@ function Application() {
   const inboxCount = useMemo(() => inboxTasks(tasks).length, [tasks]);
   const auth = useCloud((c) => c.auth);
   const accountEmail = useCloud((c) => c.email);
+  const accountId = useCloud((c) => c.userId);
   const recovery = useCloud((c) => c.recovery);
   const syncStatus = useCloud((c) => c.status);
   const cloudReady = auth === 'in' && syncStatus !== 'loading';
+  useEffect(() => {
+    const resume = () => resumeNotification(!cloudEnabled || (auth === 'in' && syncStatus === 'synced'), accountId);
+    resume(); window.addEventListener('leve-notification', resume);
+    return () => window.removeEventListener('leve-notification', resume);
+  }, [auth, syncStatus, accountId, tasks]);
   useEffect(() => {
     if (auth === 'in') refreshPush();
   }, [auth]);
@@ -145,6 +154,7 @@ function Application() {
     if (auth === 'loading') return <Splash text="" />;
     if (recovery || (auth === 'out' && !canUseOffline())) return <Login />;
     if (syncStatus === 'loading') return <Splash />;
+    if (storageProblem && localDataOwner() !== accountId) return <main className="onboarding"><p className="ob-text">Os dados locais precisam de recuperação com a conta original. Nenhuma versão foi mesclada ou enviada. Feche as outras abas e entre na conta original antes de continuar.</p></main>;
   }
   if (!onboarded) return <Onboarding />;
 

@@ -9,6 +9,7 @@ import { nowMin, todayISO } from '../domain/dates';
 import { dueReminders } from '../domain/reminders';
 import { getState } from '../store/store';
 import { openSheet, toast } from '../store/ui';
+import { rememberNotification, rememberNotificationUrl } from './notificationNavigation';
 
 const SENT_KEY = 'leve.reminders.sent';
 
@@ -93,16 +94,11 @@ export function startReminders(): () => void {
   document.addEventListener('visibilitychange', onVisible);
   // Toque na notificação (vinda do service worker) abre a tarefa
   const onMessage = (e: MessageEvent) => {
-    if (e.data?.type === 'open-task' && e.data.taskId) openSheet({ type: 'task', id: e.data.taskId, date: e.data.date });
+    if (e.data?.type === 'open-task') { rememberNotification(e.data); window.dispatchEvent(new Event('leve-notification')); }
   };
   navigator.serviceWorker?.addEventListener('message', onMessage);
   // App aberto pelo toque num push (estava fechado): /?task=ID&date=AAAA-MM-DD
-  const q = new URLSearchParams(location.search);
-  const taskId = q.get('task');
-  if (taskId) {
-    history.replaceState(null, '', location.pathname);
-    if (getState().tasks.some((t) => t.id === taskId)) openSheet({ type: 'task', id: taskId, date: q.get('date') ?? undefined });
-  }
+  rememberNotificationUrl();
   checkReminders();
   return () => {
     clearInterval(id);

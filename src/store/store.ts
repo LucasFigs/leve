@@ -7,7 +7,7 @@ import { occurrencesBefore } from '../domain/recurrence';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
 import { localRepository, reportStorageConflict, STATE_KEY } from './persistence';
-import { isTask, isProject } from '../domain/validation';
+import { isTask, isProject, isGoogleDeletions } from '../domain/validation';
 import { toast } from './ui';
 
 export const uid = () =>
@@ -61,7 +61,7 @@ function emit() {
 
 function set(updater: (s: AppState) => AppState, opts: { undoable?: boolean } = {}) {
   const next = updater(state);
-  if (next.tasks.some(t => !state.tasks.includes(t) && !isTask(t)) || next.projects.some(p => !state.projects.includes(p) && !isProject(p))) {
+  if (!isGoogleDeletions(next.googleDeletions) || next.tasks.some(t => !state.tasks.includes(t) && !isTask(t)) || next.projects.some(p => !state.projects.includes(p) && !isProject(p))) {
     toast('Não foi possível salvar: confira o tamanho e o formato dos campos. Seus dados anteriores foram mantidos.');
     return;
   }
@@ -229,6 +229,12 @@ export interface CaptureDefaults {
 }
 
 export const actions = {
+  queueGoogleDeletion(eventId: string, calendarId: string) {
+    set(s => ({...s,googleDeletions:[...(s.googleDeletions ?? []).filter(d => d.eventId !== eventId || d.calendarId !== calendarId),{eventId,calendarId}]}));
+  },
+  acknowledgeGoogleDeletion(eventId: string, calendarId: string) {
+    set(s => ({...s,googleDeletions:s.googleDeletions?.filter(d => d.eventId !== eventId || d.calendarId !== calendarId)}));
+  },
   /** Captura rápida: interpreta o texto e decide para onde vai. */
   capture(text: string, defaults: CaptureDefaults = {}, ignore: Set<string> = new Set()): Task | undefined {
     if (!text.trim()) return;
@@ -246,7 +252,7 @@ export const actions = {
     const has = (k: string) => !ignore.has(k);
     let date = (has('date') ? p.date : undefined) ?? defaults.date;
     let time = (has('time') ? p.time : undefined) ?? defaults.time;
-    const dayPart = has('dayPart') ? p.dayPart : undefined;
+    const dayPart = has('time') && has('dayPart') ? p.dayPart : undefined;
     const recurrence = has('recurrence') ? p.recurrence : undefined;
     const kind = has('kind') ? p.kind : 'task';
 
@@ -282,7 +288,7 @@ export const actions = {
       time,
       due: has('due') ? p.due : undefined,
       dayPart,
-      duration: p.duration,
+      duration: has('duration') ? p.duration : state.settings.defaultDuration,
       priority: has('priority') ? p.priority : undefined,
       recurrence,
       category: p.category,

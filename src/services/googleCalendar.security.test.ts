@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { calendarBackend } from './googleCalendarBackend';
-import { connectGoogleCalendar, disconnectGoogleCalendar, getGoogleCalendarState, initGoogleCalendarListener, resetGoogleCalendarSession, restoreGoogleCalendarConnection, syncTaskToGoogle } from './googleCalendar';
+import { connectGoogleCalendar, deleteGoogleEvent, disconnectGoogleCalendar, getGoogleCalendarState, initGoogleCalendarListener, resetGoogleCalendarSession, restoreGoogleCalendarConnection, setGoogleTargetCalendar, syncTaskToGoogle } from './googleCalendar';
 import { actions, emptyState, replaceState } from '../store/store';
 import type { Task } from '../domain/types';
 vi.mock('./googleCalendarBackend', () => ({ calendarBackend: vi.fn() }));
+vi.mock('../store/persistence', async importOriginal => ({...await importOriginal<typeof import('../store/persistence')>(),storageIssue:()=>undefined}));
 const task: Task = { id: 'a', title: 'Privada', kind: 'task', status: 'active', date: '2026-11-04', time: '14:00', subtasks: [], postponed: 0, createdAt: 1, updatedAt: 1, googleEventId: 'event-a' };
 let storage: Map<string, string>;
 beforeEach(() => {
@@ -21,6 +22,67 @@ afterEach(() => { resetGoogleCalendarSession(); vi.useRealTimers(); vi.restoreAl
 async function connect() { await restoreGoogleCalendarConnection(); expect(getGoogleCalendarState().connected).toBe(true); }
 
 describe('isolamento do Google Agenda persistente', () => {
+  it('repete envio transitório sem perder a alteração da fila', async () => {
+    vi.useFakeTimers(); await connect();replaceState({...emptyState(),tasks:[task]});
+    const unsubscribe=initGoogleCalendarListener();
+    const request=vi.fn().mockResolvedValueOnce(Response.json({}, {status:503})).mockResolvedValue(Response.json({id:'event-a'}));
+    vi.stubGlobal('fetch',request);
+    actions.update('a',{title:'Alteração fictícia'});
+    await vi.advanceTimersByTimeAsync(701);
+    await vi.waitFor(()=>expect(getGoogleCalendarState().status).toBe('error'));
+    expect(request).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5001);
+    await vi.waitFor(()=>expect(request).toHaveBeenCalledTimes(2));
+    await vi.waitFor(()=>expect(getGoogleCalendarState().status).toBe('synced'));unsubscribe();
+  });
+  it('não trata uma exclusão 503 como confirmada',async()=>{
+    await connect();vi.stubGlobal('fetch',vi.fn(async()=>Response.json({}, {status:503})));
+    expect(await deleteGoogleEvent('event-a')).toBe(false);
+  });
+  it('reconcilia vínculo de tarefa arquivada ao restaurar a conexão',async()=>{
+    const state=emptyState();state.settings.onboarded=true;state.tasks=[{...task,status:'archived',googleCalendarId:'primary'}];replaceState(state);
+    const request=vi.fn(async(_url:string,init?:RequestInit)=>init?.method==='DELETE'?new Response(null,{status:204}):Response.json({items:[]}));vi.stubGlobal('fetch',request);
+    await connect();expect(request.mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(true);
+    const {getState}=await import('../store/store');expect(getState().tasks[0].googleEventId).toBeUndefined();
+  });
+  it('retém a exclusão na outbox ao falhar e desfazer cancela a exclusão remota',async()=>{
+    vi.useFakeTimers();await connect();replaceState({...emptyState(),tasks:[{...task,googleCalendarId:'primary'}]});
+    const unsubscribe=initGoogleCalendarListener();
+    const request=vi.fn(async(_url: string,_init?: RequestInit)=>Response.json({}, {status:503}));vi.stubGlobal('fetch',request);
+    actions.remove('a');await vi.advanceTimersByTimeAsync(701);
+    const {getState}=await import('../store/store');expect(getState().googleDeletions).toHaveLength(1);
+    actions.undo();request.mockClear();await vi.advanceTimersByTimeAsync(6000);
+    expect(request.mock.calls.some(([,init])=>init?.method === 'DELETE')).toBe(false);expect(getState().googleDeletions ?? []).toHaveLength(0);unsubscribe();
+  });
+  it('mantém o calendário de eventos legados ao escolher outro destino',async()=>{
+    await connect();replaceState({...emptyState(),tasks:[task]});
+    setGoogleTargetCalendar('new-calendar');
+    await vi.waitFor(()=>expect(getGoogleCalendarState().calendarId).toBe('new-calendar'));
+    const {getState}=await import('../store/store');
+    const bound=getState().tasks[0];expect(bound.googleCalendarId).toBe('primary');
+    const request=vi.fn(async(_url: string)=>Response.json({id:'event-a'}));vi.stubGlobal('fetch',request);
+    await syncTaskToGoogle(bound);
+    expect(String(request.mock.calls[0][0])).toContain('/calendars/primary/events/event-a');
+  });
+  it('reutiliza o id de criação após falha de rede',async()=>{
+    await connect();const fresh={...task,googleEventId:undefined};
+    const bodies:string[]=[];
+    vi.stubGlobal('fetch',vi.fn(async(_url,init)=>{bodies.push(init.body);throw new Error('rede simulada');}));
+    await syncTaskToGoogle(fresh);await syncTaskToGoogle(fresh);
+    expect(JSON.parse(bodies[0]).id).toMatch(/^[a-v0-9]{5,1024}$/);
+    expect(JSON.parse(bodies[0]).id).toBe(JSON.parse(bodies[1]).id);
+  });
+  it('excluir durante a criação mantém um id de reconciliação na outbox',async()=>{
+    await connect();const fresh={...task,googleEventId:undefined};replaceState({...emptyState(),tasks:[fresh]});
+    const unsubscribe=initGoogleCalendarListener();
+    let finish!: (r:Response)=>void;
+    const request=vi.fn((_url:string,_init?:RequestInit)=>new Promise<Response>(resolve=>{finish=resolve;}));vi.stubGlobal('fetch',request);
+    const pending=syncTaskToGoogle(fresh);await vi.waitFor(()=>expect(request).toHaveBeenCalled());
+    const id=JSON.parse(request.mock.calls[0][1]!.body as string).id;
+    actions.remove(fresh.id);const {getState}=await import('../store/store');
+    expect(getState().googleDeletions).toContainEqual({eventId:id,calendarId:'primary'});
+    finish(Response.json({id}));await pending;expect(getState().tasks).toEqual([]);unsubscribe();
+  });
   it('restaura o vínculo pelo servidor mantendo access token somente em memória', async () => {
     await connect();
     expect([...storage.values()].join('')).not.toContain('private-token');

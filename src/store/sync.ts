@@ -11,8 +11,8 @@
 import { createClient, type RealtimeChannel, type Session } from '@supabase/supabase-js';
 import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Task } from '../domain/types';
-import { localRepository, storageIssue, reportStorageConflict } from './persistence';
-import { emptyState, getState, replaceState, subscribe, uid } from './store';
+import { localRepository, storageIssue, reportStorageConflict, reportJournalFailure, journalSaved } from './persistence';
+import { emptyState, getState, isReplacingState, replaceState, subscribe, uid } from './store';
 import { resetGoogleCalendarSession } from '../services/googleCalendar';
 import { isTask, isProject, isMeta } from '../domain/validation';
 
@@ -45,6 +45,7 @@ export interface CloudUser {
 export interface CloudState {
   auth: 'loading' | 'in' | 'out';
   email?: string;
+  userId?: string;
   user?: CloudUser;
   status: SyncStatus;
   error?: string;
@@ -98,14 +99,17 @@ function readJournal(): Journal {
 
 function writeJournal(j: Journal) {
   journal = j;
+  if (storageIssue() === 'conflict' || storageIssue() === 'recovery') return;
   try {
     localStorage.setItem(JOURNAL_KEY, JSON.stringify(j));
+    journalSaved();
   } catch {
-    /* noop */
+    reportJournalFailure();
   }
 }
 
 let journal = readJournal();
+export const localDataOwner = () => journal.owner;
 
 /* ------------------------------------------------------------------ */
 /* Espelho do que está na nuvem                                        */
@@ -369,10 +373,12 @@ async function pull() {
     setCloud({ status: navigator.onLine ? 'error' : 'offline', error: errorMessage(e) });
     scheduleRetry();
   } finally {
-    pulling = false;
-    const pending = buffered;
-    buffered = [];
-    pending.forEach((fn) => fn());
+    if (version === syncVersion) {
+      pulling = false;
+      const pending = buffered;
+      buffered = [];
+      pending.forEach((fn) => fn());
+    }
   }
   await push();
 }
@@ -473,7 +479,7 @@ function start(session: Session) {
     setCloud({ auth: 'out', email: undefined, user: undefined, status: 'error', error: 'Há dados pendentes de outra conta neste aparelho. Entre na conta original para recuperá-los.' });
     return;
   }
-  setCloud({ auth: 'in', email: session.user.email ?? undefined, user: userInfo(session) });
+  setCloud({ auth: 'in', userId:id, email: session.user.email ?? undefined, user: userInfo(session) });
   if (userId === id) return;
   stop();
   userId = id;
@@ -500,19 +506,21 @@ function stop() {
   if (channel) supabase?.removeChannel(channel);
   channel = undefined;
   chain = Promise.resolve(); pushQueued = false;
+  pulling = false; buffered = [];
 }
 
 /** Envia o pendente e busca novidades. */
 export function syncNow() {
   if (!userId) return;
+  saveJournal();
   enqueue(pull);
 }
 
 /** Há alterações neste aparelho que ainda não chegaram à nuvem? */
 export function hasPending() {
-  if (!journal.owner) return false;
+  if (!journal.owner) return !!userId && (getState().tasks.length > 0 || getState().projects.length > 0 || getState().settings.onboarded);
   const { upserts, deletes } = diff(getState());
-  return upserts.length > 0 || deletes.length > 0;
+  return upserts.length > 0 || deletes.length > 0 || !!getState().googleDeletions?.length;
 }
 
 /** Usuário pode usar o app sem login quando está offline e já tem dados aqui. */
@@ -555,8 +563,11 @@ async function finishSignOut(discardPending: boolean): Promise<boolean> {
   catch { setCloud({ status: 'error', error: 'Não foi possível encerrar a sessão. Seus dados locais foram mantidos.' }); return false; }
   if (version !== syncVersion || owner !== userId || (!discardPending && hasPending())) return false;
   stop();
+  if (!localRepository.clear()) {
+    setCloud({auth:'out',email:undefined,user:undefined,status:'error',error:'A sessão foi encerrada, mas não foi possível limpar os dados locais. Entre na conta original para recuperá-los.'});
+    return false;
+  }
   writeJournal({ dirty: [], deleted: [] });
-  localRepository.clear();
   replaceState(emptyState(), { resetUndo: true });
   restoreKnown();
   setCloud({ auth: 'out', email: undefined, user: undefined, status: 'idle', error: undefined, lastSync: undefined, recovery: false });
@@ -604,7 +615,7 @@ if (supabase && typeof window !== 'undefined') {
     }, 0);
   });
 
-  subscribe(() => schedulePush());
+  subscribe(() => { if (!isReplacingState()) saveJournal(); schedulePush(); });
   window.addEventListener('online', () => syncNow());
   window.addEventListener('offline', () => userId && setCloud({ status: 'offline' }));
   document.addEventListener('visibilitychange', () => {

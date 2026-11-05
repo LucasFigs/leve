@@ -163,7 +163,7 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
           ))}
         </div>
       )}
-      {hint && text.trim().length > 2 && chips.length === 0 && contextChips.length === 0 && (
+      {hint && text.trim().length > 2 && text.length <= 1000 && chips.length === 0 && contextChips.length === 0 && (
         <div className="quick-hint">Vai para o Inbox — organizo depois.</div>
       )}
       {hint && parsed?.big && !parsed.recurrence && (
