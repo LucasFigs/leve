@@ -164,7 +164,7 @@ export function Login() {
           </span>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Leve</div>
           <p className="xs faint" style={{ maxWidth: 320, margin: '4px auto 0' }}>
-            Gerenciador de tarefas, planejamento diário e compromissos sincronizados com o Google Agenda.
+            Organize tarefas, compromissos e hábitos e encontre um próximo passo possível para o seu dia.
           </p>
         </div>
 

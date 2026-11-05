@@ -10,6 +10,14 @@ O frontend atualizado ainda precisa ser publicado na Vercel. A primeira autoriza
 
 ## Proteções
 
+### Disponibilidade durante os testes OAuth
+
+O projeto Google está em modo de teste, conforme informado pelo responsável. O login do Leve solicita somente `openid email profile`; a autorização do calendário é iniciada separadamente no Perfil. Solicitações apenas de identidade têm exceção à lista de usuários de teste. Já o calendário permanece limitado aos e-mails autorizados e seu refresh token expira após sete dias nesse modo, mesmo quando armazenado com segurança no servidor.
+
+Antes da divulgação, validar o login com uma conta fora da lista de testes. Se houver bloqueio, conferir os escopos da URL de autorização e se o público do projeto é Externo. Não acrescentar permissões de calendário ao login. Não é necessário publicar o calendário para testar o login básico.
+
+A integração pública do calendário depende da verificação dos escopos solicitados. Após aprovação e mudança para produção, atualizar o aviso de integração em testes no Perfil. Referência: [regras de público e modo de teste do Google](https://support.google.com/cloud/answer/15549945?hl=en).
+
 - Authorization Code com acesso offline, PKCE S256, estado de uso único e expiração de dez minutos, com prova adicional do navegador iniciador.
 - O callback público apenas devolve o código no fragmento da URL ao app. A troca exige JWT validado no Auth do Supabase, origem exata, usuário, estado e prova correspondentes. Um `user_id` enviado pelo cliente não define a identidade.
 - A prova é guardada temporariamente no navegador para sobreviver ao redirecionamento; não é um token Google. Código e prova são removidos na conclusão; provas expiradas são descartadas ao restaurar.

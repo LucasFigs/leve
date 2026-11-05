@@ -21,6 +21,8 @@ Assistente pessoal de tarefas, compromissos e hábitos, desenvolvido com React e
 
 O assistente usa regras e heurísticas locais. Não depende de uma API de IA generativa. A integração com Google Agenda envia alterações do Leve para o calendário; não importa automaticamente alterações feitas no Google.
 
+O Google Agenda está em testes e disponível apenas para contas autorizadas; nesse modo, a autorização pode expirar após sete dias. O login Google solicita apenas dados básicos de identidade, separadamente do calendário. A conexão com a agenda é opcional para usar o Leve.
+
 ## Tecnologias e decisões
 
 | Área | Implementação |
