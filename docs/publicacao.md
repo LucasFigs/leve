@@ -32,9 +32,3 @@ Antes do commit, revise o diff e a lista de arquivos. `.env.local`, backups, o c
 5. Confira cabeçalhos, erros CSP, login, recuperação, troca de conta, Google Agenda, push e reabertura offline. Verifique os logs sem copiar conteúdo de usuários para issues.
 
 Mantenha a revisão anterior disponível para rollback do frontend. Mudanças no banco e em credenciais exigem procedimentos próprios; voltar o deploy Vercel não as desfaz.
-
-## LinkedIn
-
-O rascunho em [publicacao-linkedin.md](publicacao-linkedin.md) prioriza o produto, a arquitetura e o aprendizado. Publique a demonstração online depois de concluir a validação acima. Não use expressões como “invulnerável”, “100% seguro” ou “segurança certificada”.
-
-Para acompanhar o texto, prefira duas ou três capturas de Hoje, Agenda e Projetos com tarefas fictícias. Mostre o fluxo do produto e o resultado do planejamento. Confira nomes, e-mails, notificações, abas abertas e conteúdo de tarefas antes de publicar as imagens.
