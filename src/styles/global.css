@@ -3583,6 +3583,10 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .day-summary { padding: 0; }
 .day-summary > .disclosure-trigger { padding: 12px 16px; min-height: 64px; }
 .day-summary-title { display: flex; flex-direction: column; gap: 4px; }
+.day-summary-heading { display: flex; align-items: center; gap: 10px; }
+.day-summary-heading .day-summary-title { min-width: 0; }
+.day-summary-heading .pulse-ring { width: 40px; height: 40px; }
+.day-summary-heading .pulse-ring span { font-size: 10px; }
 .day-summary-estimate { font-weight: 400; }
 .day-summary-details { display: grid; gap: 10px; padding: 0 16px 14px; }
 .day-summary-details > .btn { justify-self: start; }
