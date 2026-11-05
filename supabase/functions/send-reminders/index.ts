@@ -228,6 +228,29 @@ async function sendPush(sub, payload, vapid, ttlSeconds = 900) {
   return status;
 }
 
+// src/domain/habits.ts
+var HABIT_COLORS = [
+  { value: "emerald", label: "Verde" },
+  { value: "coral", label: "Rosa" },
+  { value: "cyan", label: "Turquesa" },
+  { value: "blue", label: "Azul" },
+  { value: "purple", label: "Roxo" },
+  { value: "amber", label: "\xC2mbar" }
+];
+var HABIT_ICONS = [
+  { value: "activity", label: "Movimento" },
+  { value: "droplet", label: "\xC1gua" },
+  { value: "book", label: "Leitura" },
+  { value: "laptop", label: "Estudo e trabalho" },
+  { value: "heart", label: "Bem-estar" },
+  { value: "target", label: "Objetivo" },
+  { value: "bolt", label: "Energia" },
+  { value: "leaf", label: "Natureza" },
+  { value: "sun", label: "Manh\xE3" },
+  { value: "moon", label: "Descanso" },
+  { value: "coffee", label: "Pausa" }
+];
+
 // src/domain/validation.ts
 var isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 var text = (v, max) => typeof v === "string" && v.length <= max;
@@ -238,7 +261,7 @@ var time = (v) => typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 var dates = (v) => Array.isArray(v) && v.length <= 25e3 && v.every(isDate);
 var integer = (v, low, high) => number(v) && Number.isInteger(v) && v >= low && v <= high;
 function isTask(v) {
-  if (!isObject(v) || !text(v.id, 200) || !v.id || !text(v.title, 1e3) || !["task", "event", "habit"].includes(v.kind) || !["inbox", "active", "done", "archived"].includes(v.status) || !number(v.createdAt) || !number(v.updatedAt) || !number(v.postponed) || !optional(v.notes, (x) => text(x, 5e4)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) || !optional(v.duration, (x) => integer(x, 1, 10080)) || !optional(v.googleEventId, (x) => text(x, 1024)) || !optional(v.doneDates, dates) || !optional(v.skipDates, dates) || !optional(v.missedDates, dates) || !Array.isArray(v.subtasks) || v.subtasks.length > 1e3 || !v.subtasks.every((s) => isObject(s) && text(s.id, 200) && text(s.title, 1e3) && typeof s.done === "boolean")) return false;
+  if (!isObject(v) || !text(v.id, 200) || !v.id || !text(v.title, 1e3) || !["task", "event", "habit"].includes(v.kind) || !["inbox", "active", "done", "archived"].includes(v.status) || !number(v.createdAt) || !number(v.updatedAt) || !number(v.postponed) || !optional(v.habitColor, (x) => HABIT_COLORS.some((color) => color.value === x)) || !optional(v.habitIcon, (x) => HABIT_ICONS.some((icon) => icon.value === x)) || !optional(v.notes, (x) => text(x, 5e4)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) || !optional(v.duration, (x) => integer(x, 1, 10080)) || !optional(v.googleEventId, (x) => text(x, 1024)) || !optional(v.doneDates, dates) || !optional(v.skipDates, dates) || !optional(v.missedDates, dates) || !Array.isArray(v.subtasks) || v.subtasks.length > 1e3 || !v.subtasks.every((s) => isObject(s) && text(s.id, 200) && text(s.title, 1e3) && typeof s.done === "boolean")) return false;
   if (v.recurrence != null) {
     const r = v.recurrence;
     if (!isObject(r) || !["daily", "weekly", "monthly", "yearly", "interval"].includes(r.freq) || !isDate(r.anchor) || !optional(r.until, isDate) || !optional(r.interval, (x) => integer(x, 1, 1e4)) || !optional(r.count, (x) => integer(x, 1, 25e3)) || !optional(r.weekdays, (x) => Array.isArray(x) && x.length <= 7 && x.every((d) => integer(d, 0, 6))) || !optional(r.monthDay, (x) => integer(x, 1, 31)) || !optional(r.month, (x) => integer(x, 0, 11)) || !optional(r.weekday, (x) => integer(x, 0, 6)) || !optional(r.nth, (x) => x === -1 || integer(x, 1, 5))) return false;

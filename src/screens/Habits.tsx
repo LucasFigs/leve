@@ -94,8 +94,8 @@ export function HabitsScreen() {
         />
       ) : (
         <div className="habit-list">
-          {habits.map((task, idx) => (
-            <HabitCard key={task.id} task={task} today={today} index={idx} />
+          {habits.map((task) => (
+            <HabitCard key={task.id} task={task} today={today} />
           ))}
         </div>
       )}
@@ -110,13 +110,11 @@ export function HabitsScreen() {
 function HabitCard({
   task,
   today,
-  index,
 }: {
   task: Task;
   today: string;
-  index: number;
 }) {
-  const theme = useMemo(() => getHabitTheme(task, index), [task, index]);
+  const theme = useMemo(() => getHabitTheme(task), [task]);
   const icon = useMemo(() => getHabitIcon(task), [task]);
   const streak = useMemo(() => getHabitStreak(task, today), [task, today]);
   const target = useMemo(() => getHabitTargetLabel(task), [task]);
@@ -145,13 +143,14 @@ function HabitCard({
     >
       {/* Header */}
       <div className="habit-header">
-        <div
+        <button type="button"
           className="habit-icon-wrap"
           onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
           style={{ cursor: "pointer" }}
+          aria-label={`Abrir calendário de ${task.title}`}
         >
           <Icon name={icon} size={20} />
-        </div>
+        </button>
         <button
           className="habit-title-btn"
           onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
@@ -189,7 +188,7 @@ function HabitCard({
       {/* Footer stats */}
       <div className="habit-footer">
         {streak > 0 && (
-          <span className="habit-stat">
+          <span className="habit-stat" title="Ocorrências programadas consecutivas concluídas" aria-label={`${streak} ocorrências programadas consecutivas concluídas`}>
             <Icon name="flame" size={13} />
             {streak}
           </span>

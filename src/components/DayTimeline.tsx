@@ -4,6 +4,8 @@ import { formatDuration, minToTime, nowMin, pad, timeToMin, todayISO } from '../
 import { useStore } from '../store/store';
 import { openSheet } from '../store/ui';
 import { Icon } from './Icon';
+import { habitStyle } from './habitStyle';
+import { getHabitIcon } from '../domain/habits';
 
 interface Props {
   date: string;
@@ -89,6 +91,7 @@ export function DayTimeline({ date, items, hourHeight = 60, scrollToNow }: Props
             key={t.id + item.date}
             className={`block ${kind}${item.missed ? ' missed' : item.done ? ' done' : isToday && end <= now ? ' past' : ''}${height < 36 ? ' compact' : ''}${height < 24 ? ' tiny' : ''}`}
             style={{
+              ...(t.kind === 'habit' ? habitStyle(t) : {}),
               top: y(start) + 1,
               height,
               left: `calc(6px + ${(lane / lanes) * 100}% - ${(lane / lanes) * 12}px)`,
@@ -104,7 +107,7 @@ export function DayTimeline({ date, items, hourHeight = 60, scrollToNow }: Props
             </span>
             {height > 40 && (
               <span className="block-meta num">
-                {t.kind === 'habit' && <Icon name="repeat" size={11} />}
+                {t.kind === 'habit' && <><Icon name={getHabitIcon(t)} size={11} />Hábito · </>}
                 {item.time}–{minToTime(timeToMin(item.time!) + item.duration)}
                 {t.kind !== 'event' && ` · ${formatDuration(item.duration)}`}
                 {item.missed && ' · não aconteceu'}

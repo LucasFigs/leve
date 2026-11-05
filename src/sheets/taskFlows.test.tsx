@@ -7,6 +7,8 @@ import { InboxScreen } from '../screens/Inbox';
 import { emptyState, getState, newTask, replaceState } from '../store/store';
 import { closeAllSheets, getUI, openSheet, useUI } from '../store/ui';
 import { todayISO } from '../domain/dates';
+import { TaskCard } from '../components/TaskCard';
+import { getHabitTheme } from '../domain/habits';
 import type { Task } from '../domain/types';
 
 vi.mock('../store/sync', () => ({ cloudEnabled: false, useCloud: (select: (value: unknown) => unknown) => select({ auth: 'out' }) }));
@@ -119,6 +121,39 @@ describe('capturas no Inbox', () => {
 });
 
 describe('formulário de tarefas simplificado', () => {
+  it('salva a aparência opcional do hábito e identifica a conclusão na lista do dia', () => {
+    const habit = newTask({ title: 'Ler', kind: 'habit', recurrence: { freq: 'daily', anchor: todayISO() } });
+    act(() => root.render(<TaskSheet initial={habit} />));
+    act(() => (host.querySelector('[aria-label="Ícone: Leitura"]') as HTMLButtonElement).click());
+    act(() => (host.querySelector('[aria-label="Cor: Roxo"]') as HTMLButtonElement).click());
+    expect(host.querySelector('[aria-label="Ícone: Leitura"]')?.getAttribute('aria-pressed')).toBe('true');
+    act(() => button('Criar hábito').click());
+    const saved = getState().tasks.find(task => task.id === habit.id)!;
+    expect(saved).toMatchObject({ habitIcon: 'book', habitColor: 'purple' });
+    act(() => root.render(<TaskCard task={saved} date={todayISO()} done={false} exitOnDone={false} />));
+    expect(host.querySelector('.habit-identity')?.textContent).toBe('Hábito');
+    expect((host.querySelector('.task-habit') as HTMLElement).style.getPropertyValue('--habit-primary')).toBe(getHabitTheme(saved).primary);
+    act(() => (host.querySelector('[aria-label="Concluir: Ler"]') as HTMLButtonElement).click());
+    const completed = getState().tasks.find(task => task.id === habit.id)!;
+    expect(completed.doneDates).toEqual([todayISO()]);
+    act(() => root.render(<TaskCard task={completed} date={todayISO()} exitOnDone={false} />));
+    expect(host.querySelector('[aria-label="Reabrir: Ler"]')?.getAttribute('aria-checked')).toBe('true');
+  });
+  it('aplica aparência só à ocorrência escolhida e permite editar essa exceção sem criar repetição', () => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, kind: 'habit', date: undefined, recurrence: { freq: 'daily', anchor: '2026-11-04' } }] });
+    openTask(); act(() => button('Editar').click());
+    act(() => (host.querySelector('[aria-label="Cor: Azul"]') as HTMLButtonElement).click());
+    act(() => button('Salvar alterações').click());
+    act(() => Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('Só esta ocorrência'))!.click());
+    const exception = getState().tasks.find(task => task.seriesId === 'a')!;
+    expect(exception.habitColor).toBe('blue');
+    expect(getState().tasks.find(task => task.id === 'a')!.habitColor).toBeUndefined();
+    act(() => { openSheet({ type: 'task', id: exception.id, date: todayISO() }); root.render(<SheetHost />); });
+    act(() => button('Editar').click());
+    expect(button('Salvar alterações').disabled).toBe(false);
+    act(() => button('Salvar alterações').click());
+    expect(getState().tasks.find(task => task.id === exception.id)!.recurrence).toBeUndefined();
+  });
   it('expõe planejamento e mantém detalhes vazios recolhidos, sem retirar campos', () => {
     act(() => root.render(<TaskSheet initial={newTask({ title: '' })} />));
     expect(host.textContent).toContain('Nova tarefa');

@@ -11,6 +11,8 @@ import { DayTimeline } from '../components/DayTimeline';
 import { Icon } from '../components/Icon';
 import { EmptyState, SectionHead } from '../components/ui';
 import { WeekCard } from '../components/WeekCard';
+import { HabitIdentity } from '../components/HabitAppearance';
+import { habitStyle } from '../components/habitStyle';
 import { Disclosure } from '../components/Disclosure';
 import { computeNudges, type NudgeAction } from '../components/nudges';
 import { startTask } from '../components/focusFlow';
@@ -298,7 +300,7 @@ function NowCard() {
           <span>
             {rec.item.time}–{end}
           </span>
-          <span>{t.kind === 'event' ? 'Compromisso' : 'Tarefa planejada'}</span>
+          {t.kind === 'habit' ? <span style={habitStyle(t)}><HabitIdentity task={t} /></span> : <span>{t.kind === 'event' ? 'Compromisso' : 'Tarefa planejada'}</span>}
         </div>
         <div className="now-actions">
           <button className="btn btn-secondary btn-block" onClick={() => openSheet({ type: 'task', id: t.id, date: rec.item.date })}>
@@ -343,6 +345,7 @@ function NowCard() {
         </div>
         <div className="now-title">{t.title}</div>
         <div className="now-meta">
+          {t.kind === 'habit' && <span style={habitStyle(t)}><HabitIdentity task={t} /></span>}
           {c.item.time && (
             <span className="num">
               <Icon name="clock" size={12} /> {c.item.time}

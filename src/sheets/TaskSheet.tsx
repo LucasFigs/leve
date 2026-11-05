@@ -13,6 +13,8 @@ import { Icon } from '../components/Icon';
 import { RecurrenceEditor } from '../components/RecurrenceEditor';
 import { SubtaskList } from '../components/SubtaskList';
 import { AutoGrowTextarea } from '../components/AutoGrowTextarea';
+import { HabitAppearance, HabitIdentity } from '../components/HabitAppearance';
+import { habitStyle } from '../components/habitStyle';
 import { CATEGORIES } from '../domain/category';
 import { Disclosure } from '../components/Disclosure';
 import { archiveWithFeedback, completeWithFeedback, removeWithFeedback } from '../components/feedback';
@@ -73,7 +75,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const ruleError = recurrenceError(task.recurrence);
   const durationError = (customDuration && task.duration === undefined) || (task.duration !== undefined && (!Number.isInteger(task.duration) || task.duration < 1 || task.duration > 10080))
     ? 'Informe uma duração entre 1 e 10080 minutos.' : undefined;
-  const error = !task.title.trim() ? `Dê um nome para ${isEvent ? 'o compromisso' : 'a tarefa'}.` : task.title.length > 1000 ? 'Use até 1000 caracteres no título.' : durationError ?? (task.kind === 'habit' && !task.recurrence ? 'Escolha uma repetição para acompanhar este hábito.' : ruleError);
+  const error = !task.title.trim() ? `Dê um nome para ${isEvent ? 'o compromisso' : 'a tarefa'}.` : task.title.length > 1000 ? 'Use até 1000 caracteres no título.' : durationError ?? (task.kind === 'habit' && !task.recurrence && !task.seriesId ? 'Escolha uma repetição para acompanhar este hábito.' : ruleError);
   const confirmDiscard = () => {
     if (isNew) return !(dirty || task.title.trim() || task.notes?.trim() || task.subtasks.length) || confirm('Descartar esta tarefa? Ela ainda não foi salva.');
     return !dirty || confirm('Descartar as alterações que você não salvou?');
@@ -131,6 +133,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
 
   /** Hábito é, por natureza, algo que se repete: já começa como “todo dia”. */
   const setKind = (kind: Kind) => {
+    if (kind === task.kind) return;
     if (kind === 'habit' && !task.recurrence) {
       upd({ kind, recurrence: { freq: 'daily', anchor: task.date ?? today }, date: undefined });
     } else upd({ kind });
@@ -309,6 +312,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         <header>
           <h2 className="task-overview-title">{task.title}</h2>
           <div className="task-overview-tags">
+            {task.kind === 'habit' && <span style={habitStyle(task)}><HabitIdentity task={task} /></span>}
             {task.status === 'archived' ? <span className="chip">Arquivada</span> : isDone && <span className="chip">{missed ? 'Não aconteceu' : isEvent ? 'Aconteceu' : 'Concluída'}</span>}
             {task.priority && <span className={`prio ${task.priority}`}><span className="prio-dot" />{PRIORITY_META[task.priority].label}</span>}
             {project && <span className="small muted">{project.emoji} {project.name}</span>}
@@ -439,6 +443,10 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         {task.kind === 'habit' ? <section className="task-editor-section" aria-labelledby={`${formId}-habit`}>
           <h2 className="task-editor-heading" id={`${formId}-habit`}>Repetição do hábito</h2>{recurrenceField}
         </section> : <Disclosure className="task-editor-disclosure" icon="repeat" title={<span>Repetição<span className="task-editor-summary">{task.recurrence ? recurrenceLabel(task.recurrence, { ends: false }) : 'Não repete'}</span></span>} defaultOpen={!!original.recurrence}>{recurrenceField}</Disclosure>}
+
+        {task.kind === 'habit' && <Disclosure className="task-editor-disclosure" icon="leaf" title={<span>Aparência do hábito<span className="task-editor-summary">Ícone e cor · opcional</span></span>}>
+          <HabitAppearance task={task} onChange={upd} />
+        </Disclosure>}
 
         {(!isEvent || task.subtasks.length > 0 || !!newSub.trim()) && <Disclosure className="task-editor-disclosure" icon="list" title={<span>Passos<span className="task-editor-summary">{task.subtasks.length ? `${subDone} de ${task.subtasks.length} concluídos` : 'Divida se isso ajudar a começar'}</span></span>} defaultOpen={original.subtasks.length > 0}>
           <div className="task-editor-details">
