@@ -4,12 +4,16 @@
 
 Assistente pessoal de tarefas, compromissos e hábitos, desenvolvido com React e TypeScript. O Leve reúne captura em português, planejamento por disponibilidade, recorrências e modo foco em uma PWA com persistência local e sincronização opcional.
 
-**Estado:** projeto em desenvolvimento. As correções desta revisão passaram em testes locais; sua aplicação na infraestrutura e a validação da instância pública ainda estão pendentes. Consulte [publicação](docs/publicacao.md) antes de divulgar o link de demonstração.
+**Estado:** projeto pessoal em desenvolvimento, com testes automatizados e revisão contínua da experiência. Consulte o [guia de publicação](docs/publicacao.md) para validar a versão hospedada antes da divulgação.
+
+[Acessar o Leve](https://leve-flame.vercel.app) · [Arquitetura](docs/arquitetura.md) · [Segurança](docs/seguranca.md)
 
 ## O que o Leve faz
 
 - Captura tarefas em linguagem natural em português, como `Enviar relatório amanhã às 14h`.
 - Organiza tarefas, compromissos, projetos e hábitos em um só lugar.
+- Mantém a lista do dia enxuta, com detalhes e passos disponíveis ao abrir cada tarefa.
+- Acompanha hábitos em um calendário de realizações, com histórico em quadradinhos, cores e ícones personalizáveis.
 - Planeja o dia e a semana considerando horários, duração e disponibilidade.
 - Acompanha recorrências, prioridades e execução com modo foco/Pomodoro.
 - Funciona no navegador e pode ser instalado como PWA.
@@ -97,9 +101,9 @@ src/
   store/        Estado, persistência e sincronização
   screens/      Telas do produto
   components/   Componentes reutilizáveis
-  sheets/       Painéis de edição
+  sheets/       Painéis de visualização e edição
 supabase/
-  functions/    Worker de lembretes
+  functions/    Integração Google Agenda e worker de lembretes
   tests/        Isolamento e validação SQL
 scripts/        Preparação e verificação
 public/         PWA e páginas institucionais
