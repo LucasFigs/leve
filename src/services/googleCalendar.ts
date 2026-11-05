@@ -10,18 +10,11 @@ import { addDays } from '../domain/dates';
 import { actions, getState, subscribe, isReplacingState } from '../store/store';
 import { toast } from '../store/ui';
 
-const CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  '862478611976-heidd1qqrghiar660jiujnge4ehmoctl.apps.googleusercontent.com';
-
-const SCOPES = [
-  'email',
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-].join(' ');
+import { calendarBackend } from './googleCalendarBackend';
 
 const STORAGE_KEY_STATE = 'leve.gcal.state.v1';
 const STORAGE_KEY_TOKEN = 'leve.gcal.token.v1';
+const OAUTH_PENDING_KEY = 'leve.gcal.pending.v1';
 
 export interface GoogleCalendarItem {
   id: string;
@@ -92,7 +85,7 @@ function getStoredToken(): string | null {
 function saveToken(accessToken: string, expiresIn: number) {
   // Margem segura de 30 segundos antes da expiração de 3600s (~1 hora)
   const safeMarginSec = Math.min(30, Math.max(5, Math.floor(expiresIn * 0.05)));
-  const expiresAt = Date.now() + Math.max(60, expiresIn - safeMarginSec) * 1000;
+  const expiresAt = Date.now() + Math.max(1, expiresIn - safeMarginSec) * 1000;
   memoryToken = { accessToken, expiresAt };
 }
 
@@ -100,154 +93,49 @@ let tokenRefreshPromise: Promise<string | null> | null = null;
 let lastSilentAuthFailure = 0;
 const SILENT_AUTH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos de espera após falha silenciosa
 
-/* ------------------------------------------------------------------ */
-/* Google Identity Services (GIS) Loader                              */
-/* ------------------------------------------------------------------ */
-
-let gisPromise: Promise<void> | null = null;
-
-function loadGis(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google?.accounts?.oauth2) return Promise.resolve();
-  if (gisPromise) return gisPromise;
-
-  gisPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Falha ao carregar Google OAuth')));
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Não foi possível carregar a biblioteca do Google.'));
-    document.head.appendChild(script);
-  });
-
-  return gisPromise;
-}
-
-/* ------------------------------------------------------------------ */
-/* Conexão e Autenticação OAuth 2.0                                   */
-/* ------------------------------------------------------------------ */
-
+/** Inicia autorização por redirecionamento, compatível com PWA sem depender de popups. */
 export async function connectGoogleCalendar(): Promise<boolean> {
-  resetGoogleCalendarSession();
   const version = sessionVersion;
   updateGcalState({ status: 'syncing', error: undefined });
   try {
-    await loadGis();
+    const result = await calendarBackend('begin', {}, requests.signal);
     if (version !== sessionVersion) return false;
-    const google = (window as any).google;
-    if (!google?.accounts?.oauth2) {
-      throw new Error('Google Identity Services não está disponível.');
-    }
-
-    return new Promise((resolve) => {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        hint: gcalState.email || undefined,
-        callback: async (resp: { access_token?: string; error?: string; expires_in?: number }) => {
-          if (version !== sessionVersion) { resolve(false); return; }
-          if (resp.error || !resp.access_token) {
-            updateGcalState({
-              status: 'error',
-              error: resp.error === 'access_denied' ? 'Acesso negado no Google.' : 'Não foi possível conectar.',
-            });
-            resolve(false);
-            return;
-          }
-
-          saveToken(resp.access_token, resp.expires_in || 3600);
-          lastSilentAuthFailure = 0;
-
-          // Obtém lista de calendários e perfil
-          const calendars = await fetchCalendarList(resp.access_token);
-          if (version !== sessionVersion) { resolve(false); return; }
-          const email = await fetchUserEmail(resp.access_token, calendars);
-          if (version !== sessionVersion) { resolve(false); return; }
-
-          const errorFound = gcalState.error;
-          updateGcalState({
-            connected: true,
-            email: email || gcalState.email,
-            calendars,
-            calendarId: gcalState.calendarId || 'primary',
-            status: errorFound ? 'error' : 'synced',
-            error: errorFound,
-            lastSync: Date.now(),
-          });
-
-          if (errorFound) {
-            toast(errorFound);
-          } else {
-            toast('Google Agenda conectado com sucesso!');
-            // Sincroniza tarefas com data existentes
-            syncAllUpcomingTasks(false).catch(() => {});
-          }
-
-          resolve(true);
-        },
-        error_callback: (err: unknown) => {
-          if (version !== sessionVersion) { resolve(false); return; }
-          console.warn('Erro na autorização do Google:', err);
-          updateGcalState({ status: 'error', error: 'Erro ao abrir autorização do Google.' });
-          resolve(false);
-        },
-      });
-
-      // Se já temos a conta conectada previamente, usa hint para pular o seletor de contas
-      const reqOptions: any = {};
-      if (gcalState.email) {
-        reqOptions.hint = gcalState.email;
-        reqOptions.prompt = '';
-      } else {
-        reqOptions.prompt = 'select_account';
-      }
-
-      client.requestAccessToken(reqOptions);
-    });
+    if (!result.url || !result.proof || !result.state || new URL(result.url).origin !== 'https://accounts.google.com') throw new Error('Resposta de autorização inválida.');
+    // Prova de origem de uso único, por dez minutos; não é um token de acesso/renovação.
+    // Precisa sobreviver ao redirecionamento e à volta ao PWA.
+    localStorage.setItem(OAUTH_PENDING_KEY, JSON.stringify({ proof: result.proof, state: result.state, expires: Date.now() + 600000 }));
+    window.location.assign(result.url);
+    return true;
   } catch (err) {
-    if (version !== sessionVersion) return false;
-    const msg = (err as Error)?.message || 'Erro ao conectar ao Google.';
-    updateGcalState({ status: 'error', error: msg });
+    if (version === sessionVersion) updateGcalState({ status: 'error', error: (err as Error).message });
     return false;
   }
 }
 
-export function disconnectGoogleCalendar() {
-  const token = getStoredToken();
-  if (token && (window as any).google?.accounts?.oauth2?.revoke) {
-    try {
-      (window as any).google.accounts.oauth2.revoke(token);
-    } catch {
-      /* noop */
-    }
+/** Logout limpa memória; somente Desconectar remove e revoga o vínculo no servidor. */
+export async function disconnectGoogleCalendar(): Promise<boolean> {
+  const version = sessionVersion;
+  updateGcalState({ status: 'syncing', error: undefined });
+  try {
+    const result = await calendarBackend('disconnect', {}, requests.signal);
+    if (version !== sessionVersion) return false;
+    resetGoogleCalendarSession();
+    toast(result.revoked === false ? 'Vínculo removido do Leve. Confira também as permissões na sua Conta Google.' : 'Google Agenda desconectado.');
+    return true;
+  } catch (err) {
+    if (version === sessionVersion) updateGcalState({ status: 'error', error: (err as Error).message });
+    return false;
   }
-  resetGoogleCalendarSession();
-  lastSilentAuthFailure = 0;
-  updateGcalState({
-    connected: false,
-    email: undefined,
-    status: 'idle',
-    error: undefined,
-    calendars: [],
-    lastSync: undefined,
-  });
-  toast('Google Agenda desconectado.');
 }
 
-/** Antes de logout, troca de conta ou expiração: não exclui eventos remotos. */
+/** Antes de logout ou troca de conta: cancela operações sem excluir eventos remotos. */
 export function resetGoogleCalendarSession() {
   sessionVersion++;
   requests.abort();
   requests = new AbortController();
   memoryToken = undefined;
   tokenRefreshPromise = null;
+  restorePromise = null;
   clearTimeout(syncTimeout);
   queuedTasks.clear();
   queuedDeletions.clear();
@@ -256,165 +144,112 @@ export function resetGoogleCalendarSession() {
   updateGcalState({ connected: false, calendarId: 'primary', autoSync: true, email: undefined, calendars: [], status: 'idle', error: undefined, lastSync: undefined });
 }
 
-export function setGoogleTargetCalendar(calendarId: string) {
-  updateGcalState({ calendarId });
-  toast('Calendário de destino atualizado.');
+async function preferences(patch: { calendarId?: string; autoSync?: boolean }) {
+  const version = sessionVersion;
+  try {
+    const result = await calendarBackend('preferences', patch, requests.signal);
+    if (version !== sessionVersion) return;
+    if (result.connected === false) throw new Error('Conecte novamente o Google Agenda.');
+    updateGcalState(patch);
+    if (patch.autoSync) void syncAllUpcomingTasks().catch(() => {});
+  } catch (err) {
+    if (version === sessionVersion) updateGcalState({ status: 'error', error: (err as Error).message });
+  }
 }
+export function setGoogleTargetCalendar(calendarId: string) { void preferences({ calendarId }); }
+export function toggleGoogleAutoSync(autoSync: boolean) { void preferences({ autoSync }); }
 
-export function toggleGoogleAutoSync(autoSync: boolean) {
-  updateGcalState({ autoSync });
-  if (autoSync) syncAllUpcomingTasks().catch(() => {});
+let restorePromise: Promise<void> | null = null;
+export function restoreGoogleCalendarConnection(): Promise<void> {
+  if (restorePromise) return restorePromise;
+  const version = sessionVersion;
+  restorePromise = (async () => {
+    try {
+      const location = window.location;
+      const savedAttempt = localStorage.getItem(OAUTH_PENDING_KEY);
+      if (savedAttempt) {
+        try { if (JSON.parse(savedAttempt).expires < Date.now()) localStorage.removeItem(OAUTH_PENDING_KEY); }
+        catch { localStorage.removeItem(OAUTH_PENDING_KEY); }
+      }
+      const callback = new URLSearchParams(location?.hash?.slice(1));
+      if (callback.has('gcal_code')) {
+        window.history.replaceState(null, '', location.pathname + location.search);
+        const stored = localStorage.getItem(OAUTH_PENDING_KEY);
+        localStorage.removeItem(OAUTH_PENDING_KEY);
+        const pending = stored ? JSON.parse(stored) : null;
+        if (!pending || pending.expires < Date.now() || pending.state !== callback.get('gcal_state')) throw new Error('Volte ao app onde iniciou a conexão e tente conectar novamente.');
+        await calendarBackend('complete', { code: callback.get('gcal_code'), state: pending.state, proof: pending.proof }, requests.signal);
+        if (version !== sessionVersion) return;
+        toast('Google Agenda conectado. O vínculo será mantido ao reabrir o app.');
+      }
+      if (location?.search && new URLSearchParams(location.search).has('gcal')) {
+        const params = new URLSearchParams(location.search);
+        const result = params.get('gcal'); params.delete('gcal');
+        window.history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : '') + location.hash);
+        if (result === 'error') throw new Error('A conexão com o Google não foi concluída. Tente novamente.');
+      }
+      const connection = await calendarBackend('status', {}, requests.signal);
+      if (version !== sessionVersion) return;
+      if (!connection.connected) { if (gcalState.connected) resetGoogleCalendarSession(); return; }
+      const restoredNow = !gcalState.connected;
+      updateGcalState({ connected: true, email: connection.email, calendarId: connection.calendarId || 'primary', autoSync: connection.autoSync ?? true });
+      const token = await getValidToken();
+      if (!token || version !== sessionVersion) return;
+      const calendars = await fetchCalendarList(token);
+      if (version !== sessionVersion) return;
+      updateGcalState({ calendars });
+      if (restoredNow && gcalState.autoSync && getState().settings.onboarded) await syncAllUpcomingTasks(false, true);
+    } catch (err) {
+      if (version === sessionVersion) updateGcalState({ status: 'error', error: (err as Error).message });
+    } finally {
+      if (version === sessionVersion) restorePromise = null;
+    }
+  })();
+  return restorePromise;
 }
-
-/* ------------------------------------------------------------------ */
-/* Chamadas à Google Calendar API v3                                  */
-/* ------------------------------------------------------------------ */
 
 async function fetchCalendarList(token: string): Promise<GoogleCalendarItem[]> {
   const version = sessionVersion;
   try {
-    const res = await googleFetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      let errDetail = '';
-      try {
-        const errJson = await res.json();
-        if (version !== sessionVersion) return [];
-        errDetail = errJson?.error?.message || '';
-      } catch {
-        /* fallback */
-      }
-      console.warn('[Google Calendar] Falha ao listar calendários:', res.status, errDetail);
-      if (res.status === 403 && (errDetail.toLowerCase().includes('has not been used') || errDetail.toLowerCase().includes('disabled'))) {
-        updateGcalState({ error: 'A Google Calendar API precisa ser ativada no Google Cloud Console.' });
-      }
-      return [{ id: 'primary', summary: 'Principal', primary: true }];
-    }
+    const res = await googleFetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Não foi possível listar os calendários do Google.');
     const data = await res.json();
     if (version !== sessionVersion) return [];
-    return (data.items || []).map((item: any) => ({
-      id: item.id,
-      summary: item.summary,
-      primary: !!item.primary,
-    }));
+    return (data.items || []).map((item: { id: string; summary: string; primary?: boolean }) => ({ id: item.id, summary: item.summary, primary: !!item.primary }));
   } catch (err) {
-    console.warn('[Google Calendar] Erro de rede ao buscar calendários:', err);
+    if (version === sessionVersion) updateGcalState({ status: 'error', error: (err as Error).message });
     return [{ id: 'primary', summary: 'Principal', primary: true }];
   }
 }
 
-async function fetchUserEmail(token: string, calendars: GoogleCalendarItem[]): Promise<string | undefined> {
-  try {
-    const res = await googleFetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.email) return data.email;
-    }
-  } catch {
-    /* fallback */
-  }
-  const primary = calendars.find((c) => c.primary);
-  return primary && primary.id.includes('@') ? primary.id : undefined;
-}
-
 async function getValidToken(interactive = false): Promise<string | null> {
-  const version = sessionVersion;
   const existing = getStoredToken();
   if (existing) return existing;
   if (!gcalState.connected) return null;
-
-  // Se for em segundo plano e já falhou silenciosamente recentemente, espera o cooldown
-  if (!interactive && Date.now() - lastSilentAuthFailure < SILENT_AUTH_COOLDOWN_MS) {
-    return null;
-  }
-
-  // Deduplicação: se já existe uma renovação em andamento, aguarda a mesma
-  if (tokenRefreshPromise) {
-    return tokenRefreshPromise;
-  }
-
+  if (!interactive && lastSilentAuthFailure && Date.now() - lastSilentAuthFailure < SILENT_AUTH_COOLDOWN_MS) return null;
+  if (tokenRefreshPromise) return tokenRefreshPromise;
+  const version = sessionVersion;
   tokenRefreshPromise = (async () => {
     try {
-      await loadGis();
+      const result = await calendarBackend('token', {}, requests.signal);
       if (version !== sessionVersion) return null;
-      const google = (window as any).google;
-      if (!google?.accounts?.oauth2) return null;
-
-      return await new Promise<string | null>((resolve) => {
-        let finished = false;
-        const done = (val: string | null) => {
-          if (!finished) {
-            finished = true;
-            resolve(val);
-          }
-        };
-
-        // Timeout para chamadas em segundo plano (evita travar o app se a janela for bloqueada)
-        const timer = !interactive
-          ? setTimeout(() => {
-              if (version === sessionVersion) lastSilentAuthFailure = Date.now();
-              done(null);
-            }, 6000)
-          : undefined;
-
-        const client = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          hint: gcalState.email || undefined,
-          callback: (resp: any) => {
-            if (timer) clearTimeout(timer);
-            if (version !== sessionVersion) { done(null); return; }
-            if (resp?.access_token) {
-              saveToken(resp.access_token, resp.expires_in || 3600);
-              lastSilentAuthFailure = 0;
-              updateGcalState({ error: undefined, status: 'synced' });
-              done(resp.access_token);
-            } else {
-              if (!interactive) lastSilentAuthFailure = Date.now();
-              updateGcalState({
-                status: 'error',
-                error: 'Sessão do Google expirada. Clique em Sincronizar para reconectar.',
-              });
-              done(null);
-            }
-          },
-          error_callback: (err: any) => {
-            if (timer) clearTimeout(timer);
-            if (version !== sessionVersion) { done(null); return; }
-            if (!interactive) lastSilentAuthFailure = Date.now();
-            console.warn('[Google Calendar] Falha na obtenção do token:', err);
-            done(null);
-          },
-        });
-
-        const reqOptions: any = {};
-        if (gcalState.email) {
-          reqOptions.hint = gcalState.email;
-        }
-
-        if (interactive) {
-          reqOptions.prompt = gcalState.email ? '' : 'select_account';
-        } else {
-          // Em segundo plano: estritamente silencioso
-          reqOptions.prompt = '';
-        }
-
-        client.requestAccessToken(reqOptions);
-      });
+      if (!result.connected || !result.accessToken || !result.expiresIn) throw new Error('Conecte novamente o Google Agenda.');
+      saveToken(result.accessToken, result.expiresIn);
+      lastSilentAuthFailure = 0;
+      updateGcalState({ status: 'idle', error: undefined });
+      return result.accessToken;
     } catch (err) {
-      console.warn('[Google Calendar] Erro ao renovar token:', err);
+      if (version === sessionVersion) {
+        lastSilentAuthFailure = Date.now();
+        updateGcalState({ status: 'error', error: (err as Error).message, ...((err as { status?: number }).status === 409 ? { connected: false } : {}) });
+      }
       return null;
     } finally {
       if (version === sessionVersion) tokenRefreshPromise = null;
     }
   })();
-
   return tokenRefreshPromise;
 }
-
 /* ------------------------------------------------------------------ */
 /* Formatação e Conversão de Tarefa → Evento Google                    */
 /* ------------------------------------------------------------------ */
@@ -648,7 +483,7 @@ export async function deleteGoogleEvent(googleEventId: string, existingToken?: s
 }
 
 /** Sincroniza todas as tarefas ativas com data para o Google Agenda. */
-export async function syncAllUpcomingTasks(interactive = false): Promise<number> {
+export async function syncAllUpcomingTasks(interactive = false, quiet = false): Promise<number> {
   const version = sessionVersion;
   if (!gcalState.connected) return 0;
   updateGcalState({ status: 'syncing', error: undefined });
@@ -658,7 +493,7 @@ export async function syncAllUpcomingTasks(interactive = false): Promise<number>
   if (!token) {
     updateGcalState({
       status: 'error',
-      error: 'Sessão do Google expirada. Clique em Sincronizar para reconectar.',
+      error: gcalState.error || 'Não foi possível renovar a conexão. Tente sincronizar novamente.',
     });
     return 0;
   }
@@ -682,14 +517,14 @@ export async function syncAllUpcomingTasks(interactive = false): Promise<number>
   }
 
   if (version !== sessionVersion) return count;
-  if (hasErrors && count === 0 && tasks.length > 0) {
+  if (hasErrors) {
     updateGcalState({ status: 'error' });
-    toast(gcalState.error || 'Erro ao sincronizar tarefas com o Google Agenda.');
+    if (!quiet) toast(gcalState.error || 'Alguns itens não foram sincronizados. Tente novamente.');
   } else {
     updateGcalState({ status: 'synced', lastSync: Date.now() });
-    if (tasks.length === 0) {
+    if (!quiet && tasks.length === 0) {
       toast('Nenhuma tarefa com data para sincronizar.');
-    } else {
+    } else if (!quiet) {
       toast(`${count} ${count === 1 ? 'item sincronizado' : 'itens sincronizados'} com o Google Agenda`);
     }
   }

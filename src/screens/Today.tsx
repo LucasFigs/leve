@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { addDays, formatDuration, formatLongDate, greeting, minToTime, timeToMin } from '../domain/dates';
-import { nextEventAfter, recommendNow, PRIORITY_META } from '../domain/priority';
+import { recommendNow, PRIORITY_META } from '../domain/priority';
 import { dayCapacity, type CapacityStatus } from '../domain/planner';
 import { useTodayContext } from '../hooks/hooks';
 import { actions, useStore } from '../store/store';
@@ -11,6 +11,7 @@ import { DayTimeline } from '../components/DayTimeline';
 import { Icon } from '../components/Icon';
 import { EmptyState, SectionHead } from '../components/ui';
 import { WeekCard } from '../components/WeekCard';
+import { Disclosure } from '../components/Disclosure';
 import { computeNudges, type NudgeAction } from '../components/nudges';
 import { startTask } from '../components/focusFlow';
 import { TopActions } from './TopActions';
@@ -211,59 +212,29 @@ const CAPACITY: Record<CapacityStatus, { label: string; tone: string }> = {
 
 /** Painel do dia: progresso, se o que falta cabe no tempo livre e o próximo compromisso. */
 function DayPulse({ doneToday, totalToday }: { doneToday: number; totalToday: number }) {
-  const { today, now, items, tasks, settings } = useTodayContext();
+  const { today, now, tasks, settings } = useTodayContext();
   const cap = useMemo(() => dayCapacity(tasks, today, settings, now), [tasks, today, settings, now]);
-  const next = nextEventAfter(items, now);
-  const pct = totalToday ? doneToday / totalToday : 0;
   const meta = CAPACITY[cap.status];
-  const r = 20;
-  const circ = 2 * Math.PI * r;
-
-  let detail: string;
-  if (cap.status === 'ended') detail = cap.left ? `Ficaram ${formatDuration(cap.left)} de tarefas para depois.` : 'Tudo certo por hoje.';
-  else if (!cap.left) detail = `Nada pendente · ${formatDuration(cap.free) || '0 min'} livres até ${settings.dayEnd}.`;
-  else detail = `Faltam ${formatDuration(cap.left)} de tarefas · ${formatDuration(cap.free) || '0 min'} livres até ${settings.dayEnd}.`;
-
-  const action =
-    cap.status === 'ended'
-      ? cap.left > 0 && { label: 'Planejar amanhã', run: () => openSheet({ type: 'plan', date: addDays(today, 1) }) }
-      : cap.unscheduled > 0 && { label: cap.status === 'ok' ? 'Encaixar horários' : 'Reorganizar', run: () => openSheet({ type: 'plan', date: today }) };
+  const estimate = cap.status === 'ended'
+    ? cap.left ? `${formatDuration(cap.left)} ficaram pendentes` : 'Tudo certo por hoje'
+    : cap.left ? `${formatDuration(cap.left)} de tarefas · ${formatDuration(cap.free) || '0 min'} disponíveis*` : 'Nenhuma tarefa pendente';
 
   return (
-    <div className="card card-pad pulse">
-      <div className="pulse-ring" role="img" aria-label={`${doneToday} de ${totalToday} tarefas feitas hoje`}>
-        <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
-          <circle cx="26" cy="26" r={r} className="pulse-track" />
-          <circle cx="26" cy="26" r={r} className="pulse-fill" strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)} />
-        </svg>
-        <span className="num">
-          {doneToday}/{totalToday}
-        </span>
+    <Disclosure className="card day-summary" title={<span className="day-summary-title">
+      <span className={`pulse-status tone-text-${meta.tone}`}><i aria-hidden="true" />{meta.label}</span>
+      <span className="xs muted day-summary-estimate">{estimate}</span>
+      <span className="sr-only">Ver detalhes da estimativa e ajustar plano</span>
+    </span>}>
+      <div className="day-summary-details">
+        <p className="small muted">{doneToday} de {totalToday} tarefas concluídas.</p>
+        <p className="xs muted">*Estimativa somente dos itens do Leve, no período {settings.dayStart}–{settings.dayEnd}. Compromissos existentes no Google Agenda não são importados.</p>
+        <button className="btn btn-sm btn-soft" onClick={() => openSheet({ type: 'plan', date: cap.status === 'ended' && cap.left > 0 ? addDays(today, 1) : today })}>
+          {cap.status === 'ended' && cap.left > 0 ? 'Planejar amanhã' : 'Ajustar disponibilidade e plano'}
+        </button>
       </div>
-      <div className="grow" style={{ minWidth: 0 }}>
-        <span className={`pulse-status tone-text-${meta.tone}`}>
-          <i aria-hidden="true" />
-          {meta.label}
-        </span>
-        <p className="small" style={{ marginTop: 2 }}>{detail}</p>
-        <p className="xs muted" style={{ marginTop: 6 }}>Estimativa dos itens do Leve · período {settings.dayStart}–{settings.dayEnd}. Google Agenda não importado.</p>
-        <button className="btn btn-sm btn-ghost" onClick={() => openSheet({ type: 'plan', date: today })}>Revisar disponibilidade e plano</button>
-        {next && cap.status !== 'ended' && (
-          <p className="xs muted truncate" style={{ marginTop: 4 }}>
-            <Icon name="calendar" size={12} /> Próximo: {next.task.title} às {next.time}
-          </p>
-        )}
-        {action && (
-          <button className="btn btn-sm btn-soft" style={{ marginTop: 10 }} onClick={action.run}>
-            <Icon name="wand" size={14} />
-            {action.label}
-          </button>
-        )}
-      </div>
-    </div>
+    </Disclosure>
   );
 }
-
 /** Atrasadas: uma linha com ação rápida; a lista abre só se você quiser. */
 function OverdueCard() {
   const { overdue } = useTodayContext();

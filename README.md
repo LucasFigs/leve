@@ -67,7 +67,7 @@ Em um projeto próprio, configure `SUPABASE_ACCESS_TOKEN` e `APP_URL` e execute 
 
 ### Google Agenda e push
 
-O Google Agenda pode ser conectado no Perfil. O token permanece somente na memória da aba; é necessário reconectar ao recarregar o app ou trocar de conta.
+O Google Agenda pode ser conectado no Perfil. Com o backend da integração configurado, o vínculo é restaurado ao reabrir o app: o refresh token fica cifrado no servidor e o access token permanece somente em memória. Veja [configuração e limites](docs/google-agenda.md).
 
 Para push, `npm run setup:push` gera as chaves necessárias, aplica tabelas, publica a função e agenda o processamento no projeto Supabase. Mantenha a chave privada e o segredo do cron fora do frontend. Depois configure apenas `VITE_VAPID_PUBLIC_KEY` na Vercel e ative os lembretes no aparelho.
 
