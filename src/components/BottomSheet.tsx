@@ -12,13 +12,14 @@ interface Props {
   label?: string;
   /** Chamado antes de fechar; retornar false mantém aberto (ex.: alterações não salvas). */
   canClose?: () => boolean;
+  className?: string;
 }
 
 /**
  * Bottom sheet no celular, modal centralizado no desktop.
  * Fecha com Esc, toque no fundo ou arrastando para baixo.
  */
-export function BottomSheet({ title, onClose, children, footer, full, headerExtra, label, canClose }: Props) {
+export function BottomSheet({ title, onClose, children, footer, full, headerExtra, label, canClose, className }: Props) {
   const [closing, setClosing] = useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -213,7 +214,7 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
     >
       <div
         ref={sheetRef}
-        className={`sheet${full ? ' full' : ''}`}
+        className={`sheet${full ? ' full' : ''}${className ? ` ${className}` : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={label ?? (typeof title === 'string' ? title : 'Detalhes')}

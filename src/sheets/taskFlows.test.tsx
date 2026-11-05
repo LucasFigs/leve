@@ -50,9 +50,42 @@ function openTask() {
 }
 
 describe('consulta e edição de tarefas', () => {
+  it('prioriza título, planejamento e passos antes das notas, mantendo o contexto visível', () => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, time: '09:05', category: 'trabalho', priority: 'important' }] });
+    openTask();
+    expect(host.querySelector('.task-overview-plan')?.textContent).toContain('09:05–09:35');
+    expect(host.querySelector('.task-plan-duration')?.textContent).toBe('30 min');
+    expect(host.querySelector('.task-overview-tags')?.textContent).toContain('Trabalho');
+    expect(host.querySelector('.task-overview-tags')?.textContent).toContain('Importante');
+    const steps = host.querySelector('[aria-label="Passos da tarefa"]')!;
+    const notes = host.querySelector('[aria-label="Notas"]')!;
+    expect(steps.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(host.querySelector('.task-overview-facts')).toBeNull();
+  });
+  it('permite marcar o passo pela linha inteira e destaca o próximo pendente', () => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, subtasks: [...base.subtasks, { id: 's2', title: 'Revisar o resultado', done: false }] }] });
+    openTask();
+    expect(host.querySelector('.task-overview-step.next')?.getAttribute('aria-label')).toBe('Concluir passo: Reunir dados');
+    act(() => (host.querySelector('.task-overview-step.next') as HTMLButtonElement).click());
+    expect(getState().tasks[0].subtasks[0].done).toBe(true);
+    expect(host.querySelector('.task-overview-step.next')?.getAttribute('aria-label')).toBe('Concluir passo: Revisar o resultado');
+    expect(host.querySelector('[aria-label="Passos concluídos"]')?.getAttribute('aria-valuenow')).toBe('50');
+    expect(host.querySelector('textarea')).toBeNull();
+  });
+  it('mantém a visualização simples quando não há notas ou passos', () => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, notes: undefined, subtasks: [], date: undefined }] });
+    openTask();
+    expect(host.querySelector('.task-overview-plan')?.textContent).toContain('Quando der');
+    expect(host.querySelector('[aria-label="Passos da tarefa"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Notas"]')).toBeNull();
+    expect(host.querySelector<HTMLDetailsElement>('.task-overview-more')?.open).toBe(false);
+    expect(button('Começar agora')).toBeDefined();
+    expect(button('Concluir')).toBeDefined();
+  });
   it('abre em consulta, marca passos imediatamente e não inicia um rascunho', () => {
     openTask();
     expect(host.querySelector('h2')?.textContent).toBe(base.title);
+    expect(document.activeElement).toBe(host.querySelector('h2'));
     expect(host.querySelector('textarea')).toBeNull();
     expect(host.textContent).toContain(base.notes);
     act(() => (host.querySelector('[aria-label="Concluir passo: Reunir dados"]') as HTMLButtonElement).click());

@@ -8,13 +8,13 @@ import { assistant } from '../services/assistant';
 import { actions, uid, useStore, type SeriesScope } from '../store/store';
 import { closeSheet, openSheet, toast } from '../store/ui';
 import { BottomSheet } from '../components/BottomSheet';
-import { Checkbox, Option, ProgressBar, Segmented } from '../components/ui';
+import { Option, Segmented } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { RecurrenceEditor } from '../components/RecurrenceEditor';
 import { SubtaskList } from '../components/SubtaskList';
 import { AutoGrowTextarea } from '../components/AutoGrowTextarea';
-import { HabitAppearance, HabitIdentity } from '../components/HabitAppearance';
-import { habitStyle } from '../components/habitStyle';
+import { HabitAppearance } from '../components/HabitAppearance';
+import { TaskOverview } from '../components/TaskOverview';
 import { CATEGORIES } from '../domain/category';
 import { Disclosure } from '../components/Disclosure';
 import { archiveWithFeedback, completeWithFeedback, removeWithFeedback } from '../components/feedback';
@@ -303,49 +303,18 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   }
 
   if (!editing) return (
-    <BottomSheet key="overview" label={task.title} title={KIND_LABEL[task.kind]} onClose={closeSheet}
+    <BottomSheet key="overview" className="task-detail-sheet" label={task.title} title={KIND_LABEL[task.kind]} onClose={closeSheet}
       headerExtra={<button type="button" className="btn btn-sm btn-soft" onClick={() => { setOriginal(live); setDraft(live); setEditMode(true); }}>
         <Icon name="edit" size={16} />Editar
       </button>}
       footer={footer}>
-      <article className="task-overview">
-        <header>
-          <h2 className="task-overview-title">{task.title}</h2>
-          <div className="task-overview-tags">
-            {task.kind === 'habit' && <span style={habitStyle(task)}><HabitIdentity task={task} /></span>}
-            {task.status === 'archived' ? <span className="chip">Arquivada</span> : isDone && <span className="chip">{missed ? 'Não aconteceu' : isEvent ? 'Aconteceu' : 'Concluída'}</span>}
-            {task.priority && <span className={`prio ${task.priority}`}><span className="prio-dot" />{PRIORITY_META[task.priority].label}</span>}
-            {project && <span className="small muted">{project.emoji} {project.name}</span>}
-          </div>
-        </header>
-        <dl className="task-overview-facts">
-          <div><dt><Icon name="calendar" size={16} />Quando</dt><dd>{task.recurrence ? formatDay(occurrence, today, { long: true }) : task.date ? formatDay(task.date, today, { long: true }) : 'Quando der · sem data'}{task.time && ` · ${task.time}${endTime ? `–${endTime}` : ''}`}</dd></div>
-          {task.duration && <div><dt><Icon name="clock" size={16} />Duração</dt><dd>{formatDuration(task.duration)}</dd></div>}
-          {task.due && <div><dt><Icon name="flag" size={16} />Prazo final</dt><dd>{formatDay(task.due, today, { long: true })}</dd></div>}
-          {task.recurrence && <div><dt><Icon name="repeat" size={16} />Repetição</dt><dd>{recurrenceLabel(task.recurrence)}</dd></div>}
-          {task.category && <div><dt>Categoria</dt><dd>{CATEGORIES.find(c => c.id === task.category)?.label}</dd></div>}
-        </dl>
-        {task.notes && <section aria-label="Notas"><h3 className="section-title">Notas</h3><p className="task-overview-notes">{task.notes}</p></section>}
-        {task.subtasks.length > 0 ? <section aria-label="Passos da tarefa">
-          <div className="section-head"><h3 className="section-title">Passos</h3><span className="small muted num" aria-live="polite">{subDone} de {task.subtasks.length}</span></div>
-          <ProgressBar value={subDone / task.subtasks.length} label="Passos concluídos" />
-          <div className="task-overview-steps">
-            {task.subtasks.map(step => <div key={step.id} className={`task-overview-step${step.done ? ' done' : ''}`}>
-              <Checkbox checked={step.done} onToggle={() => actions.toggleSubtask(task.id, step.id)} label={`${step.done ? 'Reabrir' : 'Concluir'} passo: ${step.title}`} />
-              <span>{step.title}</span>
-            </div>)}
-          </div>
-          {task.recurrence && <p className="xs muted">Os passos são compartilhados entre as repetições. A ação de concluir esta tarefa se aplica à data exibida.</p>}
-        </section> : <p className="small muted">Você pode começar diretamente. Use Editar se quiser adicionar passos ou outros detalhes.</p>}
-        {(task.focusMinutes ?? 0) > 0 && <p className="small muted"><Icon name="target" size={16} /> {formatDuration(task.focusMinutes)} de foco nesta tarefa.</p>}
-        <Disclosure title="Outras ações">
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => { archiveWithFeedback(task.id); closeSheet(); }}><Icon name="archive" size={16} />{task.recurrence ? 'Arquivar tarefa e repetições' : 'Arquivar tarefa'}</button>
-          <button type="button" className="btn btn-sm btn-danger" onClick={() => remove()}><Icon name="trash" size={16} />Excluir {noun}</button>
-        </Disclosure>
-      </article>
+      <TaskOverview task={task} project={project} today={today} occurrence={occurrence}
+        endTime={endTime} defaultDuration={defaultDuration} isDone={isDone} missed={missed}
+        onToggleStep={stepId => actions.toggleSubtask(task.id, stepId)}
+        onArchive={() => { archiveWithFeedback(task.id); closeSheet(); }}
+        onRemove={() => remove()} />
     </BottomSheet>
   );
-
   const showCustomDuration = customDuration || (task.duration !== undefined && !DURATIONS.includes(task.duration));
   const recurrenceField = <div className="field">
     <label className="task-field-label" htmlFor={`${formId}-repeat`}>Frequência</label>
