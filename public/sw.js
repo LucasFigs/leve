@@ -1,5 +1,5 @@
 // Service worker simples: app abre offline e atualiza em segundo plano.
-const CACHE = 'leve-v2';
+const CACHE = 'leve-v3';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/index.html', '/icon.svg', '/icon-192.png', '/manifest.webmanifest'])));
@@ -15,20 +15,30 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   // Só arquivos do app e fontes: dados do Supabase sempre vão direto à rede
-  const { origin } = new URL(req.url);
+  const url = new URL(req.url);
+  const { origin } = url;
   if (origin !== self.location.origin && !/fonts\.(googleapis|gstatic)\.com$/.test(new URL(req.url).hostname)) return;
+  // Cache somente do shell público; nunca callbacks OAuth, APIs ou URLs com tokens.
+  if (req.headers.has('Authorization')) return;
+  if (url.search || url.hash) {
+    if (req.mode === 'navigate') e.respondWith(fetch(req).catch(() => caches.match('/index.html')));
+    return;
+  }
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          if (res.ok && res.headers.get('Content-Type')?.includes('text/html')) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          }
           return res;
         })
         .catch(() => caches.match('/index.html')),
     );
     return;
   }
+  if (origin === self.location.origin && !/^\/(assets\/|icons?[^/]*\.(png|svg)$|apple-touch-icon\.png$|manifest\.webmanifest$)/.test(url.pathname)) return;
   e.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req)

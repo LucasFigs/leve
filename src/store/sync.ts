@@ -13,6 +13,8 @@ import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Task } from '../domain/types';
 import { localRepository } from './persistence';
 import { emptyState, getState, replaceState, subscribe, uid } from './store';
+import { resetGoogleCalendarSession } from '../services/googleCalendar';
+import { isTask, isProject, isMeta } from '../domain/validation';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -121,6 +123,12 @@ interface Row {
   data: unknown;
 }
 
+function validRow(row: Row): boolean {
+  return row.type === 'meta' ? row.id === 'meta' && isMeta(row.data) :
+    row.type === 'task' ? isTask(row.data) && row.data.id === row.id :
+    row.type === 'project' && isProject(row.data) && row.data.id === row.id;
+}
+
 /**
  * Último valor confirmado na nuvem para cada item. A comparação é por referência:
  * o store é imutável, então um objeto diferente significa alteração local pendente.
@@ -186,6 +194,7 @@ function saveJournal() {
 /* ------------------------------------------------------------------ */
 
 let userId: string | undefined;
+let syncVersion = 0;
 let channel: RealtimeChannel | undefined;
 let chain: Promise<void> = Promise.resolve();
 let pushQueued = false;
@@ -237,6 +246,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 async function push() {
+  const version = syncVersion;
   const uidNow = userId;
   // Só envia depois de ter mesclado com a nuvem ao menos uma vez nesta conta
   if (!supabase || !uidNow || journal.owner !== uidNow) return;
@@ -254,16 +264,18 @@ async function push() {
   try {
     const stamp = new Date().toISOString();
     for (const part of chunk(upserts, 500)) {
+      if (version !== syncVersion) return;
       const { error } = await supabase.from(TABLE).upsert(
         part.map((r) => ({ user_id: uidNow, id: r.id, type: r.type, data: r.data, origin: CLIENT_ID, updated_at: stamp })),
       );
       if (error) throw error;
     }
     for (const part of chunk(deletes, 200)) {
-      const { error } = await supabase.from(TABLE).delete().in('id', part);
+      if (version !== syncVersion) return;
+      const { error } = await supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part);
       if (error) throw error;
     }
-    if (uidNow !== userId) return; // saiu da conta no meio do envio
+    if (version !== syncVersion) return; // saiu da conta no meio do envio
     for (const r of upserts) {
       if (r.type === 'meta') knownMeta = meta;
       else known.set(r.id, r.data as Entity);
@@ -276,15 +288,17 @@ async function push() {
     const rest = diff(getState());
     if (rest.upserts.length || rest.deletes.length) schedulePush(200);
   } catch (e) {
+    if (version !== syncVersion) return;
     setCloud({ status: navigator.onLine ? 'error' : 'offline', error: errorMessage(e) });
     scheduleRetry();
   }
 }
 
-async function fetchAll(): Promise<Row[]> {
+async function fetchAll(uidNow: string, version: number): Promise<Row[]> {
   const rows: Row[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase!.from(TABLE).select('id,type,data').order('id').range(from, from + PAGE - 1);
+    if (version !== syncVersion) return [];
+    const { data, error } = await supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1);
     if (error) throw error;
     rows.push(...(data as Row[]));
     if (!data || data.length < PAGE) return rows;
@@ -293,6 +307,7 @@ async function fetchAll(): Promise<Row[]> {
 
 /** Baixa tudo da nuvem e mescla com o que há no aparelho. */
 async function pull() {
+  const version = syncVersion;
   const uidNow = userId;
   if (!supabase || !uidNow) return;
   if (!navigator.onLine) {
@@ -301,8 +316,9 @@ async function pull() {
   }
   pulling = true;
   try {
-    const rows = await fetchAll();
-    if (uidNow !== userId) return;
+    const rows = await fetchAll(uidNow, version);
+    if (!rows.every(validRow)) throw new Error('Há dados inválidos na nuvem. A sincronização foi interrompida para preservar seus dados.');
+    if (version !== syncVersion) return;
     lastPull = Date.now();
     const firstSync = journal.owner !== uidNow;
     const remote = new Map<string, Row>(rows.map((r) => [r.id, r]));
@@ -349,6 +365,7 @@ async function pull() {
     saveJournal();
     setCloud({ status: 'synced', error: undefined, lastSync: Date.now() });
   } catch (e) {
+    if (version !== syncVersion) return;
     setCloud({ status: navigator.onLine ? 'error' : 'offline', error: errorMessage(e) });
     scheduleRetry();
   } finally {
@@ -370,6 +387,7 @@ interface RtRow extends Row {
 }
 
 function applyRemoteRow(row: RtRow) {
+  if (!validRow(row)) { setCloud({ status: 'error', error: 'Registro remoto inválido. Sincronize novamente.' }); return; }
   const s = getState();
   if (row.type === 'meta') {
     if (metaDirty(s)) return;
@@ -467,6 +485,8 @@ function start(session: Session) {
 }
 
 function stop() {
+  syncVersion++;
+  resetGoogleCalendarSession();
   userId = undefined;
   clearTimeout(pushTimer);
   clearTimeout(retryTimer);
@@ -504,6 +524,7 @@ export async function confirmSignOut(switching = false) {
 
 export async function signOut() {
   if (!supabase) return;
+  resetGoogleCalendarSession();
   // Envia o que faltava antes de sair
   await enqueue(push);
   stop();

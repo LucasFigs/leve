@@ -371,7 +371,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     if (!supabase || !dirty || busy) return;
-    if (password && password.length < 6) return setError('A senha precisa ter pelo menos 6 caracteres.');
+    if (password && password.length < 12) return setError('A senha precisa ter pelo menos 12 caracteres.');
     if (password !== confirmPw) return setError('As senhas não conferem.');
     setBusy(true);
     setError('');
@@ -521,6 +521,7 @@ function GoogleCalendarSection() {
                 <span className="xs faint" style={{ display: 'block' }}>
                   Tarefas e compromissos criados e editados sobem direto para a sua agenda Google
                 </span>
+                <span className="xs faint" style={{ display: 'block' }}>A conexão vale nesta aba. Ao reabrir o app ou trocar de conta, conecte novamente.</span>
               </span>
             </span>
             <button

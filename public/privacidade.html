@@ -92,7 +92,7 @@
     <div class="container">
       <span class="badge">Leve App</span>
       <h1>Política de Privacidade</h1>
-      <p><em>Última atualização: 17 de outubro de 2026</em></p>
+      <p><em>Última atualização: 4 de novembro de 2026</em></p>
 
       <p>
         O aplicativo <strong>Leve</strong> tem o compromisso de proteger a sua privacidade. Esta Política de Privacidade descreve como coletamos, utilizamos, armazenamos e protegemos suas informações ao utilizar nosso aplicativo de organização e produtividade.
@@ -101,9 +101,10 @@
       <h2>1. Informações que Coletamos</h2>
       <p>Para fornecer os serviços de gestão de tarefas e calendário, podemos coletar:</p>
       <ul>
-        <li><strong>Informações da Conta:</strong> Nome, endereço de e-mail e foto de perfil quando você faz login via Supabase ou autenticação Google.</li>
+        <li><strong>Informações da Conta:</strong> Nome, endereço de e-mail, celular opcional e foto de perfil quando você faz login via Supabase ou autenticação Google.</li>
         <li><strong>Tarefas e Conteúdo:</strong> Títulos de tarefas, compromissos, notas, datas, horários e projetos criados por você no aplicativo.</li>
-        <li><strong>Dados do Google Agenda (quando conectado):</strong> Identificador do evento, título, data e horário para permitir a sincronização bidirecional entre o Leve e sua conta do Google Agenda.</li>
+        <li><strong>Google Agenda (quando conectado):</strong> O Leve consulta seu e-mail e a lista de calendários e envia títulos, notas, datas, horários e recorrências das tarefas para criar ou atualizar eventos. Exclusões de tarefas vinculadas podem excluir seus eventos correspondentes. A integração envia alterações do Leve para o Google; ela não importa automaticamente as alterações feitas no Google.</li>
+        <li><strong>Lembretes:</strong> Quando ativados, guardamos o endpoint e as chaves públicas/de inscrição push e o fuso do aparelho. O título da tarefa pode aparecer na tela bloqueada, conforme as configurações de notificações do dispositivo.</li>
       </ul>
 
       <h2>2. Como Utilizamos suas Informações</h2>
@@ -131,6 +132,8 @@
       <p>
         O Leve funciona no modelo local-first com sincronização em nuvem segura via criptografia em trânsito (HTTPS/TLS) e autenticação segura (OAuth 2.0 / JWT). Você pode desconectar sua conta do Google Agenda a qualquer momento na aba <strong>Perfil</strong> do aplicativo.
       </p>
+      <p>As tarefas e a sessão de login podem permanecer no armazenamento local do navegador para permitir uso offline e acesso à conta. O token de acesso do Google Agenda fica somente na memória da aba e é descartado ao recarregar, sair ou trocar de conta. Ao desconectar pelo Perfil, o aplicativo também solicita a revogação do token disponível. Você pode revogar o acesso do Leve nas configurações da sua Conta Google. Nenhum armazenamento no navegador impede acesso por outra pessoa que tenha acesso ao mesmo perfil do dispositivo.</p>
+      <p>Os dados sincronizados ficam no Supabase enquanto você mantém a conta e os registros. Os registros de deduplicação de lembretes são eliminados pelo processamento periódico após dois dias. As notificações são transportadas pelos serviços push do navegador com conteúdo criptografado para o aparelho. Não declaramos um prazo de remoção de backups do provedor sem confirmação das configurações do ambiente.</p>
 
       <h2>5. Seus Direitos e Exclusão de Dados</h2>
       <p>
@@ -139,12 +142,12 @@
       <ul>
         <li>Desconectar a integração com o Google Agenda na aba de Perfil do aplicativo.</li>
         <li>Excluir tarefas, eventos ou limpar todos os seus dados diretamente nas configurações do aplicativo.</li>
-        <li>Solicitar a exclusão definitiva de sua conta e dados entrando em contato pelo e-mail de suporte.</li>
+        <li>Solicitar a exclusão definitiva de sua conta e dados em <a href="mailto:lucasfig.oliv@gmail.com">lucasfig.oliv@gmail.com</a>. Confirmaremos a titularidade antes de excluir os dados associados.</li>
       </ul>
 
       <h2>6. Contato</h2>
       <p>
-        Em caso de dúvidas sobre esta Política de Privacidade ou sobre o tratamento de dados pelo aplicativo Leve, entre em contato através da nossa página de suporte ou pelo e-mail configurado na sua conta.
+        Em caso de dúvidas sobre privacidade, suporte ou exclusão de dados, entre em contato pelo e-mail <a href="mailto:lucasfig.oliv@gmail.com">lucasfig.oliv@gmail.com</a>.
       </p>
 
       <div class="footer">

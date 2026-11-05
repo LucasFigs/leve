@@ -93,6 +93,7 @@ export function Login() {
         const { error } = await auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
       } else if (mode === 'signup') {
+        if (password.length < 12) throw new Error('Use uma senha com pelo menos 12 caracteres.');
         if (fullName.trim().split(/\s+/).length < 2) throw new Error('Informe seu nome completo (nome e sobrenome).');
         if (password !== confirmPw) throw new Error('As senhas não conferem.');
         if (phone && phone.replace(/\D/g, '').length < 10) throw new Error('Celular incompleto — use DDD + número, ou deixe em branco.');
@@ -119,6 +120,7 @@ export function Login() {
 
   const saveNewPassword = (e: FormEvent) =>
     run(e, async () => {
+      if (password.length < 12) throw new Error('Use uma senha com pelo menos 12 caracteres.');
       if (password !== confirmPw) throw new Error('As senhas não conferem.');
       const { error } = await supabase!.auth.updateUser({ password });
       if (error) throw error;
@@ -142,8 +144,8 @@ export function Login() {
           <h1 className="ob-title">Nova senha</h1>
           <p className="ob-text">Escolha uma senha nova para a sua conta.</p>
           <div className="stack" style={{ marginTop: 20 }}>
-            <input className="input" type="password" autoComplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required autoFocus aria-label="Nova senha" />
-            <input className="input" type="password" autoComplete="new-password" placeholder="Confirme a nova senha" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} minLength={6} required aria-label="Confirmar nova senha" />
+            <input className="input" type="password" autoComplete="new-password" placeholder="Nova senha (mín. 12 caracteres)" value={password} onChange={(e) => setPassword(e.target.value)} minLength={12} required autoFocus aria-label="Nova senha" />
+            <input className="input" type="password" autoComplete="new-password" placeholder="Confirme a nova senha" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} minLength={12} required aria-label="Confirmar nova senha" />
             {error && <p className="small" role="alert" style={{ color: 'var(--red)' }}>{error}</p>}
             <button className="btn btn-primary btn-lg btn-block" disabled={busy}>
               {busy ? 'Salvando…' : 'Salvar senha'}
@@ -222,10 +224,10 @@ export function Login() {
                 className="input"
                 type="password"
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                placeholder={mode === 'signup' ? 'Mínimo 6 caracteres' : ''}
+                placeholder={mode === 'signup' ? 'Mínimo 12 caracteres' : ''}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                minLength={6}
+                minLength={mode === 'signup' ? 12 : 6}
                 required
                 aria-label="Senha"
               />
@@ -240,7 +242,7 @@ export function Login() {
           {mode === 'signup' && (
             <label className="field">
               <span className="label">Confirmar senha</span>
-              <input className="input" type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} minLength={6} required aria-label="Confirmar senha" />
+              <input className="input" type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} minLength={12} required aria-label="Confirmar senha" />
               {confirmPw && confirmPw !== password && <span className="xs" style={{ color: 'var(--red)' }}>As senhas não conferem</span>}
             </label>
           )}

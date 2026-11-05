@@ -2,8 +2,8 @@ import { createDecipheriv, createECDH, createPublicKey, hkdfSync, randomBytes, v
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../../../src/domain/types';
 import { dueReminders } from '../../../src/domain/reminders';
-import { b64urlDecode, b64urlEncode, encryptPayload, vapidAuthorization, type VapidKeys } from './webpush';
-import { localNow, run } from './source';
+import { b64urlDecode, b64urlEncode, encryptPayload, vapidAuthorization, isAllowedPushEndpoint, sendPush, type VapidKeys } from './webpush';
+import { localNow, run, validCronSecret, handleRequest } from './source';
 
 const task = (o: Partial<Task>): Task => ({ id: 't', title: 'Tarefa', kind: 'task', status: 'active', subtasks: [], postponed: 0, createdAt: 0, updatedAt: 0, ...o });
 
@@ -36,7 +36,7 @@ function newDevice() {
   const ua = createECDH('prime256v1');
   ua.generateKeys();
   const auth = randomBytes(16);
-  return { ua, auth, sub: { endpoint: 'https://push.exemplo.com/abc', p256dh: ua.getPublicKey().toString('base64url'), auth: auth.toString('base64url') } };
+  return { ua, auth, sub: { endpoint: 'https://fcm.googleapis.com/abc', p256dh: ua.getPublicKey().toString('base64url'), auth: auth.toString('base64url') } };
 }
 
 describe('lembretes', () => {
@@ -64,6 +64,25 @@ describe('lembretes', () => {
 });
 
 describe('web push', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each([
+    'http://fcm.googleapis.com/send', 'https://127.0.0.1/a', 'https://[::1]/a',
+    'https://169.254.169.254/a', 'https://fcm.googleapis.com.evil.test/a',
+    'https://user:pass@fcm.googleapis.com/a', 'https://fcm.googleapis.com:8443/a',
+    'https://evil.test@localhost/a', 'https://fcm.googleapis.com/a#fragment', 'garbage',
+  ])('rejeita destino SSRF %s antes de fazer requisições', async endpoint => {
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    expect(isAllowedPushEndpoint(endpoint)).toBe(false);
+    await expect(sendPush({ ...newDevice().sub, endpoint }, '{}', newVapid())).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('aceita provedores conhecidos e bloqueia redirects no fetch', async () => {
+    for (const endpoint of ['https://fcm.googleapis.com/a', 'https://updates.push.services.mozilla.com/a', 'https://web.push.apple.com/a', 'https://abc.wns.windows.com/a']) expect(isAllowedPushEndpoint(endpoint)).toBe(true);
+    const fetch = vi.fn(async () => new Response(null, { status: 201 })); vi.stubGlobal('fetch', fetch);
+    await sendPush(newDevice().sub, '{}', newVapid());
+    expect(fetch.mock.calls[0][1]).toMatchObject({ redirect: 'error', method: 'POST' });
+    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
   it('o aparelho consegue decifrar a mensagem', async () => {
     const { ua, auth, sub } = newDevice();
     const text = JSON.stringify({ title: 'Reunião 1:1 — às 14:00', body: 'Começa em 10 min ✓' });
@@ -88,12 +107,74 @@ describe('web push', () => {
 describe('função do servidor', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('falha fechado sem segredo e restringe métodos antes de executar', async () => {
+    const secret = 's'.repeat(32);
+    expect(await validCronSecret(null, undefined)).toBe(false);
+    expect(await validCronSecret('null', undefined)).toBe(false);
+    expect(await validCronSecret(secret, secret)).toBe(true);
+    expect(await validCronSecret('x'.repeat(32), secret)).toBe(false);
+    const env = vi.fn();
+    expect((await handleRequest(new Request('https://app.test', { method: 'GET' }), secret, env)).status).toBe(405);
+    expect((await handleRequest(new Request('https://app.test', { method: 'POST' }), undefined, env)).status).toBe(403);
+    expect(env).not.toHaveBeenCalled();
+  });
+
+  it('fuso inválido de uma conta não interrompe os lembretes da seguinte', async () => {
+    const device = newDevice();
+    const fetch = vi.fn(async (url: string, init: RequestInit = {}) => {
+      if (url.includes('/push_subscriptions?')) return Response.json([
+        { ...device.sub, user_id: 'bad', tz: 'invalid/timezone' },
+        { ...device.sub, user_id: 'good', tz: 'UTC' },
+      ]);
+      if (url.includes('/records?')) return Response.json([
+        { id: 'meta', type: 'meta', data: { settings: { reminders: true } } },
+        { id: 't', type: 'task', data: task({ date: '2026-10-10', time: '14:00' }) },
+        { id: 'invalid', type: 'task', data: { recurrence: { weekdays: 'invalid' } } },
+      ]);
+      if (url.includes('/push_sent')) return new Response(null, { status: 201 });
+      expect(init.redirect).toBe('error');
+      return new Response(null, { status: 201 });
+    });
+    vi.stubGlobal('fetch', fetch);
+    expect((await run({ supabaseUrl: 'https://x.supabase.co', serviceKey: 'k', vapid: newVapid() }, new Date('2026-10-10T13:55:00Z'))).sent).toBe(1);
+  });
+
+  it('tenta novamente apenas o aparelho com falha temporária', async () => {
+    const first = newDevice(), retry = newDevice();
+    retry.sub.endpoint = 'https://fcm.googleapis.com/retry';
+    const marks = new Set<string>();
+    const pushes: string[] = [];
+    let failing = true;
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      if (url.includes('/push_subscriptions?')) return Response.json([first, retry].map(d => ({ ...d.sub, user_id: 'u1', tz: 'UTC' })));
+      if (url.includes('/records?')) return Response.json([
+        { id: 'meta', type: 'meta', data: { settings: { reminders: true } } },
+        { id: 't', type: 'task', data: task({ date: '2026-10-10', time: '14:00' }) },
+      ]);
+      if (url.includes('/push_sent')) {
+        if (init.method === 'DELETE') { marks.delete(new URL(url).searchParams.get('key')!.slice(3)); return new Response(null, { status: 204 }); }
+        const { key } = JSON.parse(init.body as string);
+        if (marks.has(key)) return new Response(null, { status: 409 });
+        marks.add(key); return new Response(null, { status: 201 });
+      }
+      pushes.push(url);
+      return new Response(null, { status: failing && url.endsWith('retry') ? 503 : 201 });
+    });
+    const env = { supabaseUrl: 'https://x.supabase.co', serviceKey: 'k', vapid: newVapid() };
+    const at = new Date('2026-10-10T13:55:00Z');
+    expect((await run(env, at)).sent).toBe(1);
+    failing = false;
+    expect((await run(env, at)).sent).toBe(1);
+    expect((await run(env, at)).sent).toBe(0);
+    expect(pushes).toEqual([first.sub.endpoint, retry.sub.endpoint, retry.sub.endpoint]);
+  });
+
   it('envia uma vez por item, só para quem ligou os lembretes, e apaga inscrição morta', async () => {
     const alive = newDevice();
     const dead = newDevice();
-    dead.sub.endpoint = 'https://push.exemplo.com/morto';
+    dead.sub.endpoint = 'https://fcm.googleapis.com/morto';
     const off = newDevice();
-    off.sub.endpoint = 'https://push.exemplo.com/desligado';
+    off.sub.endpoint = 'https://fcm.googleapis.com/desligado';
     const row = (d: ReturnType<typeof newDevice>, user: string) => ({ ...d.sub, user_id: user, tz: 'America/Sao_Paulo', updated_at: '' });
     const records: Record<string, unknown[]> = {
       u1: [

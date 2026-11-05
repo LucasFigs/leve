@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Recurrence, Task } from '../domain/types';
 import { addDays } from '../domain/dates';
-import { actions, getState, subscribe } from '../store/store';
+import { actions, getState, subscribe, isReplacingState } from '../store/store';
 import { toast } from '../store/ui';
 
 const CLIENT_ID =
@@ -17,7 +17,7 @@ const CLIENT_ID =
 const SCOPES = [
   'email',
   'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
 ].join(' ');
 
 const STORAGE_KEY_STATE = 'leve.gcal.state.v1';
@@ -49,41 +49,24 @@ interface StoredToken {
 /* Estado e Armazenamento Local                                        */
 /* ------------------------------------------------------------------ */
 
-function readStoredState(): GoogleCalendarState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_STATE);
-    if (raw) {
-      return {
-        calendarId: 'primary',
-        autoSync: true,
-        status: 'idle',
-        calendars: [],
-        ...JSON.parse(raw),
-      };
-    }
-  } catch {
-    /* noop */
-  }
-  return {
-    connected: false,
-    calendarId: 'primary',
-    autoSync: true,
-    status: 'idle',
-    calendars: [],
-  };
-}
+// Nunca restaurar uma autorização de outra sessão/conta do navegador.
+let gcalState: GoogleCalendarState = { connected: false, calendarId: 'primary', autoSync: true, status: 'idle', calendars: [] };
+try { localStorage.removeItem(STORAGE_KEY_TOKEN); localStorage.removeItem(STORAGE_KEY_STATE); } catch { /* storage indisponível */ }
+let memoryToken: StoredToken | undefined;
+let sessionVersion = 0;
+let requests = new AbortController();
 
-let gcalState: GoogleCalendarState = readStoredState();
+async function googleFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const version = sessionVersion;
+  const response = await fetch(url, { ...init, signal: requests.signal });
+  if (version !== sessionVersion) throw new Error('Sessão do Google encerrada.');
+  return response;
+}
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
 function updateGcalState(patch: Partial<GoogleCalendarState>) {
   gcalState = { ...gcalState, ...patch };
-  try {
-    localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(gcalState));
-  } catch {
-    /* noop */
-  }
   emit();
 }
 
@@ -103,24 +86,14 @@ export const isGoogleCalendarConnected = () => gcalState.connected;
 export const getGoogleCalendarState = () => gcalState;
 
 function getStoredToken(): string | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_TOKEN);
-    if (!raw) return null;
-    const token = JSON.parse(raw) as StoredToken;
-    if (Date.now() >= token.expiresAt) {
-      return null;
-    }
-    return token.accessToken;
-  } catch {
-    return null;
-  }
+  return memoryToken && Date.now() < memoryToken.expiresAt ? memoryToken.accessToken : null;
 }
 
 function saveToken(accessToken: string, expiresIn: number) {
   // Margem segura de 30 segundos antes da expiração de 3600s (~1 hora)
   const safeMarginSec = Math.min(30, Math.max(5, Math.floor(expiresIn * 0.05)));
   const expiresAt = Date.now() + Math.max(60, expiresIn - safeMarginSec) * 1000;
-  localStorage.setItem(STORAGE_KEY_TOKEN, JSON.stringify({ accessToken, expiresAt }));
+  memoryToken = { accessToken, expiresAt };
 }
 
 let tokenRefreshPromise: Promise<string | null> | null = null;
@@ -162,9 +135,12 @@ function loadGis(): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function connectGoogleCalendar(): Promise<boolean> {
+  resetGoogleCalendarSession();
+  const version = sessionVersion;
   updateGcalState({ status: 'syncing', error: undefined });
   try {
     await loadGis();
+    if (version !== sessionVersion) return false;
     const google = (window as any).google;
     if (!google?.accounts?.oauth2) {
       throw new Error('Google Identity Services não está disponível.');
@@ -176,6 +152,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
         scope: SCOPES,
         hint: gcalState.email || undefined,
         callback: async (resp: { access_token?: string; error?: string; expires_in?: number }) => {
+          if (version !== sessionVersion) { resolve(false); return; }
           if (resp.error || !resp.access_token) {
             updateGcalState({
               status: 'error',
@@ -190,7 +167,9 @@ export async function connectGoogleCalendar(): Promise<boolean> {
 
           // Obtém lista de calendários e perfil
           const calendars = await fetchCalendarList(resp.access_token);
+          if (version !== sessionVersion) { resolve(false); return; }
           const email = await fetchUserEmail(resp.access_token, calendars);
+          if (version !== sessionVersion) { resolve(false); return; }
 
           const errorFound = gcalState.error;
           updateGcalState({
@@ -214,6 +193,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
           resolve(true);
         },
         error_callback: (err: unknown) => {
+          if (version !== sessionVersion) { resolve(false); return; }
           console.warn('Erro na autorização do Google:', err);
           updateGcalState({ status: 'error', error: 'Erro ao abrir autorização do Google.' });
           resolve(false);
@@ -232,6 +212,7 @@ export async function connectGoogleCalendar(): Promise<boolean> {
       client.requestAccessToken(reqOptions);
     });
   } catch (err) {
+    if (version !== sessionVersion) return false;
     const msg = (err as Error)?.message || 'Erro ao conectar ao Google.';
     updateGcalState({ status: 'error', error: msg });
     return false;
@@ -247,7 +228,7 @@ export function disconnectGoogleCalendar() {
       /* noop */
     }
   }
-  localStorage.removeItem(STORAGE_KEY_TOKEN);
+  resetGoogleCalendarSession();
   lastSilentAuthFailure = 0;
   updateGcalState({
     connected: false,
@@ -258,6 +239,21 @@ export function disconnectGoogleCalendar() {
     lastSync: undefined,
   });
   toast('Google Agenda desconectado.');
+}
+
+/** Antes de logout, troca de conta ou expiração: não exclui eventos remotos. */
+export function resetGoogleCalendarSession() {
+  sessionVersion++;
+  requests.abort();
+  requests = new AbortController();
+  memoryToken = undefined;
+  tokenRefreshPromise = null;
+  clearTimeout(syncTimeout);
+  queuedTasks.clear();
+  queuedDeletions.clear();
+  lastSilentAuthFailure = 0;
+  try { localStorage.removeItem(STORAGE_KEY_TOKEN); localStorage.removeItem(STORAGE_KEY_STATE); } catch { /* noop */ }
+  updateGcalState({ connected: false, calendarId: 'primary', autoSync: true, email: undefined, calendars: [], status: 'idle', error: undefined, lastSync: undefined });
 }
 
 export function setGoogleTargetCalendar(calendarId: string) {
@@ -275,14 +271,16 @@ export function toggleGoogleAutoSync(autoSync: boolean) {
 /* ------------------------------------------------------------------ */
 
 async function fetchCalendarList(token: string): Promise<GoogleCalendarItem[]> {
+  const version = sessionVersion;
   try {
-    const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+    const res = await googleFetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
       let errDetail = '';
       try {
         const errJson = await res.json();
+        if (version !== sessionVersion) return [];
         errDetail = errJson?.error?.message || '';
       } catch {
         /* fallback */
@@ -294,6 +292,7 @@ async function fetchCalendarList(token: string): Promise<GoogleCalendarItem[]> {
       return [{ id: 'primary', summary: 'Principal', primary: true }];
     }
     const data = await res.json();
+    if (version !== sessionVersion) return [];
     return (data.items || []).map((item: any) => ({
       id: item.id,
       summary: item.summary,
@@ -307,7 +306,7 @@ async function fetchCalendarList(token: string): Promise<GoogleCalendarItem[]> {
 
 async function fetchUserEmail(token: string, calendars: GoogleCalendarItem[]): Promise<string | undefined> {
   try {
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    const res = await googleFetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -322,6 +321,7 @@ async function fetchUserEmail(token: string, calendars: GoogleCalendarItem[]): P
 }
 
 async function getValidToken(interactive = false): Promise<string | null> {
+  const version = sessionVersion;
   const existing = getStoredToken();
   if (existing) return existing;
   if (!gcalState.connected) return null;
@@ -339,6 +339,7 @@ async function getValidToken(interactive = false): Promise<string | null> {
   tokenRefreshPromise = (async () => {
     try {
       await loadGis();
+      if (version !== sessionVersion) return null;
       const google = (window as any).google;
       if (!google?.accounts?.oauth2) return null;
 
@@ -354,7 +355,7 @@ async function getValidToken(interactive = false): Promise<string | null> {
         // Timeout para chamadas em segundo plano (evita travar o app se a janela for bloqueada)
         const timer = !interactive
           ? setTimeout(() => {
-              lastSilentAuthFailure = Date.now();
+              if (version === sessionVersion) lastSilentAuthFailure = Date.now();
               done(null);
             }, 6000)
           : undefined;
@@ -365,6 +366,7 @@ async function getValidToken(interactive = false): Promise<string | null> {
           hint: gcalState.email || undefined,
           callback: (resp: any) => {
             if (timer) clearTimeout(timer);
+            if (version !== sessionVersion) { done(null); return; }
             if (resp?.access_token) {
               saveToken(resp.access_token, resp.expires_in || 3600);
               lastSilentAuthFailure = 0;
@@ -381,6 +383,7 @@ async function getValidToken(interactive = false): Promise<string | null> {
           },
           error_callback: (err: any) => {
             if (timer) clearTimeout(timer);
+            if (version !== sessionVersion) { done(null); return; }
             if (!interactive) lastSilentAuthFailure = Date.now();
             console.warn('[Google Calendar] Falha na obtenção do token:', err);
             done(null);
@@ -405,7 +408,7 @@ async function getValidToken(interactive = false): Promise<string | null> {
       console.warn('[Google Calendar] Erro ao renovar token:', err);
       return null;
     } finally {
-      tokenRefreshPromise = null;
+      if (version === sessionVersion) tokenRefreshPromise = null;
     }
   })();
 
@@ -519,9 +522,10 @@ export function taskToGoogleEventPayload(task: Task, timeZone: string) {
 /* ------------------------------------------------------------------ */
 
 export async function syncTaskToGoogle(task: Task, existingToken?: string): Promise<boolean> {
+  const version = sessionVersion;
   if (!gcalState.connected) return false;
   const token = existingToken || (await getValidToken(false));
-  if (!token) {
+  if (!token || version !== sessionVersion || !gcalState.connected) {
     return false;
   }
 
@@ -532,7 +536,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
   if ((!task.date && !task.recurrence) || task.status === 'archived') {
     if (task.googleEventId) {
       await deleteGoogleEvent(task.googleEventId, token);
-      actions.update(task.id, { googleEventId: undefined });
+      if (version === sessionVersion) actions.update(task.id, { googleEventId: undefined });
     }
     return true;
   }
@@ -546,7 +550,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
     if (task.googleEventId) {
       // Atualiza evento existente
       const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(task.googleEventId)}`;
-      res = await fetch(url, {
+      res = await googleFetch(url, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -557,7 +561,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
 
       if (res.status === 404) {
         // Evento foi excluído no Google: recria
-        res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
+        res = await googleFetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -568,7 +572,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
       }
     } else {
       // Cria novo evento
-      res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
+      res = await googleFetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -589,10 +593,12 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
         /* fallback */
       }
 
-      console.error('[Google Calendar API Error]', res.status, errorMsg, { taskId: task.id, title: task.title, payload });
+      if (version !== sessionVersion) return false;
+
+      console.error('[Google Calendar API Error]', res.status);
 
       if (res.status === 401) {
-        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        memoryToken = undefined;
         updateGcalState({ status: 'error', error: 'Sessão do Google expirada. Clique em Sincronizar para reconectar.' });
       } else if (res.status === 403) {
         const isApiDisabled = errorMsg.toLowerCase().includes('has not been used') || errorMsg.toLowerCase().includes('disabled');
@@ -608,6 +614,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
     }
 
     const created = await res.json();
+    if (version !== sessionVersion) return false;
     if (created?.id && created.id !== task.googleEventId) {
       actions.update(task.id, { googleEventId: created.id });
     }
@@ -615,6 +622,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
     updateGcalState({ lastSync: Date.now(), error: undefined, status: 'synced' });
     return true;
   } catch (err) {
+    if (version !== sessionVersion) return false;
     const msg = (err as Error)?.message || 'Erro ao sincronizar com Google Agenda.';
     console.error('[Google Calendar Network Error]', err);
     updateGcalState({ status: 'error', error: msg });
@@ -623,13 +631,14 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
 }
 
 export async function deleteGoogleEvent(googleEventId: string, existingToken?: string): Promise<void> {
+  const version = sessionVersion;
   if (!gcalState.connected) return;
   const token = existingToken || (await getValidToken(false));
-  if (!token) return;
+  if (!token || version !== sessionVersion || !gcalState.connected) return;
 
   const calendarId = encodeURIComponent(gcalState.calendarId || 'primary');
   try {
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`, {
+    await googleFetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -640,10 +649,12 @@ export async function deleteGoogleEvent(googleEventId: string, existingToken?: s
 
 /** Sincroniza todas as tarefas ativas com data para o Google Agenda. */
 export async function syncAllUpcomingTasks(interactive = false): Promise<number> {
+  const version = sessionVersion;
   if (!gcalState.connected) return 0;
   updateGcalState({ status: 'syncing', error: undefined });
 
   const token = await getValidToken(interactive);
+  if (version !== sessionVersion) return 0;
   if (!token) {
     updateGcalState({
       status: 'error',
@@ -657,6 +668,7 @@ export async function syncAllUpcomingTasks(interactive = false): Promise<number>
   let hasErrors = false;
 
   for (const t of tasks) {
+    if (version !== sessionVersion) return count;
     try {
       const ok = await syncTaskToGoogle(t, token);
       if (ok) {
@@ -669,6 +681,7 @@ export async function syncAllUpcomingTasks(interactive = false): Promise<number>
     }
   }
 
+  if (version !== sessionVersion) return count;
   if (hasErrors && count === 0 && tasks.length > 0) {
     updateGcalState({ status: 'error' });
     toast(gcalState.error || 'Erro ao sincronizar tarefas com o Google Agenda.');
@@ -697,6 +710,7 @@ const queuedTasks = new Set<string>();
 const queuedDeletions = new Set<string>();
 
 function processQueue() {
+  const version = sessionVersion;
   if (!gcalState.connected || !gcalState.autoSync) {
     queuedTasks.clear();
     queuedDeletions.clear();
@@ -716,13 +730,15 @@ function processQueue() {
   (async () => {
     // Valida o token uma única vez para toda a fila em segundo plano (não interativo)
     const token = await getValidToken(false);
-    if (!token) return;
+    if (!token || version !== sessionVersion) return;
 
     for (const eventId of eventsToDelete) {
+      if (version !== sessionVersion) return;
       await deleteGoogleEvent(eventId, token);
     }
     const state = getState();
     for (const taskId of tasksToSync) {
+      if (version !== sessionVersion) return;
       const task = state.tasks.find((t) => t.id === taskId);
       if (task) await syncTaskToGoogle(task, token);
     }
@@ -733,7 +749,10 @@ export function initGoogleCalendarListener(): () => void {
   let prevTasks = new Map<string, Task>(getState().tasks.map((t) => [t.id, t]));
 
   const unsubscribe = subscribe(() => {
-    if (!gcalState.connected || !gcalState.autoSync) return;
+    if (isReplacingState() || !gcalState.connected || !gcalState.autoSync) {
+      prevTasks = new Map(getState().tasks.map((t) => [t.id, t]));
+      return;
+    }
     const currentTasks = getState().tasks;
     const currentMap = new Map<string, Task>(currentTasks.map((t) => [t.id, t]));
 

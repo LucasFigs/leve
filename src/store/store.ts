@@ -45,6 +45,8 @@ let state: AppState = hydrate();
 let undoStack: AppState[] = [];
 const listeners = new Set<() => void>();
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let replacingState = false;
+export const isReplacingState = () => replacingState;
 
 function hydrate(): AppState {
   const loaded = localRepository.load();
@@ -72,7 +74,8 @@ export function getState() {
 export function replaceState(next: AppState, opts: { resetUndo?: boolean } = {}) {
   if (opts.resetUndo) undoStack = [];
   state = next;
-  emit();
+  replacingState = true;
+  try { emit(); } finally { replacingState = false; }
 }
 
 export function subscribe(l: () => void) {
@@ -88,7 +91,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key && e.key.startsWith('leve.')) {
       state = hydrate();
-      listeners.forEach((l) => l());
+      replacingState = true;
+      try { listeners.forEach((l) => l()); } finally { replacingState = false; }
     }
   });
   window.addEventListener('pagehide', () => localRepository.save(state));

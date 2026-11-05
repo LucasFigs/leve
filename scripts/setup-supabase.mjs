@@ -17,8 +17,12 @@ const token = env.SUPABASE_ACCESS_TOKEN;
 // Aceita "meuapp.vercel.app" ou "https://meuapp.vercel.app/" — normaliza para https://meuapp.vercel.app
 const rawSite = (env.APP_URL || 'http://localhost:5173').trim().replace(/\/+$/, '');
 const siteUrl = /^https?:\/\//.test(rawSite) ? rawSite : `https://${rawSite}`;
+const parsedSite = new URL(siteUrl);
+if (parsedSite.username || parsedSite.password || parsedSite.search || parsedSite.hash || parsedSite.pathname !== '/') throw new Error('APP_URL deve conter somente a origem do app.');
+if (parsedSite.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(parsedSite.hostname)) throw new Error('APP_URL pública deve usar HTTPS.');
 
 if (!url || url.includes('SEU-PROJETO')) throw new Error('Preencha VITE_SUPABASE_URL no .env.local');
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url)) throw new Error('VITE_SUPABASE_URL inválida para a API administrativa.');
 if (!token || !token.startsWith('sbp_')) throw new Error('Preencha SUPABASE_ACCESS_TOKEN (começa com sbp_) no .env.local');
 
 const ref = new URL(url).hostname.split('.')[0];
@@ -38,8 +42,8 @@ console.log(`Projeto: ${ref}`);
 await api('/database/query', 'POST', { query: readFileSync('supabase/schema.sql', 'utf8') });
 console.log('✓ Tabela "records", segurança (RLS) e tempo real configurados');
 
-const redirects = [...new Set([siteUrl, 'http://localhost:5173', 'http://localhost:4173'])];
-const auth = { site_url: siteUrl, uri_allow_list: redirects.map((u) => `${u}/**`).join(',') };
+const redirects = [siteUrl, `${siteUrl}/`];
+const auth = { site_url: siteUrl, uri_allow_list: redirects.join(','), password_min_length: 12, mailer_autoconfirm: false };
 
 const googleId = env.GOOGLE_CLIENT_ID;
 const googleSecret = env.GOOGLE_CLIENT_SECRET;
