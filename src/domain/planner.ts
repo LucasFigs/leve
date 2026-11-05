@@ -280,10 +280,15 @@ export interface WeekAssignment {
 /** Minutos de tarefas que cabem num dia (metade do tempo livre fora de compromissos). */
 export function dayBudget(tasks: Task[], date: string, settings: Settings): { budget: number; used: number } {
   const items = itemsForDate(tasks, date, settings.defaultDuration);
-  const total = timeToMin(settings.dayEnd) - timeToMin(settings.dayStart);
-  const events = items.filter((i) => i.task.kind === 'event').reduce((s, i) => s + i.duration, 0);
+  const { start, end } = windowFor(date, settings);
+  const busy = busyFor(items.filter(i => i.task.kind === 'event'), new Set());
+  const lunch = lunchBlock(settings);
+  if (lunch) busy.push(lunch);
+  const free = end > start ? freeGaps(start, end, busy).reduce((sum, [a, b]) => sum + b - a, 0) : 0;
+  // Compromissos sem horário também consomem capacidade, sem inventar uma posição no calendário.
+  const untimed = items.filter(i => i.task.kind === 'event' && !i.time).reduce((sum, i) => sum + i.duration, 0);
   const used = items.filter((i) => i.task.kind !== 'event' && !i.done).reduce((s, i) => s + i.duration, 0);
-  return { budget: Math.max(60, (total - events) * 0.5), used };
+  return { budget: Math.max(0, free - untimed) * 0.5, used };
 }
 
 /** “Organizar minha semana”: distribui tarefas sem dia respeitando prazos e carga. */
@@ -310,7 +315,8 @@ export function planWeek(tasks: Task[], settings: Settings, preferred: Record<st
     const pick = ordered.find((day) => {
       const l = load.get(day)!;
       return l.used + d <= l.budget;
-    }) ?? ordered[0] ?? first;
+    });
+    if (!pick) continue;
     const l = load.get(pick);
     if (l) l.used += d;
     out.push({ task: t, date: pick });

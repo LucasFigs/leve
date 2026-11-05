@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayCapacity } from './planner';
+import { dayBudget, dayCapacity, planWeek } from './planner';
 import type { Settings, Task } from './types';
 
 const settings: Settings = {
@@ -15,6 +15,19 @@ const task = (p: Partial<Task>): Task => ({
 });
 
 describe('dayCapacity', () => {
+  it('não inventa orçamento em um dia sem disponibilidade', () => {
+    expect(dayBudget([], DAY, {...settings,dayStart:'12:00',dayEnd:'13:00'}).budget).toBe(0);
+    expect(dayBudget([], DAY, {...settings,dayStart:'18:00',dayEnd:'08:00'}).budget).toBe(0);
+  });
+  it('recorta e une compromissos sobrepostos antes de calcular o orçamento', () => {
+    const events=[task({kind:'event',time:'07:00',duration:180}),task({kind:'event',time:'09:00',duration:120})];
+    // Janela 08–18, ocupada 08–11 e almoço 12–13: seis horas livres, metade planejável.
+    expect(dayBudget(events,DAY,settings).budget).toBe(180);
+  });
+  it('mantém sem data as tarefas que não cabem em nenhum dia da semana', () => {
+    const assignments=planWeek([task({date:undefined,duration:45})],{...settings,dayStart:'12:00',dayEnd:'13:00'});
+    expect(assignments).toEqual([]);
+  });
   it('desconta almoço e compromissos do tempo livre', () => {
     const c = dayCapacity([task({ kind: 'event', time: '09:00', duration: 60 })], DAY, settings);
     // 10h de janela − 1h almoço − 1h compromisso
