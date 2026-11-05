@@ -6,6 +6,7 @@ import { QuickAddSheet, ProjectSheet, SearchSheet } from './OtherSheets';
 import { emptyState, getState, replaceState, newTask } from '../store/store';
 import { closeAllSheets, getUI, setUI } from '../store/ui';
 import { AgendaScreen } from '../screens/Agenda';
+import { TodayScreen } from '../screens/Today';
 
 let root: Root;
 let host: HTMLDivElement;
@@ -30,6 +31,15 @@ function change(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
 function close() { act(() => (host.querySelector('[aria-label="Fechar"]') as HTMLButtonElement).click()); }
 
 describe('proteção de rascunhos e recuperação de resultados', () => {
+  it('mantém o resumo do dia compacto, com critérios e ajustes recolhidos', () => {
+    act(() => root.render(<TodayScreen />));
+    const summary = host.querySelector<HTMLDetailsElement>('.day-summary')!;
+    expect(summary.open).toBe(false);
+    expect(summary.querySelector('summary')?.textContent).not.toContain('Google Agenda');
+    expect(summary.querySelector('.pulse-ring')).toBeNull();
+    expect(summary.querySelectorAll('button')).toHaveLength(1);
+    expect(summary.textContent).toContain('Google Agenda não são importados');
+  });
   it('mantém uma captura quando o descarte é recusado e permite salvá-la', () => {
     act(() => root.render(<QuickAddSheet />));
     change(host.querySelector('textarea')!, 'Uma ideia para organizar');

@@ -491,9 +491,9 @@ function GoogleCalendarSection() {
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     if (confirm('Desconectar o Google Agenda? Seus eventos já criados no Google Agenda permanecerão lá.')) {
-      disconnectGoogleCalendar();
+      await disconnectGoogleCalendar();
     }
   };
 
@@ -522,7 +522,7 @@ function GoogleCalendarSection() {
                 <span className="xs faint" style={{ display: 'block' }}>
                   Tarefas e compromissos criados e editados sobem direto para a sua agenda Google
                 </span>
-                <span className="xs faint" style={{ display: 'block' }}>A conexão vale nesta aba. Ao reabrir o app ou trocar de conta, conecte novamente.</span>
+                <span className="xs faint" style={{ display: 'block' }}>O vínculo fica salvo na sua conta do Leve. Ao reabrir o app, a conexão é restaurada automaticamente.</span>
               </span>
             </span>
             <button
@@ -597,6 +597,7 @@ function GoogleCalendarSection() {
               className="settings-row"
               style={{ width: '100%', color: 'var(--red)' }}
               onClick={handleDisconnect}
+              disabled={gcal.status === 'syncing' || syncing}
             >
               <span>Desconectar Google Agenda</span>
               <Icon name="logout" size={18} />

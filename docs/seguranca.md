@@ -5,13 +5,13 @@ Este documento descreve o código do repositório. A aplicação desses controle
 ## Controles no código
 
 - Políticas RLS vinculam os registros ao usuário autenticado, incluindo validação do proprietário na escrita.
-- Tokens Google ficam em memória da aba; logout e troca de conta cancelam filas e invalidam respostas antigas.
+- Access tokens Google ficam em memória; o refresh token fica cifrado com AES-GCM no servidor, associado à conta do Leve e sem acesso pela API cliente. Logout e troca de conta cancelam filas e invalidam respostas antigas. O fluxo de conexão usa estado de uso único, PKCE e prova do navegador iniciador.
 - Envios push validam provedores e HTTPS, bloqueiam redirects e usam timeout. O banco limita inscrições e registros por conta.
 - Dados recebidos pela sincronização e pelo worker passam por validação estrutural.
 - A configuração Vercel inclui CSP e outros cabeçalhos; o service worker limita o cache aos arquivos do app.
 - Testes de regressão e verificações de dependências e padrões de segredos apoiam a manutenção.
 
-Esses controles não são garantia contra ataques. Tarefas e sessão Supabase continuam armazenadas no navegador para permitir uso local/offline. Acesso ao perfil do dispositivo ou execução de JavaScript malicioso na origem pode comprometer os dados. A integração Google exige nova conexão ao recarregar a página.
+Esses controles não são garantia contra ataques. Tarefas e sessão Supabase continuam armazenadas no navegador para permitir uso local/offline. Acesso ao perfil do dispositivo ou execução de JavaScript malicioso na origem pode comprometer os dados. Com a Edge Function Google configurada, a integração é restaurada após autenticar no Leve; revogação ou expiração da autorização pelo Google exige conectar novamente. Veja [configuração da integração](google-agenda.md).
 
 ## Configuração e credenciais
 

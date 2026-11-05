@@ -19,7 +19,7 @@ function inspect(name, source) {
   for (const match of source.matchAll(/\beyJ[A-Za-z0-9_-]+\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/g)) {
     try { if (JSON.parse(Buffer.from(match[1], 'base64url').toString()).role === 'service_role') types.push('service-role-jwt'); } catch { /* não é JWT */ }
   }
-  if (/\b(?:VAPID_PRIVATE_KEY|PUSH_CRON_SECRET|GOOGLE_CLIENT_SECRET|SUPABASE_SERVICE_ROLE_KEY)\s*=\s*["']?[A-Za-z0-9_-]{24,}/.test(source)) types.push('private-env-value');
+  if (/\b(?:VAPID_PRIVATE_KEY|PUSH_CRON_SECRET|GOOGLE_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION_KEY|SUPABASE_SERVICE_ROLE_KEY)\s*=\s*["']?[A-Za-z0-9_-]{24,}/.test(source)) types.push('private-env-value');
   if (types.length) { findings++; console.error(`${name}: ${[...new Set(types)].join(', ')}`); }
 }
 for (const file of new Set(git('ls-files', '--cached', '--others', '--exclude-standard', '-z').split('\0').filter(Boolean))) {

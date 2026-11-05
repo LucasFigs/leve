@@ -15,7 +15,8 @@
     "check:secrets": "node scripts/check-secrets.mjs",
     "icons": "node scripts/icons.mjs",
     "setup:supabase": "node scripts/setup-supabase.mjs",
-    "setup:push": "node scripts/setup-push.mjs"
+    "setup:push": "node scripts/setup-push.mjs",
+    "setup:google": "node scripts/setup-google-calendar.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

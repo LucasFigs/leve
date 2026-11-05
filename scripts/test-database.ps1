@@ -26,9 +26,11 @@ try {
   $files = @(
     (Join-Path $repoRoot 'supabase/tests/bootstrap.sql'),
     (Join-Path $repoRoot 'supabase/schema.sql'),
+    (Join-Path $repoRoot 'supabase/google-calendar.sql'),
     $pushTemp,
     (Join-Path $repoRoot 'supabase/tests/isolation.sql'),
-    (Join-Path $repoRoot 'supabase/tests/validation.sql')
+    (Join-Path $repoRoot 'supabase/tests/validation.sql'),
+    (Join-Path $repoRoot 'supabase/tests/google-calendar.sql')
   )
   foreach ($file in $files) {
     Invoke-Docker cp $file "${containerName}:/tmp/test.sql"
