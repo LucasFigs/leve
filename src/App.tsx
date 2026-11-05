@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { StorageNotice } from './components/StorageNotice';
 import { inboxTasks } from './domain/selectors';
 import { useStore } from './store/store';
 import { goTo, openSheet, useUI, type Sheet, type Tab } from './store/ui';
@@ -109,6 +110,10 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
 }
 
 export default function App() {
+  return <><StorageNotice /><Application /></>;
+}
+
+function Application() {
   useTheme();
   useShortcuts();
   useEffect(() => startReminders(), []);

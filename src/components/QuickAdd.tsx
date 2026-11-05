@@ -38,7 +38,7 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
   useEffect(() => { onDraftChange?.(text); }, [text, onDraftChange]);
 
   const parsed = useMemo(
-    () => (text.trim().length > 2 ? assistant.interpret(text, { defaultDuration }) : undefined),
+    () => (text.trim().length > 2 && text.length <= 1000 ? assistant.interpret(text, { defaultDuration }) : undefined),
     [text, defaultDuration],
   );
   const chips = (parsed?.chips ?? []).filter((c) => !ignored.has(c.type === 'due' ? 'due' : c.type));
@@ -75,6 +75,7 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
 
   /** Já sabe tudo da tarefa? Abre os detalhes antes de salvar. */
   const detail = () => {
+    if (text.length > 1000) return;
     const task = text.trim()
       ? actions.buildCapture(text, defaults, ignored)
       : newTask({
@@ -112,6 +113,8 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
           className="input-plain"
           rows={1}
           value={text}
+          aria-invalid={text.length > 1000}
+          aria-describedby={text.length > 1000 ? `${inputId}-error` : undefined}
           placeholder={placeholder}
           onChange={(e) => setText(e.target.value.replace(/\n/g, ''))}
           onKeyDown={(e) => {
@@ -126,15 +129,16 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
           data-autofocus={autoFocus ? '' : undefined}
         />
         {(alwaysDetail || text.trim()) && (
-          <button type="button" className="btn btn-sm btn-ghost quick-detail" onClick={detail} title="Abrir todos os campos antes de salvar">
+          <button type="button" className="btn btn-sm btn-ghost quick-detail" disabled={text.length > 1000} onClick={detail} title="Abrir todos os campos antes de salvar">
             <Icon name="settings" size={16} />
             Detalhar
           </button>
         )}
-        <button type="submit" className="send" disabled={!text.trim()} aria-label="Adicionar">
+        <button type="submit" className="send" disabled={!text.trim() || text.length > 1000} aria-label="Adicionar">
           <Icon name="arrow-up" size={18} stroke={2.2} />
         </button>
       </div>
+      {text.length > 1000 && <p id={`${inputId}-error`} className="small warn-text" role="alert">A captura aceita até 1.000 caracteres. Seu texto foi mantido para você ajustar; nada foi cortado.</p>}
       {(chips.length > 0 || contextChips.length > 0) && (
         <div className="chips quick-chips" aria-live="polite">
           {contextChips.map((c) => (

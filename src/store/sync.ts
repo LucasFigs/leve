@@ -11,7 +11,7 @@
 import { createClient, type RealtimeChannel, type Session } from '@supabase/supabase-js';
 import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Task } from '../domain/types';
-import { localRepository } from './persistence';
+import { localRepository, storageIssue, reportStorageConflict } from './persistence';
 import { emptyState, getState, replaceState, subscribe, uid } from './store';
 import { resetGoogleCalendarSession } from '../services/googleCalendar';
 import { isTask, isProject, isMeta } from '../domain/validation';
@@ -249,7 +249,7 @@ async function push() {
   const version = syncVersion;
   const uidNow = userId;
   // Só envia depois de ter mesclado com a nuvem ao menos uma vez nesta conta
-  if (!supabase || !uidNow || journal.owner !== uidNow) return;
+  if (!supabase || !uidNow || journal.owner !== uidNow || storageIssue()) return;
   const { upserts, deletes, meta } = diff(getState());
   saveJournal();
   if (!upserts.length && !deletes.length) {
@@ -265,14 +265,14 @@ async function push() {
     const stamp = new Date().toISOString();
     for (const part of chunk(upserts, 500)) {
       if (version !== syncVersion) return;
-      const { error } = await supabase.from(TABLE).upsert(
+      const { error } = await bounded(supabase.from(TABLE).upsert(
         part.map((r) => ({ user_id: uidNow, id: r.id, type: r.type, data: r.data, origin: CLIENT_ID, updated_at: stamp })),
-      );
+      ));
       if (error) throw error;
     }
     for (const part of chunk(deletes, 200)) {
       if (version !== syncVersion) return;
-      const { error } = await supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part);
+      const { error } = await bounded(supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part));
       if (error) throw error;
     }
     if (version !== syncVersion) return; // saiu da conta no meio do envio
@@ -298,7 +298,7 @@ async function fetchAll(uidNow: string, version: number): Promise<Row[]> {
   const rows: Row[] = [];
   for (let from = 0; ; from += PAGE) {
     if (version !== syncVersion) return [];
-    const { data, error } = await supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1);
+    const { data, error } = await bounded(supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1));
     if (error) throw error;
     rows.push(...(data as Row[]));
     if (!data || data.length < PAGE) return rows;
@@ -309,7 +309,7 @@ async function fetchAll(uidNow: string, version: number): Promise<Row[]> {
 async function pull() {
   const version = syncVersion;
   const uidNow = userId;
-  if (!supabase || !uidNow) return;
+  if (!supabase || !uidNow || storageIssue()) return;
   if (!navigator.onLine) {
     setCloud({ status: 'offline' });
     return;
@@ -387,6 +387,7 @@ interface RtRow extends Row {
 }
 
 function applyRemoteRow(row: RtRow) {
+  if (storageIssue()) return;
   if (!validRow(row)) { setCloud({ status: 'error', error: 'Registro remoto inválido. Sincronize novamente.' }); return; }
   const s = getState();
   if (row.type === 'meta') {
@@ -409,6 +410,7 @@ function applyRemoteRow(row: RtRow) {
 }
 
 function applyRemoteDelete(id: string) {
+  if (storageIssue()) return;
   const s = getState();
   const task = s.tasks.find((t) => t.id === id);
   const project = s.projects.find((p) => p.id === id);
@@ -466,6 +468,11 @@ function userInfo(session: Session): CloudUser {
 
 function start(session: Session) {
   const id = session.user.id;
+  if (journal.owner && journal.owner !== id && (hasPending() || storageIssue())) {
+    stop(); reportStorageConflict(null);
+    setCloud({ auth: 'out', email: undefined, user: undefined, status: 'error', error: 'Há dados pendentes de outra conta neste aparelho. Entre na conta original para recuperá-los.' });
+    return;
+  }
   setCloud({ auth: 'in', email: session.user.email ?? undefined, user: userInfo(session) });
   if (userId === id) return;
   stop();
@@ -492,6 +499,7 @@ function stop() {
   clearTimeout(retryTimer);
   if (channel) supabase?.removeChannel(channel);
   channel = undefined;
+  chain = Promise.resolve(); pushQueued = false;
 }
 
 /** Envia o pendente e busca novidades. */
@@ -512,30 +520,47 @@ export const canUseOffline = () => !!journal.owner && typeof navigator !== 'unde
 
 /** Confirma e sai da conta (avisa se há alterações que ainda não subiram). */
 export async function confirmSignOut(switching = false) {
-  const msg = hasPending() && !navigator.onLine
-    ? 'Há alterações que ainda não foram enviadas (você está sem internet). Se sair agora, elas serão perdidas. Sair mesmo assim?'
-    : switching
-      ? 'Sair desta conta para entrar com outra? Seus dados continuam salvos na nuvem.'
-      : 'Sair da conta neste aparelho? Seus dados continuam salvos na nuvem.';
+  const msg = switching ? 'Sair desta conta para entrar com outra? Vou tentar enviar as alterações pendentes antes de sair.' : 'Sair da conta neste aparelho? Vou tentar enviar as alterações pendentes antes de sair.';
   if (!confirm(msg)) return false;
-  await signOut();
-  return true;
+  if (await signOut()) return true;
+  if (!confirm('Não foi possível confirmar o envio de todas as alterações. Cancelar mantém os dados neste aparelho para tentar novamente. Sair mesmo assim e descartar as alterações locais não confirmadas?')) return false;
+  return signOut(true);
 }
 
-export async function signOut() {
-  if (!supabase) return;
-  resetGoogleCalendarSession();
-  // Envia o que faltava antes de sair
-  await enqueue(push);
-  stop();
+let exiting: Promise<boolean> | undefined;
+function bounded<T>(work: PromiseLike<T>, ms = 15_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([Promise.resolve(work), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de espera esgotado. Tente novamente.')), ms); })]).finally(() => clearTimeout(timer));
+}
+export function signOut(discardPending = false): Promise<boolean> {
+  if (exiting) return exiting;
+  exiting = finishSignOut(discardPending).finally(() => { exiting = undefined; });
+  return exiting;
+}
+
+async function finishSignOut(discardPending: boolean): Promise<boolean> {
+  if (!supabase) return false;
+  const version = syncVersion;
+  const owner = userId;
+  if (!discardPending) { try { await bounded(enqueue(push)); } catch { return false; } }
+  if (version !== syncVersion || owner !== userId) return false;
+  if (!discardPending && (hasPending() || storageIssue())) {
+    setCloud({ status: 'error', error: 'Há alterações não confirmadas. Tente sincronizar novamente antes de sair.' });
+    return false;
+  }
   // Este aparelho deixa de receber os lembretes desta conta
-  await import('../services/push').then((m) => m.disablePush()).catch(() => {});
-  await supabase.auth.signOut().catch(() => {});
+  await bounded(import('../services/push').then((m) => m.disablePush())).catch(() => {});
+  if (version !== syncVersion || owner !== userId || (!discardPending && hasPending())) return false;
+  try { const { error } = await bounded(supabase.auth.signOut()); if (error) throw error; }
+  catch { setCloud({ status: 'error', error: 'Não foi possível encerrar a sessão. Seus dados locais foram mantidos.' }); return false; }
+  if (version !== syncVersion || owner !== userId || (!discardPending && hasPending())) return false;
+  stop();
   writeJournal({ dirty: [], deleted: [] });
   localRepository.clear();
   replaceState(emptyState(), { resetUndo: true });
   restoreKnown();
   setCloud({ auth: 'out', email: undefined, user: undefined, status: 'idle', error: undefined, lastSync: undefined, recovery: false });
+  return true;
 }
 
 /** Quais formas de login estão ligadas no Supabase (ex.: Google). */
@@ -587,4 +612,11 @@ if (supabase && typeof window !== 'undefined') {
     if (document.visibilityState === 'hidden') saveJournal();
   });
   window.addEventListener('pagehide', () => saveJournal());
+  window.addEventListener('storage', e => {
+    if (e.key !== JOURNAL_KEY) return;
+    try {
+      const other = JSON.parse(e.newValue ?? '{}') as Journal;
+      if (other.owner !== journal.owner) { reportStorageConflict(null); stop(); setCloud({ auth: 'out', status: 'idle', email: undefined, user: undefined }); }
+    } catch { reportStorageConflict(null); }
+  });
 }
