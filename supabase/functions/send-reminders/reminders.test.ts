@@ -218,7 +218,7 @@ describe('função do servidor', () => {
     expect(deleted).toEqual([dead.sub.endpoint]);
     expect(pushes[0].headers['Content-Encoding']).toBe('aes128gcm');
     expect(JSON.parse(deviceDecrypt(pushes[0].body, alive.ua, alive.auth))).toEqual({
-      title: 'Dentista', body: 'Começa às 14:00 (em 8 min)', tag: 'a:14:00', data: { taskId: 'a', date: '2026-10-10' },
+      title: 'Dentista', body: 'Começa às 14:00 (em 8 min)', tag: 'a:14:00', data: { taskId: 'a', date: '2026-10-10', owner:'u1' },
     });
     // Um minuto depois: já avisou, não repete
     expect((await run(env, new Date('2026-10-10T16:53:00Z'))).sent).toBe(0);

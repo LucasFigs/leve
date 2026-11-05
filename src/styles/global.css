@@ -3670,3 +3670,6 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .habit-icon-wrap, .habit-check-btn { width: 44px; height: 44px; }
 .habit-icon-wrap, .habit-cal-icon-wrap, .habit-check-btn { color: var(--text-2); }
 .habit-check-btn.done { background: var(--habit-bg); color: var(--text); }
+.storage-notice { position: relative; z-index: 100; padding: 16px; background: var(--surface); color: var(--text); border-bottom: 2px solid var(--accent); }
+.storage-notice p { margin: 6px 0 12px; font-size: var(--fs-sm); }
+.storage-notice .btn { min-height: 44px; }

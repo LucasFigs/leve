@@ -207,10 +207,14 @@ export function ProfileScreen() {
               </div>
             </div>
           )}
+          {settings.reminders && <div className="settings-row">
+            <span>Lembretes discretos<span className="xs faint" style={{display:'block'}}>Ocultar o título da atividade nas notificações</span></span>
+            <Switch label="Lembretes discretos" checked={!!settings.discreetReminders} onChange={discreetReminders => set({discreetReminders})} />
+          </div>}
         </div>
         <p className="xs faint" style={{ marginTop: 8 }}>
           {pushConfigured
-            ? 'Os avisos chegam mesmo com o app fechado. Ligue em cada aparelho em que quiser receber. No iPhone, o app precisa estar instalado na tela inicial.'
+            ? 'O envio com o app fechado depende da permissão, da conexão e do sistema do aparelho. Ligue em cada aparelho em que quiser receber. No iPhone, o app precisa estar instalado na tela inicial.'
             : 'Os avisos chegam enquanto o app está aberto ou em segundo plano há pouco tempo. Com o app totalmente fechado, o celular não deixa avisar.'}
         </p>
       </section>
@@ -576,8 +580,8 @@ function GoogleCalendarSection() {
             {gcal.calendars.length > 1 && (
               <label className="settings-row" style={{ flexWrap: 'wrap' }}>
                 <span>
-                  Calendário de destino
-                  <span className="xs faint" style={{ display: 'block' }}>Onde os eventos serão criados</span>
+                  Destino de novos itens
+                  <span className="xs faint" style={{ display: 'block' }}>Itens já vinculados continuam no calendário original; não serão movidos nem excluídos.</span>
                 </span>
                 <select
                   className="input"

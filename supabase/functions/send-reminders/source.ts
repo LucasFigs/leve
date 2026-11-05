@@ -90,7 +90,7 @@ export async function run(env: Env, at = new Date()): Promise<{ users: number; s
     const { today, now } = localNow(devices[0].tz || 'America/Sao_Paulo', at);
 
     for (const r of dueReminders(tasks, meta.settings, today, now)) {
-      const payload = JSON.stringify({ title: [...r.title].slice(0, 180).join(''), body: r.body, tag: r.key, data: { taskId: r.taskId, date: r.date } });
+      const payload = JSON.stringify({ title: [...r.title].slice(0, 180).join(''), body: r.body, tag: r.key, data: { taskId: r.taskId, date: r.date, owner:userId } });
       for (const d of devices) {
         if (!isAllowedPushEndpoint(d.endpoint)) continue;
         const deviceKey = b64urlEncode(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(d.endpoint))));

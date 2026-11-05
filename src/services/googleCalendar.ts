@@ -9,6 +9,7 @@ import type { Recurrence, Task } from '../domain/types';
 import { addDays } from '../domain/dates';
 import { actions, getState, subscribe, isReplacingState } from '../store/store';
 import { toast } from '../store/ui';
+import { storageIssue } from '../store/persistence';
 
 import { calendarBackend } from './googleCalendarBackend';
 
@@ -51,9 +52,16 @@ let requests = new AbortController();
 
 async function googleFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const version = sessionVersion;
-  const response = await fetch(url, { ...init, signal: requests.signal });
-  if (version !== sessionVersion) throw new Error('Sessão do Google encerrada.');
-  return response;
+  const parent = requests.signal;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  parent.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(abort, 15_000);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (version !== sessionVersion) throw new Error('Sessão do Google encerrada.');
+    return response;
+  } finally { clearTimeout(timer); parent.removeEventListener('abort', abort); }
 }
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -139,6 +147,8 @@ export function resetGoogleCalendarSession() {
   clearTimeout(syncTimeout);
   queuedTasks.clear();
   queuedDeletions.clear();
+  processingVersion = undefined;
+  queueRetry = 5_000;
   lastSilentAuthFailure = 0;
   try { localStorage.removeItem(STORAGE_KEY_TOKEN); localStorage.removeItem(STORAGE_KEY_STATE); } catch { /* noop */ }
   updateGcalState({ connected: false, calendarId: 'primary', autoSync: true, email: undefined, calendars: [], status: 'idle', error: undefined, lastSync: undefined });
@@ -147,10 +157,15 @@ export function resetGoogleCalendarSession() {
 async function preferences(patch: { calendarId?: string; autoSync?: boolean }) {
   const version = sessionVersion;
   try {
+    if (patch.calendarId && patch.calendarId !== gcalState.calendarId) {
+      // Registros legados mantêm o destino anterior. Nunca aplicar um id antigo no novo calendário.
+      for (const task of getState().tasks) if (task.googleEventId && !task.googleCalendarId) actions.update(task.id, {googleCalendarId:gcalState.calendarId || 'primary'});
+    }
     const result = await calendarBackend('preferences', patch, requests.signal);
     if (version !== sessionVersion) return;
     if (result.connected === false) throw new Error('Conecte novamente o Google Agenda.');
     updateGcalState(patch);
+    if (patch.autoSync) void processQueue();
     if (patch.autoSync) void syncAllUpcomingTasks().catch(() => {});
   } catch (err) {
     if (version === sessionVersion) updateGcalState({ status: 'error', error: (err as Error).message });
@@ -358,20 +373,21 @@ export function taskToGoogleEventPayload(task: Task, timeZone: string) {
 
 export async function syncTaskToGoogle(task: Task, existingToken?: string): Promise<boolean> {
   const version = sessionVersion;
-  if (!gcalState.connected) return false;
+  if (!gcalState.connected || storageIssue()) return false;
   const token = existingToken || (await getValidToken(false));
   if (!token || version !== sessionVersion || !gcalState.connected) {
     return false;
   }
 
-  const calendarId = encodeURIComponent(gcalState.calendarId || 'primary');
+  const destination = task.googleCalendarId || gcalState.calendarId || 'primary';
+  const calendarId = encodeURIComponent(destination);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
 
   // Se a tarefa não tem data nem recorrência, ou foi arquivada, remove do Google Calendar se já existia
   if ((!task.date && !task.recurrence) || task.status === 'archived') {
     if (task.googleEventId) {
-      await deleteGoogleEvent(task.googleEventId, token);
-      if (version === sessionVersion) actions.update(task.id, { googleEventId: undefined });
+      if (!await deleteGoogleEvent(task.googleEventId, token, destination)) return false;
+      if (version === sessionVersion) actions.update(task.id, { googleEventId: undefined, googleCalendarId: undefined });
     }
     return true;
   }
@@ -381,6 +397,12 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
 
   try {
     let res: Response;
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${gcalState.email ?? ''}:${task.id}:${destination}`)));
+    const eventId = '1e0e' + Array.from(digest, b => b.toString(16).padStart(2,'0')).join('');
+    const createPayload = {...payload, id:eventId, extendedProperties:{private:{leveTaskId:task.id}}};
+    // Registra o id tentativo antes da rede: exclusão/undo durante POST ainda têm um vínculo para reconciliar.
+    // A confirmação continua sendo o estado/lastSync, não a simples presença deste id.
+    if (!task.googleEventId && getState().tasks.some(t => t.id === task.id)) actions.update(task.id,{googleEventId:eventId,googleCalendarId:destination});
 
     if (task.googleEventId) {
       // Atualiza evento existente
@@ -402,7 +424,7 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(createPayload),
         });
       }
     } else {
@@ -413,8 +435,18 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(createPayload),
       });
+    }
+
+    // Repetir um POST após falha de rede usa o mesmo id; 409 precisa de reconciliação antes de atualizar.
+    if (res.status === 409) {
+      const eventUrl = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`;
+      const existing = await googleFetch(eventUrl, {headers:{Authorization:`Bearer ${token}`}});
+      const event = existing.ok ? await existing.json() : undefined;
+      if (event?.extendedProperties?.private?.leveTaskId === task.id && event.status !== 'cancelled') {
+        res = await googleFetch(eventUrl, {method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      }
     }
 
     if (!res.ok) {
@@ -450,8 +482,8 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
 
     const created = await res.json();
     if (version !== sessionVersion) return false;
-    if (created?.id && created.id !== task.googleEventId) {
-      actions.update(task.id, { googleEventId: created.id });
+    if (created?.id && (created.id !== task.googleEventId || task.googleCalendarId !== destination)) {
+      actions.update(task.id, { googleEventId: created.id, googleCalendarId:destination });
     }
 
     updateGcalState({ lastSync: Date.now(), error: undefined, status: 'synced' });
@@ -459,33 +491,34 @@ export async function syncTaskToGoogle(task: Task, existingToken?: string): Prom
   } catch (err) {
     if (version !== sessionVersion) return false;
     const msg = (err as Error)?.message || 'Erro ao sincronizar com Google Agenda.';
-    console.error('[Google Calendar Network Error]', err);
+    console.error('[Google Calendar Network Error]');
     updateGcalState({ status: 'error', error: msg });
     return false;
   }
 }
 
-export async function deleteGoogleEvent(googleEventId: string, existingToken?: string): Promise<void> {
+export async function deleteGoogleEvent(googleEventId: string, existingToken?: string, destination = gcalState.calendarId || 'primary'): Promise<boolean> {
   const version = sessionVersion;
-  if (!gcalState.connected) return;
+  if (!gcalState.connected || storageIssue()) return false;
   const token = existingToken || (await getValidToken(false));
-  if (!token || version !== sessionVersion || !gcalState.connected) return;
+  if (!token || version !== sessionVersion || !gcalState.connected) return false;
 
-  const calendarId = encodeURIComponent(gcalState.calendarId || 'primary');
+  const calendarId = encodeURIComponent(destination);
   try {
-    await googleFetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`, {
+    const response = await googleFetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
+    return response.ok || response.status === 404 || response.status === 410;
   } catch {
-    /* noop */
+    return false;
   }
 }
 
 /** Sincroniza todas as tarefas ativas com data para o Google Agenda. */
 export async function syncAllUpcomingTasks(interactive = false, quiet = false): Promise<number> {
   const version = sessionVersion;
-  if (!gcalState.connected) return 0;
+  if (!gcalState.connected || storageIssue()) return 0;
   updateGcalState({ status: 'syncing', error: undefined });
 
   const token = await getValidToken(interactive);
@@ -498,9 +531,12 @@ export async function syncAllUpcomingTasks(interactive = false, quiet = false): 
     return 0;
   }
 
-  const tasks = getState().tasks.filter((t) => (t.date || t.recurrence) && t.status !== 'archived');
+  // Ao reabrir, reconcilia também itens arquivados/sem data que ainda têm vínculo a remover.
+  const tasks = getState().tasks.filter((t) => ((t.date || t.recurrence) && t.status !== 'archived') || (!!t.googleEventId && (t.status === 'archived' || (!t.date && !t.recurrence))));
+  for (const d of getState().googleDeletions ?? []) enqueueDeletion(d.eventId,d.calendarId);
+  if (queuedDeletions.size) await processQueue(true);
   let count = 0;
-  let hasErrors = false;
+  let hasErrors = queuedDeletions.size > 0;
 
   for (const t of tasks) {
     if (version !== sessionVersion) return count;
@@ -542,49 +578,59 @@ function taskFingerprint(t: Task): string {
 
 let syncTimeout: ReturnType<typeof setTimeout> | undefined;
 const queuedTasks = new Set<string>();
-const queuedDeletions = new Set<string>();
+const queuedDeletions = new Map<string, {eventId: string; calendarId: string}>();
+function enqueueDeletion(eventId: string, calendarId: string) { queuedDeletions.set(JSON.stringify([calendarId,eventId]),{eventId,calendarId}); }
+let processingVersion: number | undefined;
+let queueRetry = 5_000;
 
-function processQueue() {
+async function processQueue(manual = false) {
   const version = sessionVersion;
-  if (!gcalState.connected || !gcalState.autoSync) {
-    queuedTasks.clear();
-    queuedDeletions.clear();
-    return;
-  }
-
-  // Se já sabemos que a sessão falhou recentemente, não fica bombardeando em background
-  if (gcalState.status === 'error' && Date.now() - lastSilentAuthFailure < SILENT_AUTH_COOLDOWN_MS) {
-    return;
-  }
-
-  const tasksToSync = Array.from(queuedTasks);
-  const eventsToDelete = Array.from(queuedDeletions);
-  queuedTasks.clear();
-  queuedDeletions.clear();
-
-  (async () => {
-    // Valida o token uma única vez para toda a fila em segundo plano (não interativo)
+  if (!gcalState.connected || storageIssue() || (!gcalState.autoSync && !manual) || processingVersion === version) return;
+  processingVersion = version;
+  try {
+    if (gcalState.status === 'error' && Date.now() - lastSilentAuthFailure < SILENT_AUTH_COOLDOWN_MS) return;
     const token = await getValidToken(false);
     if (!token || version !== sessionVersion) return;
-
-    for (const eventId of eventsToDelete) {
+    for (const [key, {eventId, calendarId}] of Array.from(queuedDeletions)) {
       if (version !== sessionVersion) return;
-      await deleteGoogleEvent(eventId, token);
+      const restored = getState().tasks.some(t => t.googleEventId === eventId && (t.googleCalendarId || gcalState.calendarId || 'primary') === calendarId);
+      if ((restored || await deleteGoogleEvent(eventId, token, calendarId)) && version === sessionVersion && queuedDeletions.has(key)) {
+        queuedDeletions.delete(key); actions.acknowledgeGoogleDeletion(eventId,calendarId);
+      }
     }
-    const state = getState();
-    for (const taskId of tasksToSync) {
+    for (const taskId of Array.from(queuedTasks)) {
       if (version !== sessionVersion) return;
-      const task = state.tasks.find((t) => t.id === taskId);
-      if (task) await syncTaskToGoogle(task, token);
+      const task = getState().tasks.find(t => t.id === taskId);
+      if (!task) { queuedTasks.delete(taskId); continue; }
+      const fingerprint = taskFingerprint(task);
+      if (await syncTaskToGoogle(task, token) && version === sessionVersion) {
+        const latest = getState().tasks.find(t => t.id === taskId);
+        if (!latest || fingerprint === taskFingerprint(latest)) queuedTasks.delete(taskId);
+      }
     }
-  })().catch(() => {});
+  } catch {
+    if (version === sessionVersion) updateGcalState({status:'error',error:'Há alterações pendentes no Google Agenda. Vou tentar novamente com o app aberto.'});
+  } finally {
+    if (version === sessionVersion) {
+      processingVersion = undefined;
+      if (queuedTasks.size || queuedDeletions.size) {
+        updateGcalState({status:'error',error:'Há alterações pendentes no Google Agenda. Vou tentar novamente com o app aberto.'});
+        syncTimeout = setTimeout(() => {void processQueue();}, queueRetry);
+        queueRetry = Math.min(queueRetry * 2, 60_000);
+      } else queueRetry = 5_000;
+    }
+  }
 }
 
 export function initGoogleCalendarListener(): () => void {
   let prevTasks = new Map<string, Task>(getState().tasks.map((t) => [t.id, t]));
+  const restoreDeletions = () => {for (const d of getState().googleDeletions ?? []) enqueueDeletion(d.eventId,d.calendarId);};
+  restoreDeletions();
+  if (queuedDeletions.size) syncTimeout = setTimeout(() => {void processQueue();},700);
 
   const unsubscribe = subscribe(() => {
-    if (isReplacingState() || !gcalState.connected || !gcalState.autoSync) {
+    restoreDeletions();
+    if (isReplacingState()) {
       prevTasks = new Map(getState().tasks.map((t) => [t.id, t]));
       return;
     }
@@ -604,16 +650,18 @@ export function initGoogleCalendarListener(): () => void {
     }
 
     // Detecta tarefas excluídas
+    const removed: Task[] = [];
     for (const [id, prev] of prevTasks.entries()) {
       if (!currentMap.has(id)) {
-        if (prev.googleEventId) queuedDeletions.add(prev.googleEventId);
+        if (prev.googleEventId) removed.push(prev);
       }
     }
 
     prevTasks = currentMap;
+    for (const prev of removed) actions.queueGoogleDeletion(prev.googleEventId!,prev.googleCalendarId || gcalState.calendarId || 'primary');
 
     clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(processQueue, 700);
+    syncTimeout = setTimeout(() => {void processQueue();}, 700);
   });
 
   return () => {

@@ -11,8 +11,8 @@
 import { createClient, type RealtimeChannel, type Session } from '@supabase/supabase-js';
 import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Task } from '../domain/types';
-import { localRepository } from './persistence';
-import { emptyState, getState, replaceState, subscribe, uid } from './store';
+import { localRepository, storageIssue, reportStorageConflict, reportJournalFailure, journalSaved } from './persistence';
+import { emptyState, getState, isReplacingState, replaceState, subscribe, uid } from './store';
 import { resetGoogleCalendarSession } from '../services/googleCalendar';
 import { isTask, isProject, isMeta } from '../domain/validation';
 
@@ -45,6 +45,7 @@ export interface CloudUser {
 export interface CloudState {
   auth: 'loading' | 'in' | 'out';
   email?: string;
+  userId?: string;
   user?: CloudUser;
   status: SyncStatus;
   error?: string;
@@ -98,14 +99,17 @@ function readJournal(): Journal {
 
 function writeJournal(j: Journal) {
   journal = j;
+  if (storageIssue() === 'conflict' || storageIssue() === 'recovery') return;
   try {
     localStorage.setItem(JOURNAL_KEY, JSON.stringify(j));
+    journalSaved();
   } catch {
-    /* noop */
+    reportJournalFailure();
   }
 }
 
 let journal = readJournal();
+export const localDataOwner = () => journal.owner;
 
 /* ------------------------------------------------------------------ */
 /* Espelho do que está na nuvem                                        */
@@ -195,6 +199,7 @@ function saveJournal() {
 
 let userId: string | undefined;
 let syncVersion = 0;
+let syncRequests = new AbortController();
 let channel: RealtimeChannel | undefined;
 let chain: Promise<void> = Promise.resolve();
 let pushQueued = false;
@@ -249,7 +254,7 @@ async function push() {
   const version = syncVersion;
   const uidNow = userId;
   // Só envia depois de ter mesclado com a nuvem ao menos uma vez nesta conta
-  if (!supabase || !uidNow || journal.owner !== uidNow) return;
+  if (!supabase || !uidNow || journal.owner !== uidNow || storageIssue()) return;
   const { upserts, deletes, meta } = diff(getState());
   saveJournal();
   if (!upserts.length && !deletes.length) {
@@ -265,14 +270,14 @@ async function push() {
     const stamp = new Date().toISOString();
     for (const part of chunk(upserts, 500)) {
       if (version !== syncVersion) return;
-      const { error } = await supabase.from(TABLE).upsert(
+      const { error } = await syncRequest(supabase.from(TABLE).upsert(
         part.map((r) => ({ user_id: uidNow, id: r.id, type: r.type, data: r.data, origin: CLIENT_ID, updated_at: stamp })),
-      );
+      ));
       if (error) throw error;
     }
     for (const part of chunk(deletes, 200)) {
       if (version !== syncVersion) return;
-      const { error } = await supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part);
+      const { error } = await syncRequest(supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part));
       if (error) throw error;
     }
     if (version !== syncVersion) return; // saiu da conta no meio do envio
@@ -298,7 +303,7 @@ async function fetchAll(uidNow: string, version: number): Promise<Row[]> {
   const rows: Row[] = [];
   for (let from = 0; ; from += PAGE) {
     if (version !== syncVersion) return [];
-    const { data, error } = await supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1);
+    const { data, error } = await syncRequest(supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1));
     if (error) throw error;
     rows.push(...(data as Row[]));
     if (!data || data.length < PAGE) return rows;
@@ -309,7 +314,7 @@ async function fetchAll(uidNow: string, version: number): Promise<Row[]> {
 async function pull() {
   const version = syncVersion;
   const uidNow = userId;
-  if (!supabase || !uidNow) return;
+  if (!supabase || !uidNow || storageIssue()) return;
   if (!navigator.onLine) {
     setCloud({ status: 'offline' });
     return;
@@ -369,10 +374,12 @@ async function pull() {
     setCloud({ status: navigator.onLine ? 'error' : 'offline', error: errorMessage(e) });
     scheduleRetry();
   } finally {
-    pulling = false;
-    const pending = buffered;
-    buffered = [];
-    pending.forEach((fn) => fn());
+    if (version === syncVersion) {
+      pulling = false;
+      const pending = buffered;
+      buffered = [];
+      pending.forEach((fn) => fn());
+    }
   }
   await push();
 }
@@ -387,6 +394,7 @@ interface RtRow extends Row {
 }
 
 function applyRemoteRow(row: RtRow) {
+  if (storageIssue()) return;
   if (!validRow(row)) { setCloud({ status: 'error', error: 'Registro remoto inválido. Sincronize novamente.' }); return; }
   const s = getState();
   if (row.type === 'meta') {
@@ -409,6 +417,7 @@ function applyRemoteRow(row: RtRow) {
 }
 
 function applyRemoteDelete(id: string) {
+  if (storageIssue()) return;
   const s = getState();
   const task = s.tasks.find((t) => t.id === id);
   const project = s.projects.find((p) => p.id === id);
@@ -466,7 +475,12 @@ function userInfo(session: Session): CloudUser {
 
 function start(session: Session) {
   const id = session.user.id;
-  setCloud({ auth: 'in', email: session.user.email ?? undefined, user: userInfo(session) });
+  if (journal.owner && journal.owner !== id && (hasPending() || storageIssue())) {
+    stop(); reportStorageConflict(null);
+    setCloud({ auth: 'out', email: undefined, user: undefined, status: 'error', error: 'Há dados pendentes de outra conta neste aparelho. Entre na conta original para recuperá-los.' });
+    return;
+  }
+  setCloud({ auth: 'in', userId:id, email: session.user.email ?? undefined, user: userInfo(session) });
   if (userId === id) return;
   stop();
   userId = id;
@@ -486,25 +500,29 @@ function start(session: Session) {
 
 function stop() {
   syncVersion++;
+  syncRequests.abort(); syncRequests = new AbortController();
   resetGoogleCalendarSession();
   userId = undefined;
   clearTimeout(pushTimer);
   clearTimeout(retryTimer);
   if (channel) supabase?.removeChannel(channel);
   channel = undefined;
+  chain = Promise.resolve(); pushQueued = false;
+  pulling = false; buffered = [];
 }
 
 /** Envia o pendente e busca novidades. */
 export function syncNow() {
   if (!userId) return;
+  saveJournal();
   enqueue(pull);
 }
 
 /** Há alterações neste aparelho que ainda não chegaram à nuvem? */
 export function hasPending() {
-  if (!journal.owner) return false;
+  if (!journal.owner) return !!userId && (getState().tasks.length > 0 || getState().projects.length > 0 || getState().settings.onboarded);
   const { upserts, deletes } = diff(getState());
-  return upserts.length > 0 || deletes.length > 0;
+  return upserts.length > 0 || deletes.length > 0 || !!getState().googleDeletions?.length;
 }
 
 /** Usuário pode usar o app sem login quando está offline e já tem dados aqui. */
@@ -512,30 +530,57 @@ export const canUseOffline = () => !!journal.owner && typeof navigator !== 'unde
 
 /** Confirma e sai da conta (avisa se há alterações que ainda não subiram). */
 export async function confirmSignOut(switching = false) {
-  const msg = hasPending() && !navigator.onLine
-    ? 'Há alterações que ainda não foram enviadas (você está sem internet). Se sair agora, elas serão perdidas. Sair mesmo assim?'
-    : switching
-      ? 'Sair desta conta para entrar com outra? Seus dados continuam salvos na nuvem.'
-      : 'Sair da conta neste aparelho? Seus dados continuam salvos na nuvem.';
+  const msg = switching ? 'Sair desta conta para entrar com outra? Vou tentar enviar as alterações pendentes antes de sair.' : 'Sair da conta neste aparelho? Vou tentar enviar as alterações pendentes antes de sair.';
   if (!confirm(msg)) return false;
-  await signOut();
-  return true;
+  if (await signOut()) return true;
+  if (!confirm('Não foi possível confirmar o envio de todas as alterações. Cancelar mantém os dados neste aparelho para tentar novamente. Sair mesmo assim e descartar as alterações locais não confirmadas?')) return false;
+  return signOut(true);
 }
 
-export async function signOut() {
-  if (!supabase) return;
-  resetGoogleCalendarSession();
-  // Envia o que faltava antes de sair
-  await enqueue(push);
-  stop();
+let exiting: Promise<boolean> | undefined;
+function bounded<T>(work: PromiseLike<T>, ms = 15_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([Promise.resolve(work), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de espera esgotado. Tente novamente.')), ms); })]).finally(() => clearTimeout(timer));
+}
+function syncRequest<T>(work: PromiseLike<T> & {abortSignal?: (signal: AbortSignal) => PromiseLike<T>}): Promise<T> {
+  const parent = syncRequests.signal;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  parent.addEventListener('abort', abort, {once:true});
+  return bounded(work.abortSignal ? work.abortSignal(controller.signal) : work).finally(() => {controller.abort();parent.removeEventListener('abort',abort);});
+}
+export function signOut(discardPending = false): Promise<boolean> {
+  if (exiting) return exiting;
+  exiting = finishSignOut(discardPending).finally(() => { exiting = undefined; });
+  return exiting;
+}
+
+async function finishSignOut(discardPending: boolean): Promise<boolean> {
+  if (!supabase) return false;
+  const version = syncVersion;
+  const owner = userId;
+  if (!discardPending) { try { await bounded(enqueue(push)); } catch { return false; } }
+  if (version !== syncVersion || owner !== userId) return false;
+  if (!discardPending && (hasPending() || storageIssue())) {
+    setCloud({ status: 'error', error: 'Há alterações não confirmadas. Tente sincronizar novamente antes de sair.' });
+    return false;
+  }
   // Este aparelho deixa de receber os lembretes desta conta
-  await import('../services/push').then((m) => m.disablePush()).catch(() => {});
-  await supabase.auth.signOut().catch(() => {});
+  await bounded(import('../services/push').then((m) => m.disablePush())).catch(() => {});
+  if (version !== syncVersion || owner !== userId || (!discardPending && hasPending())) return false;
+  try { const { error } = await bounded(supabase.auth.signOut()); if (error) throw error; }
+  catch { setCloud({ status: 'error', error: 'Não foi possível encerrar a sessão. Seus dados locais foram mantidos.' }); return false; }
+  if (version !== syncVersion || owner !== userId || (!discardPending && hasPending())) return false;
+  stop();
+  if (!localRepository.clear()) {
+    setCloud({auth:'out',email:undefined,user:undefined,status:'error',error:'A sessão foi encerrada, mas não foi possível limpar os dados locais. Entre na conta original para recuperá-los.'});
+    return false;
+  }
   writeJournal({ dirty: [], deleted: [] });
-  localRepository.clear();
   replaceState(emptyState(), { resetUndo: true });
   restoreKnown();
   setCloud({ auth: 'out', email: undefined, user: undefined, status: 'idle', error: undefined, lastSync: undefined, recovery: false });
+  return true;
 }
 
 /** Quais formas de login estão ligadas no Supabase (ex.: Google). */
@@ -579,7 +624,7 @@ if (supabase && typeof window !== 'undefined') {
     }, 0);
   });
 
-  subscribe(() => schedulePush());
+  subscribe(() => { if (!isReplacingState()) saveJournal(); schedulePush(); });
   window.addEventListener('online', () => syncNow());
   window.addEventListener('offline', () => userId && setCloud({ status: 'offline' }));
   document.addEventListener('visibilitychange', () => {
@@ -587,4 +632,11 @@ if (supabase && typeof window !== 'undefined') {
     if (document.visibilityState === 'hidden') saveJournal();
   });
   window.addEventListener('pagehide', () => saveJournal());
+  window.addEventListener('storage', e => {
+    if (e.key !== JOURNAL_KEY) return;
+    try {
+      const other = JSON.parse(e.newValue ?? '{}') as Journal;
+      if (other.owner !== journal.owner) { reportStorageConflict(null); stop(); setCloud({ auth: 'out', status: 'idle', email: undefined, user: undefined }); }
+    } catch { reportStorageConflict(null); }
+  });
 }

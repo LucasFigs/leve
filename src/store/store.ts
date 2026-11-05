@@ -6,7 +6,8 @@ import { nextFreeSlot, reflowDay, slotsByPart, type DayPlan, type WeekAssignment
 import { occurrencesBefore } from '../domain/recurrence';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
-import { localRepository } from './persistence';
+import { localRepository, reportStorageConflict, STATE_KEY } from './persistence';
+import { isTask, isProject, isGoogleDeletions } from '../domain/validation';
 import { toast } from './ui';
 
 export const uid = () =>
@@ -44,7 +45,6 @@ export const emptyState = (): AppState => ({
 let state: AppState = hydrate();
 let undoStack: AppState[] = [];
 const listeners = new Set<() => void>();
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let replacingState = false;
 export const isReplacingState = () => replacingState;
 
@@ -56,13 +56,17 @@ function hydrate(): AppState {
 
 function emit() {
   listeners.forEach((l) => l());
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => localRepository.save(state), 120);
+  localRepository.save(state);
 }
 
 function set(updater: (s: AppState) => AppState, opts: { undoable?: boolean } = {}) {
+  const next = updater(state);
+  if (!isGoogleDeletions(next.googleDeletions) || next.tasks.some(t => !state.tasks.includes(t) && !isTask(t)) || next.projects.some(p => !state.projects.includes(p) && !isProject(p))) {
+    toast('Não foi possível salvar: confira o tamanho e o formato dos campos. Seus dados anteriores foram mantidos.');
+    return;
+  }
   if (opts.undoable) undoStack = [...undoStack.slice(-19), state];
-  state = updater(state);
+  state = next;
   emit();
 }
 
@@ -89,11 +93,7 @@ export function useStore<T>(selector: (s: AppState) => T): T {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key && e.key.startsWith('leve.')) {
-      state = hydrate();
-      replacingState = true;
-      try { listeners.forEach((l) => l()); } finally { replacingState = false; }
-    }
+    if (e.key === STATE_KEY || e.key === null) reportStorageConflict(e.newValue);
   });
   window.addEventListener('pagehide', () => localRepository.save(state));
 }
@@ -229,10 +229,18 @@ export interface CaptureDefaults {
 }
 
 export const actions = {
+  queueGoogleDeletion(eventId: string, calendarId: string) {
+    set(s => ({...s,googleDeletions:[...(s.googleDeletions ?? []).filter(d => d.eventId !== eventId || d.calendarId !== calendarId),{eventId,calendarId}]}));
+  },
+  acknowledgeGoogleDeletion(eventId: string, calendarId: string) {
+    set(s => ({...s,googleDeletions:s.googleDeletions?.filter(d => d.eventId !== eventId || d.calendarId !== calendarId)}));
+  },
   /** Captura rápida: interpreta o texto e decide para onde vai. */
   capture(text: string, defaults: CaptureDefaults = {}, ignore: Set<string> = new Set()): Task | undefined {
     if (!text.trim()) return;
+    if (text.length > 1000) { toast('Use até 1.000 caracteres na captura. O texto não foi salvo nem cortado.'); return; }
     const task = actions.buildCapture(text, defaults, ignore);
+    if (!isTask(task)) { toast('Confira os campos da captura antes de salvar.'); return; }
     set((s) => ({ ...s, tasks: [task, ...s.tasks] }));
     return task;
   },
@@ -244,7 +252,7 @@ export const actions = {
     const has = (k: string) => !ignore.has(k);
     let date = (has('date') ? p.date : undefined) ?? defaults.date;
     let time = (has('time') ? p.time : undefined) ?? defaults.time;
-    const dayPart = has('dayPart') ? p.dayPart : undefined;
+    const dayPart = has('time') && has('dayPart') ? p.dayPart : undefined;
     const recurrence = has('recurrence') ? p.recurrence : undefined;
     const kind = has('kind') ? p.kind : 'task';
 
@@ -280,7 +288,7 @@ export const actions = {
       time,
       due: has('due') ? p.due : undefined,
       dayPart,
-      duration: p.duration,
+      duration: has('duration') ? p.duration : state.settings.defaultDuration,
       priority: has('priority') ? p.priority : undefined,
       recurrence,
       category: p.category,

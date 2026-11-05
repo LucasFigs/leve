@@ -133,9 +133,9 @@ function dueReminders(tasks, prefs, today, now, grace = 5) {
       taskId: i.task.id,
       date: i.date,
       time: i.time,
-      title: i.task.title,
+      title: prefs.discreetReminders ? "Leve" : i.task.title,
       left,
-      body: left > 0 ? `Come\xE7a \xE0s ${i.time} (em ${left} min)` : `Era \xE0s ${i.time} \u2014 est\xE1 na hora`
+      body: prefs.discreetReminders ? "Voc\xEA tem uma atividade planejada. Abra o Leve para ver." : left > 0 ? `Come\xE7a \xE0s ${i.time} (em ${left} min)` : `Era \xE0s ${i.time} \u2014 est\xE1 na hora`
     });
   }
   return out;
@@ -261,7 +261,7 @@ var time = (v) => typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 var dates = (v) => Array.isArray(v) && v.length <= 25e3 && v.every(isDate);
 var integer = (v, low, high) => number(v) && Number.isInteger(v) && v >= low && v <= high;
 function isTask(v) {
-  if (!isObject(v) || !text(v.id, 200) || !v.id || !text(v.title, 1e3) || !["task", "event", "habit"].includes(v.kind) || !["inbox", "active", "done", "archived"].includes(v.status) || !number(v.createdAt) || !number(v.updatedAt) || !number(v.postponed) || !optional(v.habitColor, (x) => HABIT_COLORS.some((color) => color.value === x)) || !optional(v.habitIcon, (x) => HABIT_ICONS.some((icon) => icon.value === x)) || !optional(v.notes, (x) => text(x, 5e4)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) || !optional(v.duration, (x) => integer(x, 1, 10080)) || !optional(v.googleEventId, (x) => text(x, 1024)) || !optional(v.doneDates, dates) || !optional(v.skipDates, dates) || !optional(v.missedDates, dates) || !Array.isArray(v.subtasks) || v.subtasks.length > 1e3 || !v.subtasks.every((s) => isObject(s) && text(s.id, 200) && text(s.title, 1e3) && typeof s.done === "boolean")) return false;
+  if (!isObject(v) || !text(v.id, 200) || !v.id || !text(v.title, 1e3) || !["task", "event", "habit"].includes(v.kind) || !["inbox", "active", "done", "archived"].includes(v.status) || !number(v.createdAt) || !number(v.updatedAt) || !number(v.postponed) || !optional(v.habitColor, (x) => HABIT_COLORS.some((color) => color.value === x)) || !optional(v.habitIcon, (x) => HABIT_ICONS.some((icon) => icon.value === x)) || !optional(v.notes, (x) => text(x, 5e4)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) || !optional(v.duration, (x) => integer(x, 1, 10080)) || !optional(v.googleEventId, (x) => text(x, 1024)) || !optional(v.googleCalendarId, (x) => text(x, 1024)) || !optional(v.doneDates, dates) || !optional(v.skipDates, dates) || !optional(v.missedDates, dates) || !Array.isArray(v.subtasks) || v.subtasks.length > 1e3 || !v.subtasks.every((s) => isObject(s) && text(s.id, 200) && text(s.title, 1e3) && typeof s.done === "boolean")) return false;
   if (v.recurrence != null) {
     const r = v.recurrence;
     if (!isObject(r) || !["daily", "weekly", "monthly", "yearly", "interval"].includes(r.freq) || !isDate(r.anchor) || !optional(r.until, isDate) || !optional(r.interval, (x) => integer(x, 1, 1e4)) || !optional(r.count, (x) => integer(x, 1, 25e3)) || !optional(r.weekdays, (x) => Array.isArray(x) && x.length <= 7 && x.every((d) => integer(d, 0, 6))) || !optional(r.monthDay, (x) => integer(x, 1, 31)) || !optional(r.month, (x) => integer(x, 0, 11)) || !optional(r.weekday, (x) => integer(x, 0, 6)) || !optional(r.nth, (x) => x === -1 || integer(x, 1, 5))) return false;
@@ -270,7 +270,7 @@ function isTask(v) {
 }
 function isSettings(v) {
   if (!isObject(v)) return false;
-  return optional(v.name, (x) => text(x, 1e3)) && optional(v.theme, (x) => ["system", "light", "dark"].includes(x)) && ["dayStart", "dayEnd", "lunchStart", "lunchEnd"].every((k) => optional(v[k], time)) && optional(v.defaultDuration, (x) => integer(x, 1, 10080)) && optional(v.reminderLead, (x) => integer(x, 0, 1440)) && ["protectLunch", "nudges", "reminders", "onboarded"].every((k) => optional(v[k], (x) => typeof x === "boolean"));
+  return optional(v.name, (x) => text(x, 1e3)) && optional(v.theme, (x) => ["system", "light", "dark"].includes(x)) && ["dayStart", "dayEnd", "lunchStart", "lunchEnd"].every((k) => optional(v[k], time)) && optional(v.defaultDuration, (x) => integer(x, 1, 10080)) && optional(v.reminderLead, (x) => integer(x, 0, 1440)) && ["protectLunch", "nudges", "reminders", "discreetReminders", "onboarded"].every((k) => optional(v[k], (x) => typeof x === "boolean"));
 }
 function isMeta(v) {
   return isObject(v) && isSettings(v.settings) && optional(v.dismissed, (x) => isObject(x) && Object.values(x).every(isDate)) && optional(v.focus, (x) => isObject(x) && text(x.taskId, 200) && isDate(x.date) && number(x.startedAt) && number(x.elapsedBefore) && typeof x.running === "boolean");
@@ -331,7 +331,7 @@ async function run(env, at = /* @__PURE__ */ new Date()) {
       const tasks = rows.filter((r) => r.type === "task").map((r) => r.data).filter(isTask);
       const { today, now } = localNow(devices[0].tz || "America/Sao_Paulo", at);
       for (const r of dueReminders(tasks, meta.settings, today, now)) {
-        const payload = JSON.stringify({ title: [...r.title].slice(0, 180).join(""), body: r.body, tag: r.key, data: { taskId: r.taskId, date: r.date } });
+        const payload = JSON.stringify({ title: [...r.title].slice(0, 180).join(""), body: r.body, tag: r.key, data: { taskId: r.taskId, date: r.date, owner: userId } });
         for (const d of devices) {
           if (!isAllowedPushEndpoint(d.endpoint)) continue;
           const deviceKey = b64urlEncode(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(d.endpoint))));
