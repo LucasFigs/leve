@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import type { Subtask } from '../domain/types';
 import { Checkbox } from './ui';
 import { Icon } from './Icon';
+import { AutoGrowTextarea } from './AutoGrowTextarea';
 
 interface Props {
   subtasks: Subtask[];
@@ -88,18 +89,11 @@ export function SubtaskList({ subtasks, onChange, onToggle }: Props) {
             onToggle={() => (onToggle ? onToggle(s.id) : onChange(subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x))))}
             label={`Concluir passo: ${s.title}`}
           />
-          <textarea
-            ref={(el) => {
-              if (el) {
-                el.style.height = 'auto';
-                el.style.height = `${el.scrollHeight}px`;
-              }
-            }}
+          <AutoGrowTextarea
             rows={1}
             value={s.title}
+            maxLength={1000}
             onChange={(e) => {
-              e.target.style.height = 'auto';
-              e.target.style.height = `${e.target.scrollHeight}px`;
               onChange(subtasks.map((x) => (x.id === s.id ? { ...x, title: e.target.value.replace(/\n/g, ' ') } : x)));
             }}
             aria-label="Passo"

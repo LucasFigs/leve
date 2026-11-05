@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskSheet } from './TaskSheet';
 import { InboxScreen } from '../screens/Inbox';
-import { emptyState, getState, replaceState } from '../store/store';
+import { emptyState, getState, newTask, replaceState } from '../store/store';
 import { closeAllSheets, getUI, openSheet, useUI } from '../store/ui';
 import { todayISO } from '../domain/dates';
 import type { Task } from '../domain/types';
@@ -24,10 +24,11 @@ function button(text: string) {
   if (!found) throw new Error(`Botão não encontrado: ${text}`);
   return found;
 }
-function change(input: HTMLTextAreaElement, value: string) {
+function change(input: HTMLTextAreaElement | HTMLInputElement | HTMLSelectElement, value: string) {
   act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : input instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(input, value);
+    input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
   });
 }
 beforeEach(() => {
@@ -110,9 +111,65 @@ describe('capturas no Inbox', () => {
     expect(host.querySelector('.inbox-edit')).toBeNull();
     act(() => (host.querySelector('.task-main') as HTMLButtonElement).click());
     expect(host.querySelector('[aria-label="Título"]')).not.toBeNull();
-    expect(host.querySelector('#notes')).not.toBeNull();
-    expect(host.querySelector('#project')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Notas"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Projeto"]')).not.toBeNull();
     expect(host.textContent).toContain('Salvar alterações');
     expect(getUI().sheet).toMatchObject({ type: 'task', id: 'a' });
+  });
+});
+
+describe('formulário de tarefas simplificado', () => {
+  it('expõe planejamento e mantém detalhes vazios recolhidos, sem retirar campos', () => {
+    act(() => root.render(<TaskSheet initial={newTask({ title: '' })} />));
+    expect(host.textContent).toContain('Nova tarefa');
+    expect(host.querySelector('[aria-label="Data"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Duração"]')).not.toBeNull();
+    const optional = Array.from(host.querySelectorAll('details'));
+    expect(optional.length).toBeGreaterThanOrEqual(4);
+    expect(optional.every(panel => !panel.open)).toBe(true);
+    expect(host.querySelector('[aria-label="Categoria"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Prazo final"]')).not.toBeNull();
+    expect(host.querySelector('.sheet-head .btn-danger')).toBeNull();
+  });
+  it('inclui um passo digitado ao salvar sem exigir Adicionar antes', () => {
+    openTask(); act(() => button('Editar').click());
+    change(host.querySelector<HTMLTextAreaElement>('[aria-label="Novo passo"]')!, 'Conferir os números');
+    act(() => button('Salvar alterações').click());
+    expect(getState().tasks[0].subtasks.map(s => s.title)).toEqual(['Reunir dados', 'Conferir os números']);
+  });
+  it('protege uma tarefa sem título com notas e um passo ainda não adicionado', () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    act(() => root.render(<TaskSheet initial={newTask({ title: '' })} />));
+    change(host.querySelector<HTMLTextAreaElement>('[aria-label="Notas"]')!, 'Detalhe que não quero perder');
+    change(host.querySelector<HTMLTextAreaElement>('[aria-label="Novo passo"]')!, 'Um primeiro passo');
+    act(() => button('Cancelar').click());
+    expect(window.confirm).toHaveBeenCalled();
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Notas"]')!.value).toBe('Detalhe que não quero perder');
+    expect(getState().tasks).toHaveLength(1);
+  });
+  it('descarta só o rascunho de passo ao cancelar uma edição e reabrir', () => {
+    openTask(); act(() => button('Editar').click());
+    change(host.querySelector<HTMLTextAreaElement>('[aria-label="Novo passo"]')!, 'Rascunho descartável');
+    act(() => button('Cancelar').click()); act(() => button('Editar').click());
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Novo passo"]')!.value).toBe('');
+    expect(getState().tasks[0].subtasks).toHaveLength(1);
+  });
+  it('bloqueia duração personalizada inválida e salva a estimativa válida', () => {
+    openTask(); act(() => button('Editar').click());
+    change(host.querySelector<HTMLSelectElement>('[aria-label="Duração"]')!, 'custom');
+    change(host.querySelector<HTMLInputElement>('[aria-label="Duração em minutos"]')!, '-5');
+    expect(button('Salvar alterações').disabled).toBe(true);
+    change(host.querySelector<HTMLInputElement>('[aria-label="Duração em minutos"]')!, '75');
+    expect(button('Salvar alterações').disabled).toBe(false);
+    act(() => button('Salvar alterações').click());
+    expect(getState().tasks[0].duration).toBe(75);
+  });
+  it('mantém a frequência visível para hábitos e não cria um hábito sem repetição', () => {
+    act(() => root.render(<TaskSheet initial={newTask({ title: 'Ler', kind: 'habit', recurrence: { freq: 'daily', anchor: todayISO() } })} />));
+    const repeat = host.querySelector<HTMLSelectElement>('[aria-label="Repetição"]')!;
+    expect(repeat.closest('details')).toBeNull();
+    change(repeat, 'none');
+    expect(button('Criar hábito').disabled).toBe(true);
+    expect(host.textContent).toContain('Escolha uma repetição');
   });
 });
