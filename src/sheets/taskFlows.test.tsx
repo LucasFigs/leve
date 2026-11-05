@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskSheet } from './TaskSheet';
+import { HabitCalendarSheet } from './HabitCalendarSheet';
 import { InboxScreen } from '../screens/Inbox';
 import { emptyState, getState, newTask, replaceState } from '../store/store';
 import { closeAllSheets, getUI, openSheet, useUI } from '../store/ui';
@@ -19,7 +20,8 @@ let host: HTMLDivElement;
 const base: Task = { id: 'a', title: 'Preparar relatório', status: 'active', kind: 'task', date: '2026-11-05', duration: 30, notes: 'Trazer os dados\nRevisar com calma', subtasks: [{ id: 's', title: 'Reunir dados', done: false }], postponed: 0, createdAt: 0, updatedAt: 0 };
 function SheetHost() {
   const sheet = useUI(s => s.sheet);
-  return sheet?.type === 'task' ? <TaskSheet key={sheet.id} id={sheet.id} date={sheet.date} /> : null;
+  if (sheet?.type === 'task') return <TaskSheet key={`${sheet.id}:${sheet.date ?? ''}:${sheet.mode ?? ''}`} id={sheet.id} date={sheet.date} mode={sheet.mode} />;
+  return sheet?.type === 'habitCalendar' ? <HabitCalendarSheet key={sheet.id} id={sheet.id} /> : null;
 }
 function button(text: string) {
   const found = Array.from(host.querySelectorAll('button')).find(b => b.textContent?.trim() === text);
@@ -35,6 +37,7 @@ function change(input: HTMLTextAreaElement | HTMLInputElement | HTMLSelectElemen
 }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-05T12:00:00Z'));
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
@@ -43,11 +46,43 @@ beforeEach(() => {
 });
 afterEach(() => {
   act(() => root.unmount()); host.remove(); replaceState(emptyState()); closeAllSheets();
-  vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks();
+  vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 function openTask() {
   act(() => { openSheet({ type: 'task', id: 'a' }); root.render(<SheetHost />); });
 }
+
+describe('navegação de hábitos', () => {
+  beforeEach(() => replaceState({ ...emptyState(), tasks: [{ ...base, kind: 'habit', subtasks: [], recurrence: { freq: 'daily', anchor: '2026-10-01' } }] }));
+
+  it.each(['task', 'habitCalendar'] as const)('abre o calendário pela entrada %s e edita diretamente, voltando ao cancelar', (type) => {
+    act(() => { openSheet({ type, id: 'a' }); root.render(<SheetHost />); });
+    expect(host.querySelector('.habit-calendar-view')).not.toBeNull();
+    expect(host.querySelector('.task-overview')).toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Editar hábito"]')!.click());
+    expect(host.querySelector('textarea')).not.toBeNull();
+    expect(button('Salvar alterações')).toBeDefined();
+    act(() => button('Cancelar').click());
+    expect(host.querySelector('.habit-calendar-view')).not.toBeNull();
+    expect(getUI().sheetStack).toHaveLength(0);
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Fechar"]')!.click());
+    act(() => vi.advanceTimersByTime(250));
+    expect(getUI().sheet).toBeUndefined();
+  });
+
+  it('preserva o dia da agenda ao editar uma ocorrência e retorna ao calendário após salvar', () => {
+    act(() => { openSheet({ type: 'task', id: 'a', date: '2026-10-30' }); root.render(<SheetHost />); });
+    expect(host.textContent).toContain('out. de 2026');
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Editar hábito"]')!.click());
+    expect(getUI().sheet).toMatchObject({ mode: 'edit', date: '2026-10-30' });
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Cor: Azul"]')!.click());
+    act(() => button('Salvar alterações').click());
+    act(() => Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('Só esta ocorrência'))!.click());
+    expect(getState().tasks.find(t => t.seriesId === 'a')?.date).toBe('2026-10-30');
+    expect(host.querySelector('.habit-calendar-view')).not.toBeNull();
+    expect(getUI().sheetStack).toHaveLength(0);
+  });
+});
 
 describe('consulta e edição de tarefas', () => {
   it('prioriza título, planejamento e passos antes das notas, mantendo o contexto visível', () => {
@@ -174,7 +209,7 @@ describe('formulário de tarefas simplificado', () => {
   });
   it('aplica aparência só à ocorrência escolhida e permite editar essa exceção sem criar repetição', () => {
     replaceState({ ...emptyState(), tasks: [{ ...base, kind: 'habit', date: undefined, recurrence: { freq: 'daily', anchor: '2026-11-04' } }] });
-    openTask(); act(() => button('Editar').click());
+    openTask(); act(() => host.querySelector<HTMLButtonElement>('[aria-label="Editar hábito"]')!.click());
     act(() => (host.querySelector('[aria-label="Cor: Azul"]') as HTMLButtonElement).click());
     act(() => button('Salvar alterações').click());
     act(() => Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('Só esta ocorrência'))!.click());
@@ -182,7 +217,7 @@ describe('formulário de tarefas simplificado', () => {
     expect(exception.habitColor).toBe('blue');
     expect(getState().tasks.find(task => task.id === 'a')!.habitColor).toBeUndefined();
     act(() => { openSheet({ type: 'task', id: exception.id, date: todayISO() }); root.render(<SheetHost />); });
-    act(() => button('Editar').click());
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Editar hábito"]')!.click());
     expect(button('Salvar alterações').disabled).toBe(false);
     act(() => button('Salvar alterações').click());
     expect(getState().tasks.find(task => task.id === exception.id)!.recurrence).toBeUndefined();

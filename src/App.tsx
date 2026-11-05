@@ -82,7 +82,7 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
     case 'quickAdd':
       return <QuickAddSheet defaults={sheet.defaults} />;
     case 'task':
-      return <TaskSheet key={`${sheet.id}:${sheet.date ?? ''}`} id={sheet.id} date={sheet.date} />;
+      return <TaskSheet key={`${sheet.id}:${sheet.date ?? ''}:${sheet.mode ?? ''}`} id={sheet.id} date={sheet.date} mode={sheet.mode} />;
     case 'newTask':
       return <TaskSheet key={sheet.task.id} initial={sheet.task} />;
     case 'eventMissed':

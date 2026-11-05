@@ -3650,7 +3650,6 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   .task-editor .seg > button { font-size: var(--fs-xs); }
 }
 .habit-identity { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 7px; background: var(--habit-bg, var(--accent-soft)); color: var(--text-2); font-weight: 650; font-size: var(--fs-xs); }
-.task-habit::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--habit-primary); }
 .task-habit .check { border-color: var(--habit-primary); }
 .task-habit .check.on { background: var(--habit-bg); color: var(--text); border-color: var(--habit-primary); }
 .habit-appearance-preview { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--habit-border); border-radius: var(--radius); background: var(--habit-bg); min-width: 0; }
