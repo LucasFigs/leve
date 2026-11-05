@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { useModalFocus } from '../hooks/modalFocus';
 
 interface Props {
   title?: ReactNode;
@@ -22,6 +23,7 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
   const backdropRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  useModalFocus(sheetRef);
   const guard = useRef(canClose);
   guard.current = canClose;
 
@@ -137,9 +139,6 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
     window.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const prevFocus = document.activeElement as HTMLElement | null;
-    const first = sheetRef.current?.querySelector<HTMLElement>('[autofocus], [data-autofocus]');
-    (first ?? sheetRef.current)?.focus({ preventScroll: true });
 
     // Ouvintes globais de toque para rastrear o arrasto perfeitamente pela tela
     const onTouchMove = (e: TouchEvent) => {
@@ -169,7 +168,6 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', onTouchEnd);
       document.body.style.overflow = prevOverflow;
-      prevFocus?.focus?.({ preventScroll: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -221,7 +219,7 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
         className={`sheet${full ? ' full' : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-label={label ?? (typeof title === 'string' ? title : undefined)}
+        aria-label={label ?? (typeof title === 'string' ? title : 'Detalhes')}
         tabIndex={-1}
       >
         <div

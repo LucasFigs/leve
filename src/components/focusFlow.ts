@@ -1,11 +1,17 @@
 import { todayISO } from '../domain/dates';
-import { openSheet } from '../store/ui';
+import { actions, getState } from '../store/store';
+import { closeAllSheets } from '../store/ui';
 
 /**
- * “Começar agora / Pomodoro”:
- * Abre a seleção otimizada de passos para o usuário escolher o que focar,
- * e em seguida vai para o Pomodoro para dar start.
+ * Inicia ou retoma a execução em um toque, sem preparação obrigatória.
  */
-export function startTask(taskId: string, _date = todayISO()) {
-  openSheet({ type: 'breakdown', id: taskId, thenFocus: true });
+export function startTask(taskId: string, date = todayISO()) {
+  const state = getState();
+  if (!state.tasks.some(t => t.id === taskId)) return;
+  closeAllSheets();
+  if (state.focus?.taskId === taskId && state.focus.date === date) actions.resumeFocus();
+  else {
+    if (state.focus) actions.endFocus();
+    actions.startFocus(taskId, date, undefined, true);
+  }
 }

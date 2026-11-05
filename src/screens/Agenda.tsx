@@ -118,7 +118,7 @@ function DayView({ date }: { date: string }) {
         <Legend />
         <button className="btn btn-sm btn-soft" onClick={() => openSheet({ type: 'plan', date })}>
           <Icon name="wand" size={16} />
-          Organizar dia
+          Planejar horários
         </button>
       </div>
 

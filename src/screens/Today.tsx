@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { addDays, formatDuration, formatLongDate, greeting, minToTime, timeToMin } from '../domain/dates';
 import { nextEventAfter, recommendNow, PRIORITY_META } from '../domain/priority';
 import { dayCapacity, type CapacityStatus } from '../domain/planner';
-import { streak } from '../domain/selectors';
 import { useTodayContext } from '../hooks/hooks';
 import { actions, useStore } from '../store/store';
 import { openSheet, toast } from '../store/ui';
@@ -20,7 +19,7 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function TodayScreen() {
   const ctx = useTodayContext();
-  const { today, now, items, overdue, tasks } = ctx;
+  const { today, now, items, overdue } = ctx;
   const name = useStore((s) => s.settings.name);
   const dismissed = useStore((s) => s.dismissed);
   const [showDone, setShowDone] = useState(false);
@@ -31,7 +30,6 @@ export function TodayScreen() {
   const untimed = pending.filter((i) => !i.time);
   const totalToday = items.filter((i) => i.task.kind !== 'event').length;
   const remaining = timed.length + untimed.length;
-  const days = useMemo(() => streak(tasks, today), [tasks, today]);
 
   // O painel do dia já cuida de “organizar/planejar amanhã”: aqui só o resto
   const nudge = useMemo(
@@ -89,24 +87,19 @@ export function TodayScreen() {
           </h1>
           <p className="page-sub row" style={{ gap: 8, flexWrap: 'wrap' }}>
             {capitalize(formatLongDate(today))}
-            {days >= 2 && (
-              <span className="streak-chip" title="Dias seguidos concluindo tarefas">
-                🔥 {days} dias seguidos
-              </span>
-            )}
           </p>
 
           <div className="section" style={{ marginTop: 16 }}>
             <QuickAdd placeholder="Jogue aqui o que estiver na cabeça…" />
           </div>
 
-          <section className="section" aria-label="Seu dia em resumo" style={{ marginTop: 14 }}>
-            <DayPulse doneToday={done.length} totalToday={totalToday} />
-          </section>
-
           <section className="section" aria-labelledby="now-h">
             <SectionHead title={<span id="now-h">Agora</span>} />
             <NowCard />
+          </section>
+
+          <section className="section" aria-label="Seu dia em resumo" style={{ marginTop: 14 }}>
+            <DayPulse doneToday={done.length} totalToday={totalToday} />
           </section>
 
           {overdue.length > 0 ? (
@@ -148,9 +141,9 @@ export function TodayScreen() {
             />
             {remaining === 0 ? (
               totalToday > 0 ? (
-                <EmptyState icon="✓" title="Tudo feito por hoje." text="Bom trabalho. O que sobrar pode esperar." />
+                <EmptyState icon="✓" title="Itens de hoje concluídos." text="Você pode revisar outras pendências ou encerrar por aqui." />
               ) : (
-                <EmptyState icon="☀️" title="Seu dia está livre." text="Jogue no campo acima o que estiver na sua cabeça — eu ajudo a encaixar." />
+                <EmptyState icon="☀️" title="Nada planejado para hoje." text="Capture uma tarefa acima ou revise suas pendências para escolher o próximo passo." />
               )
             ) : (
               <>
@@ -194,7 +187,10 @@ export function TodayScreen() {
           )}
 
           <section className="section">
+            <details className="secondary-panel">
+            <summary>Visão da semana</summary>
             <WeekCard />
+            </details>
           </section>
         </div>
 
@@ -210,10 +206,10 @@ export function TodayScreen() {
 }
 
 const CAPACITY: Record<CapacityStatus, { label: string; tone: string }> = {
-  ok: { label: 'Cabe no seu dia', tone: 'green' },
-  tight: { label: 'Dia apertado', tone: 'yellow' },
-  over: { label: 'Não cabe tudo', tone: 'red' },
-  ended: { label: 'Seu dia terminou', tone: 'gray' },
+  ok: { label: 'Parece caber no seu período', tone: 'green' },
+  tight: { label: 'Período apertado', tone: 'yellow' },
+  over: { label: 'Não cabe tudo nesse período', tone: 'red' },
+  ended: { label: 'Período planejado terminou', tone: 'gray' },
 };
 
 /** Painel do dia: progresso, se o que falta cabe no tempo livre e o próximo compromisso. */
@@ -253,6 +249,8 @@ function DayPulse({ doneToday, totalToday }: { doneToday: number; totalToday: nu
           {meta.label}
         </span>
         <p className="small" style={{ marginTop: 2 }}>{detail}</p>
+        <p className="xs muted" style={{ marginTop: 6 }}>Estimativa dos itens do Leve · período {settings.dayStart}–{settings.dayEnd}. Google Agenda não importado.</p>
+        <button className="btn btn-sm btn-ghost" onClick={() => openSheet({ type: 'plan', date: today })}>Revisar disponibilidade e plano</button>
         {next && cap.status !== 'ended' && (
           <p className="xs muted truncate" style={{ marginTop: 4 }}>
             <Icon name="calendar" size={12} /> Próximo: {next.task.title} às {next.time}
@@ -285,15 +283,10 @@ function OverdueCard() {
         <div className="nudge-actions">
           <button
             className="btn btn-sm btn-soft"
-            onClick={() => {
-              const n = actions.bringOverdueToToday();
-              toast(`${n} ${n === 1 ? 'tarefa trazida' : 'tarefas trazidas'} para hoje`, { label: 'Desfazer', run: () => actions.undo() });
-            }}
+            onClick={() => setOpen(v => !v)}
+            aria-expanded={open}
           >
-            Trazer para hoje
-          </button>
-          <button className="btn btn-sm btn-ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-            {open ? 'Ocultar' : 'Ver'}
+            {open ? 'Ocultar pendências' : 'Revisar pendências'}
           </button>
         </div>
         {open && (
@@ -315,18 +308,18 @@ function NowCard() {
   const [skip, setSkip] = useState(0);
   const rec = useMemo(() => recommendNow(ctx), [ctx]);
 
-  if (rec.type === 'event') {
+  if (rec.type === 'event' || rec.type === 'scheduled') {
     const t = rec.item.task;
     const end = minToTime(timeToMin(rec.item.time!) + rec.item.duration);
     return (
       <div className="now-card">
-        <div className="eyebrow">{rec.ongoing ? 'Acontecendo agora' : `Em ${rec.minutes} min`}</div>
+        <div className="eyebrow">{rec.ongoing ? 'Acontecendo agora' : `Próxima agendada · em ${rec.minutes} min`}</div>
         <div className="now-title">{t.title}</div>
         <div className="now-meta num">
           <span>
             {rec.item.time}–{end}
           </span>
-          <span>Compromisso</span>
+          <span>{t.kind === 'event' ? 'Compromisso' : 'Tarefa planejada'}</span>
         </div>
         <div className="now-actions">
           <button className="btn btn-secondary btn-block" onClick={() => openSheet({ type: 'task', id: t.id, date: rec.item.date })}>
@@ -340,16 +333,16 @@ function NowCard() {
   if (rec.type === 'empty') {
     return (
       <div className="now-card">
-        <div className="eyebrow">Livre</div>
-        <div className="now-title">Nada urgente agora.</div>
+        <div className="eyebrow">No seu ritmo</div>
+        <div className="now-title">Sem sugestão para começar agora.</div>
         <p className="now-reason">
-          {inboxCount > 0 ? `Você tem ${inboxCount} ${inboxCount === 1 ? 'captura' : 'capturas'} para organizar.` : 'Aproveite o espaço — ou adicione algo acima.'}
+          {rec.reason ?? (inboxCount > 0 ? `Você tem ${inboxCount} ${inboxCount === 1 ? 'captura' : 'capturas'} para revisar.` : 'Você pode descansar, capturar algo ou escolher uma tarefa na sua lista.')}
         </p>
         {inboxCount > 0 && (
           <div className="now-actions">
             <button className="btn btn-soft btn-block" onClick={() => openSheet({ type: 'review' })}>
               <Icon name="sparkles" size={18} />
-              Organizar capturas
+              Revisar capturas
             </button>
           </div>
         )}
@@ -386,8 +379,9 @@ function NowCard() {
         </div>
         <p className="now-reason">
           <Icon name="sparkles" size={14} />
-          {nextStep ? `Próximo passo: ${nextStep.title}` : c.reason}
+          {c.reason}
         </p>
+        {nextStep && <p className="small muted">Próximo passo: {nextStep.title}</p>}
       </div>
       <div className="now-actions">
         <button className="btn btn-primary btn-lg grow" onClick={() => startTask(t.id, c.item.date)}>
@@ -400,6 +394,7 @@ function NowCard() {
           </button>
         )}
       </div>
+      <button className="btn btn-sm btn-ghost" onClick={() => openSheet({ type: 'breakdown', id: t.id })}>Dividir em passos (opcional)</button>
     </div>
   );
 }

@@ -1,78 +1,45 @@
 import { useState } from 'react';
 import { actions, useStore } from '../store/store';
 import { useCloud } from '../store/sync';
-import { Icon, type IconName } from '../components/Icon';
-
-const SLIDES: { icon: IconName; title: string; text: string }[] = [
-  { icon: 'inbox', title: 'Capture tudo.', text: 'Escreva do seu jeito, em segundos. “Dentista quinta às 15”, “comprar ração”. Sem formulários.' },
-  { icon: 'sparkles', title: 'Eu ajudo a organizar.', text: 'Sugiro quando fazer, quanto tempo leva e o que vem primeiro — sem lotar o seu dia.' },
-  { icon: 'target', title: 'Foque na próxima ação.', text: 'Abra o app e veja só o que importa agora. Um toque e você começa.' },
-];
+import { Icon } from '../components/Icon';
+import { timeToMin } from '../domain/dates';
 
 export function Onboarding() {
-  const settingsName = useStore((s) => s.settings.name);
-  const cloudName = useCloud((c) => c.user?.preferredName);
-  const existingName = settingsName || cloudName || '';
-  const [i, setI] = useState(0);
-  const [name, setName] = useState(existingName);
-  const last = i === SLIDES.length;
-
-  return (
-    <main className="onboarding">
-      <div className="row" style={{ justifyContent: 'flex-end', minHeight: 44 }}>
-        {!last && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setI(SLIDES.length)}>
-            Pular
-          </button>
-        )}
-      </div>
-
-      {!last ? (
-        <div className="ob-slide" key={i}>
-          <div className="ob-art">
-            <Icon name={SLIDES[i].icon} size={40} stroke={1.6} />
-          </div>
-          <div className="ob-step num">{i + 1} de 3</div>
-          <h1 className="ob-title">{SLIDES[i].title}</h1>
-          <p className="ob-text">{SLIDES[i].text}</p>
+  const settings = useStore(s => s.settings);
+  const cloudName = useCloud(c => c.user?.preferredName);
+  const [name, setName] = useState(settings.name || cloudName || '');
+  const [capture, setCapture] = useState('');
+  const [start, setStart] = useState(settings.dayStart);
+  const [end, setEnd] = useState(settings.dayEnd);
+  const [error, setError] = useState('');
+  return <main className="onboarding">
+    <form className="ob-slide onboarding-start" onSubmit={event => {
+      event.preventDefault();
+      if (!start || !end || timeToMin(start) >= timeToMin(end)) { setError('O fim do período precisa ser posterior ao começo, no mesmo dia.'); return; }
+      actions.updateSettings({ dayStart: start, dayEnd: end });
+      if (capture.trim()) actions.capture(capture);
+      actions.finishOnboarding(name);
+    }}>
+      <div className="ob-art"><Icon name="leaf" size={40} stroke={1.6} /></div>
+      <h1 className="ob-title">Um próximo passo para o seu dia.</h1>
+      <p className="ob-text">Capture uma pendência. Depois você escolhe quando fazer e pode começar com um toque.</p>
+      <label className="field">Como quer ser chamado? (opcional)
+        <input className="input" value={name} onChange={e => setName(e.target.value)} autoComplete="nickname" />
+      </label>
+      <label className="field">O que está na sua cabeça? (opcional)
+        <input className="input" placeholder="Ex.: enviar relatório amanhã às 14h" value={capture} onChange={e => setCapture(e.target.value)} />
+      </label>
+      <details className="secondary-panel">
+        <summary>Período para planejar: {start}–{end}</summary>
+        <p className="small muted">Ajuste quando você pode fazer suas tarefas. Você pode mudar isso depois no planejamento ou no Perfil.</p>
+        <div className="row" style={{ gap: 12, marginTop: 12 }}>
+          <label className="field">Começo<input type="time" className="input" value={start} onChange={e => setStart(e.target.value)} /></label>
+          <label className="field">Fim<input type="time" className="input" value={end} onChange={e => setEnd(e.target.value)} /></label>
         </div>
-      ) : (
-        <form
-          className="ob-slide"
-          key="name"
-          onSubmit={(e) => {
-            e.preventDefault();
-            actions.finishOnboarding(name);
-          }}
-        >
-          <div className="ob-art">
-            <Icon name="leaf" size={40} stroke={1.6} />
-          </div>
-          <h1 className="ob-title">Tire tudo da cabeça.</h1>
-          <p className="ob-text">Como posso te chamar?</p>
-          <input className="input" style={{ marginTop: 16, fontSize: '1.125rem' }} placeholder="Seu nome (opcional)" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Seu nome" />
-        </form>
-      )}
-
-      <div>
-        {!last && (
-          <div className="ob-dots" aria-hidden="true">
-            {SLIDES.map((_, j) => (
-              <i key={j} className={j === i ? 'on' : ''} />
-            ))}
-          </div>
-        )}
-        {!last ? (
-          <button className="btn btn-primary btn-lg btn-block" onClick={() => setI(i + 1)}>
-            Continuar
-            <Icon name="arrow-right" size={18} />
-          </button>
-        ) : (
-          <button className="btn btn-primary btn-lg btn-block" onClick={() => actions.finishOnboarding(name)}>
-            Começar
-          </button>
-        )}
-      </div>
-    </main>
-  );
+      </details>
+      <p className="small muted">O plano considera os itens do Leve. Compromissos existentes no Google Agenda não são importados.</p>
+      {error && <p role="alert">{error}</p>}
+      <button className="btn btn-primary btn-lg btn-block" type="submit">{capture.trim() ? 'Guardar e abrir meu dia' : 'Abrir meu dia'}</button>
+    </form>
+  </main>;
 }

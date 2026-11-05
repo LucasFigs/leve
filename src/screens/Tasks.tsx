@@ -136,6 +136,8 @@ export function TasksScreen() {
         ]}
       />
 
+      <details className="secondary-panel">
+      <summary>Mais filtros{(kind || priority || projectId || category) ? ' · aplicados' : ''}</summary>
       <div className="filters" style={{ marginTop: 10 }}>
         <select className="input" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')} aria-label="Tipo">
           <option value="">Todos os tipos</option>
@@ -165,6 +167,8 @@ export function TasksScreen() {
           <option value="none">Sem categoria</option>
         </select>
       </div>
+
+      </details>
 
       <p className="xs faint" style={{ margin: '10px 2px 0' }} aria-live="polite">
         {total} {total === 1 ? 'item' : 'itens'}

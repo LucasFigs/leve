@@ -511,6 +511,7 @@ function GoogleCalendarSection() {
   return (
     <section className="section">
       <SectionHead title="Google Agenda" />
+      <p className="small muted" style={{ marginBottom: 12 }}>Envia alterações do Leve para o calendário escolhido. Eventos já existentes no Google não são importados nem descontados do tempo disponível no Leve.</p>
       <div className="list">
         {!gcal.connected ? (
           <div className="settings-row" style={{ flexWrap: 'wrap', gap: 12 }}>

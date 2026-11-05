@@ -113,5 +113,6 @@ docs/           Arquitetura, segurança e publicação
 - [Contribuir e validar mudanças](CONTRIBUTING.md)
 - [Preparar o repositório e publicar](docs/publicacao.md)
 - [Rascunho para o LinkedIn](docs/publicacao-linkedin.md)
+- [Melhorias de experiência](docs/melhorias-experiencia.md)
 
 Este projeto evolui com testes e revisão. Nenhuma dessas verificações garante ausência de vulnerabilidades. Use dados fictícios nas demonstrações e confirme que o ambiente hospedado recebeu as mudanças antes de divulgar uma nova revisão.

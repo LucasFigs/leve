@@ -488,8 +488,8 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
           </div>
         </div>
 
-        <div className="field">
-          <span className="label">Categoria</span>
+        <details className="secondary-panel">
+          <summary>Categoria (opcional){task.category ? ` · ${CATEGORIES.find(cat => cat.id === task.category)?.label ?? ''}` : ''}</summary>
           <div className="chips">
             {CATEGORIES.map((cat) => (
               <button
@@ -503,7 +503,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
               </button>
             ))}
           </div>
-        </div>
+        </details>
 
         <div className="field">
           <label className="label" htmlFor="repeat">Repetir</label>

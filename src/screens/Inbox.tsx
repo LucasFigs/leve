@@ -39,7 +39,7 @@ export function InboxScreen() {
               action={
                 <button className="btn btn-sm btn-primary" onClick={() => openSheet({ type: 'review' })}>
                   <Icon name="sparkles" size={16} />
-                  Organizar tudo
+                  Revisar capturas
                 </button>
               }
             />
