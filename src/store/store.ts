@@ -312,8 +312,8 @@ export const actions = {
     set((s) => {
       if (scope === 'all') return patchTask(id, { ...draft, id })(s);
       if (scope === 'following') return splitSeries(s, id, date, draft);
-      const { title, notes, kind, priority, time, duration, due, projectId, subtasks } = draft;
-      return detach(s, id, date, { title, notes, kind, priority, time, duration, due, projectId, subtasks });
+      const { title, notes, kind, priority, time, duration, due, projectId, subtasks, habitColor, habitIcon } = draft;
+      return detach(s, id, date, { title, notes, kind, priority, time, duration, due, projectId, subtasks, habitColor, habitIcon });
     }, { undoable: true });
   },
 

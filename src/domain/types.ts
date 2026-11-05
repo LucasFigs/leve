@@ -1,5 +1,7 @@
 export type Priority = 'essential' | 'important' | 'optional';
 export type Kind = 'task' | 'event' | 'habit';
+export type HabitColor = 'emerald' | 'coral' | 'cyan' | 'blue' | 'purple' | 'amber';
+export type HabitIcon = 'activity' | 'droplet' | 'book' | 'laptop' | 'heart' | 'target' | 'bolt' | 'leaf' | 'sun' | 'moon' | 'coffee';
 export type Status = 'inbox' | 'active' | 'done' | 'archived';
 export type Energy = 'low' | 'medium' | 'high';
 export type Category = 'trabalho' | 'pessoal' | 'saude' | 'casa' | 'financas' | 'estudos';
@@ -40,6 +42,9 @@ export interface Task {
   title: string;
   notes?: string;
   kind: Kind;
+  /** Personalização opcional, compartilhada pelas telas de hábitos. */
+  habitColor?: HabitColor;
+  habitIcon?: HabitIcon;
   status: Status;
   priority?: Priority;
   /** dia planejado (YYYY-MM-DD) */

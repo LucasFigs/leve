@@ -139,7 +139,7 @@ export function HabitCalendarSheet({ id }: { id: string }) {
         <div className="habit-cal-summary-card">
           <HabitMiniGrid taskDoneDates={doneDates} today={today} recurrence={task.recurrence} skipDates={task.skipDates} />
           <div className="habit-cal-badges">
-            <span className="habit-stat">
+            <span className="habit-stat" title="Ocorrências programadas consecutivas concluídas" aria-label={`${streak} ocorrências programadas consecutivas concluídas`}>
               <Icon name="flame" size={14} />
               {streak}
             </span>

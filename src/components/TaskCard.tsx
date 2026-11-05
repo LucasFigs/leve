@@ -9,6 +9,8 @@ import { Checkbox, PriorityBadge } from './ui';
 import { Icon } from './Icon';
 import { completeWithFeedback } from './feedback';
 import { startTask } from './focusFlow';
+import { HabitIdentity } from './HabitAppearance';
+import { habitStyle } from './habitStyle';
 
 interface Props {
   task: Task;
@@ -27,11 +29,12 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const project = useStore((s) => (task.projectId ? s.projects.find((p) => p.id === task.projectId) : undefined));
   const [leaving, setLeaving] = useState(false);
   const today = todayISO();
-  const isDone = done ?? task.status === 'done';
+  const occurrence = date ?? task.date ?? today;
+  const isDone = done ?? (task.recurrence ? !!task.doneDates?.includes(occurrence) || !!task.missedDates?.includes(occurrence) : task.status === 'done');
   const isEvent = task.kind === 'event';
+  const isHabit = task.kind === 'habit';
   const overdue = !isDone && !task.recurrence && ((task.date && task.date < today) || (task.due && task.due < today));
   const subDone = task.subtasks.filter((s) => s.done).length;
-  const occurrence = date ?? task.date ?? today;
   const missed = task.recurrence ? !!task.missedDates?.includes(occurrence) : task.status === 'done' && !!task.missed;
 
   const toggle = () => {
@@ -59,7 +62,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const label = `${task.title}${task.time ? `, às ${task.time}` : ''}`;
 
   return (
-    <div className={`task${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`}>
+    <div className={`task${isHabit ? ' task-habit' : ''}${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`} style={isHabit ? habitStyle(task) : undefined}>
       {showTime && <span className="task-time num">{task.time ?? '—'}</span>}
       {isEvent ? (
         <Checkbox
@@ -80,6 +83,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
       <button className="task-main" onClick={() => openSheet({ type: 'task', id: task.id, date: occurrence })} aria-label={`Abrir ${label}`}>
         <div className="task-title">{task.title}</div>
         <div className="task-meta">
+          {isHabit && <HabitIdentity task={task} />}
           {isEvent && <span>Compromisso</span>}
           {isEvent && isDone && <span className={missed ? 'warn' : ''}>{missed ? 'Não aconteceu' : 'Aconteceu'}</span>}
           {showDate && task.date && !task.recurrence && (

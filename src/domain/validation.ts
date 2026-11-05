@@ -1,4 +1,5 @@
 import type { Task, Project } from './types';
+import { HABIT_COLORS, HABIT_ICONS } from './habits';
 
 export const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
@@ -13,6 +14,8 @@ export function isTask(v: unknown): v is Task {
   if (!isObject(v) || !text(v.id, 200) || !v.id || !text(v.title, 1000) ||
     !['task', 'event', 'habit'].includes(v.kind as string) || !['inbox', 'active', 'done', 'archived'].includes(v.status as string) ||
     !number(v.createdAt) || !number(v.updatedAt) || !number(v.postponed) ||
+    !optional(v.habitColor, x => HABIT_COLORS.some(color => color.value === x)) ||
+    !optional(v.habitIcon, x => HABIT_ICONS.some(icon => icon.value === x)) ||
     !optional(v.notes, x => text(x, 50000)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) ||
     !optional(v.duration, x => integer(x, 1, 10080)) ||
     !optional(v.googleEventId, x => text(x, 1024)) ||

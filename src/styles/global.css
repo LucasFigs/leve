@@ -3621,3 +3621,25 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   .task-editor-grid { grid-template-columns: minmax(0, 1fr); }
   .task-editor .seg > button { font-size: var(--fs-xs); }
 }
+.habit-identity { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 7px; background: var(--habit-bg, var(--accent-soft)); color: var(--text-2); font-weight: 650; font-size: var(--fs-xs); }
+.task-habit::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--habit-primary); }
+.task-habit .check { border-color: var(--habit-primary); }
+.task-habit .check.on { background: var(--habit-bg); color: var(--text); border-color: var(--habit-primary); }
+.habit-appearance-preview { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--habit-border); border-radius: var(--radius); background: var(--habit-bg); min-width: 0; }
+.habit-appearance-preview > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.habit-appearance-preview strong, .habit-appearance-preview .xs { display: block; }
+.habit-appearance-symbol { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 12px; background: var(--habit-bg); color: var(--text-2); }
+.habit-appearance-field { border: 0; padding: 0; min-width: 0; }
+.habit-appearance-field legend { margin-bottom: 8px; }
+.habit-appearance-option { width: 44px; height: 44px; border-radius: 12px; }
+.habit-appearance-option.selected { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.habit-color-option { width: 44px; height: 44px; display: grid; place-items: center; position: relative; border-radius: 12px; }
+.habit-color-swatch { width: 28px; height: 28px; border-radius: 50%; background: var(--habit-primary); }
+.habit-color-option svg { position: absolute; color: #101014; }
+.habit-color-option.selected { box-shadow: inset 0 0 0 2px var(--accent); }
+.habit-footer { flex-wrap: wrap; }
+.habit-stat { min-width: 0; overflow-wrap: anywhere; }
+.block.habit { background: var(--habit-bg, var(--accent-soft)); border-left-color: var(--habit-primary, var(--accent)); }
+.habit-icon-wrap, .habit-check-btn { width: 44px; height: 44px; }
+.habit-icon-wrap, .habit-cal-icon-wrap, .habit-check-btn { color: var(--text-2); }
+.habit-check-btn.done { background: var(--habit-bg); color: var(--text); }
