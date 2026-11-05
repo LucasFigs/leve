@@ -153,7 +153,7 @@ export function TodayScreen() {
                 {timed.length > 0 && (
                   <div className="list">
                     {timed.map((i) => (
-                      <TaskCard key={i.task.id + i.date} task={i.task} date={i.date} done={i.done} showTime showStart />
+                      <TaskCard key={i.task.id + i.date} task={i.task} date={i.date} done={i.done} showTime showStart compact />
                     ))}
                   </div>
                 )}
@@ -164,7 +164,7 @@ export function TodayScreen() {
                     </div>
                     <div className="list">
                       {untimed.map((i) => (
-                        <TaskCard key={i.task.id + i.date} task={i.task} date={i.date} done={i.done} showStart />
+                        <TaskCard key={i.task.id + i.date} task={i.task} date={i.date} done={i.done} showStart compact />
                       ))}
                     </div>
                   </>
@@ -182,7 +182,7 @@ export function TodayScreen() {
               {showDone && (
                 <div className="list" style={{ marginTop: 10 }}>
                   {done.map((i) => (
-                    <TaskCard key={i.task.id + i.date} task={i.task} date={i.date} done exitOnDone={false} />
+                    <TaskCard key={i.task.id + i.date} task={i.task} date={i.date} done exitOnDone={false} compact />
                   ))}
                 </div>
               )}
@@ -273,7 +273,7 @@ function OverdueCard() {
         {open && (
           <div className="list" style={{ marginTop: 10 }}>
             {overdue.map((t) => (
-              <TaskCard key={t.id} task={t} showDate showStart />
+              <TaskCard key={t.id} task={t} showDate showStart compact />
             ))}
           </div>
         )}
