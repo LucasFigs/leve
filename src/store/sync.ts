@@ -86,22 +86,33 @@ interface Journal {
   /** ids excluídos localmente e ainda não enviados */
   deleted: string[];
 }
+let expectedJournal: string | null = null;
 
 function readJournal(): Journal {
   try {
     const raw = localStorage.getItem(JOURNAL_KEY);
-    if (raw) return { dirty: [], deleted: [], ...JSON.parse(raw) };
+    expectedJournal = raw;
+    if (raw) {
+      const value = JSON.parse(raw);
+      const ids = (v: unknown) => Array.isArray(v) && v.every(id => typeof id === 'string' && id.length > 0 && id.length <= 200);
+      if (value && typeof value === 'object' && !Array.isArray(value) && (value.owner === undefined || typeof value.owner === 'string' && value.owner.length > 0 && value.owner.length <= 200) && ids(value.dirty ?? []) && ids(value.deleted ?? [])) return { owner:value.owner,dirty:value.dirty ?? [],deleted:value.deleted ?? [] };
+      reportStorageConflict(null);
+    }
   } catch {
-    /* noop */
+    reportStorageConflict(null);
   }
   return { dirty: [], deleted: [] };
 }
 
 function writeJournal(j: Journal) {
-  journal = j;
   if (storageIssue() === 'conflict' || storageIssue() === 'recovery') return;
   try {
-    localStorage.setItem(JOURNAL_KEY, JSON.stringify(j));
+    const current = localStorage.getItem(JOURNAL_KEY);
+    if (current !== expectedJournal) { reportStorageConflict(null); return; }
+    const next = JSON.stringify(j);
+    journal = j;
+    if (current !== next) localStorage.setItem(JOURNAL_KEY, next);
+    expectedJournal = next;
     journalSaved();
   } catch {
     reportJournalFailure();
@@ -110,6 +121,7 @@ function writeJournal(j: Journal) {
 
 let journal = readJournal();
 export const localDataOwner = () => journal.owner;
+export const notificationOwner = () => cloud.auth === 'in' && userId === journal.owner ? userId : undefined;
 
 /* ------------------------------------------------------------------ */
 /* Espelho do que está na nuvem                                        */

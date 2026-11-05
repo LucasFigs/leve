@@ -11,6 +11,9 @@ dist
 # Relatório operacional local (dados do ambiente e pendências de implantação)
 /ANALISE-SEGURANCA.md
 
+# Avaliações operacionais, medições e planejamento privados
+/docs/planejamento-local/
+
 # Vercel
 .vercel
 

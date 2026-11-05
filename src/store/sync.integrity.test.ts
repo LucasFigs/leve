@@ -2,6 +2,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const backend = vi.hoisted(() => ({
   authChange: undefined as undefined | ((event: string, session: unknown) => void),
+  realtime: undefined as undefined | ((value: {eventType: string;new?: Record<string,unknown>;old?: Record<string,unknown>}) => void),
   upsert: vi.fn(), signOut: vi.fn(), rows: [] as unknown[],
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({
@@ -11,7 +12,7 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({
     upsert: backend.upsert,
     delete: () => ({eq: () => ({in: async () => ({error:null})})}),
   }),
-  channel: () => ({on() {return this;},subscribe() {return this;}}), removeChannel: vi.fn(),
+  channel: () => ({on(_event: string,_filter: unknown,fn: typeof backend.realtime) {backend.realtime=fn;return this;},subscribe() {return this;}}), removeChannel: vi.fn(),
 }) }));
 vi.mock('../services/googleCalendar', () => ({resetGoogleCalendarSession:vi.fn()}));
 vi.mock('../services/push', () => ({disablePush:vi.fn(async()=>{})}));
@@ -32,6 +33,40 @@ async function ready() {
   return {store,sync};
 }
 describe('saída sem perda de dados',()=>{
+  it('normaliza listas ausentes do journal legado sem falhar na inicialização',async()=>{
+    localStorage.setItem('leve.sync.v1',JSON.stringify({owner:'owner-a',dirty:null,deleted:null}));
+    const sync=await import('./sync');expect(sync.localDataOwner()).toBe('owner-a');
+  });
+  it('coloca journal malformado em quarentena sem substituí-lo',async()=>{
+    const raw=JSON.stringify({owner:'owner-a',dirty:['ok'],deleted:'invalid'});localStorage.setItem('leve.sync.v1',raw);
+    await import('./sync');const {storageIssue}=await import('./persistence');expect(storageIssue()).toBe('conflict');
+    expect(localStorage.getItem('leve.sync.v1')).toBe(raw);
+  });
+  it('aplica uma alteração confirmada de outro dispositivo, sem sobrescrever uma edição local pendente',async()=>{
+    const {store}=await ready();const remote=store.newTask({id:'remote',title:'Do dispositivo B',status:'active'});
+    const deliver=(title:string)=>backend.realtime!({eventType:'UPDATE',new:{user_id:'owner-a',id:remote.id,type:'task',data:{...remote,title},origin:'device-b'}});
+    deliver('Primeira versão B');expect(store.getState().tasks[0].title).toBe('Primeira versão B');
+    deliver('Segunda versão B');expect(store.getState().tasks[0].title).toBe('Segunda versão B');
+    store.actions.update(remote.id,{title:'Edição pendente A'});deliver('Terceira versão B');
+    expect(store.getState().tasks[0].title).toBe('Edição pendente A');
+  });
+  it('ignora realtime de outra conta e preserva edição local diante de exclusão remota',async()=>{
+    const {store}=await ready();const remote=store.newTask({id:'remote',title:'Fictícia',status:'active'});
+    backend.realtime!({eventType:'INSERT',new:{user_id:'owner-b',id:remote.id,type:'task',data:remote,origin:'device-b'}});
+    expect(store.getState().tasks).toHaveLength(0);
+    backend.realtime!({eventType:'INSERT',new:{user_id:'owner-a',id:remote.id,type:'task',data:remote,origin:'device-b'}});
+    store.actions.update(remote.id,{title:'Local pendente'});
+    backend.realtime!({eventType:'DELETE',old:{user_id:'owner-a',id:remote.id}});
+    expect(store.getState().tasks[0].title).toBe('Local pendente');
+  });
+  it('não sobrescreve o journal alterado por outra aba antes de receber storage',async()=>{
+    const {store}=await ready();
+    const external=JSON.stringify({owner:'owner-b',dirty:['external-task'],deleted:[]});
+    localStorage.setItem('leve.sync.v1',external);
+    store.actions.capture('Ainda na conta A');
+    expect(localStorage.getItem('leve.sync.v1')).toBe(external);
+    const {storageIssue}=await import('./persistence');expect(storageIssue()).toBe('conflict');
+  });
   it('grava o journal da captura antes do debounce do envio',async()=>{
     const {store}=await ready();const task=store.actions.capture('Precisa sobreviver ao reload')!;
     expect(JSON.parse(localStorage.getItem('leve.sync.v1')!).dirty).toContain(task.id);

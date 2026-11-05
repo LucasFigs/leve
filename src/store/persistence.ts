@@ -55,7 +55,7 @@ export const localRepository = {
       const raw = localStorage.getItem(STATE_KEY);
       if (expected !== undefined && raw !== expected) { reportStorageConflict(raw); return false; }
       const next = JSON.stringify(state);
-      localStorage.setItem(STATE_KEY, next);
+      if (next !== raw) localStorage.setItem(STATE_KEY, next);
       expected = next;
       if (issue !== 'journal') report(undefined);
       return true;
