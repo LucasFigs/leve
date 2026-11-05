@@ -31,13 +31,13 @@ const MONTH_NAMES = [
   'dez.',
 ];
 
-export function HabitCalendarSheet({ id }: { id: string }) {
+export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) {
   const task = useStore((s) => s.tasks.find((t) => t.id === id));
   const today = todayISO();
 
   const todayDate = useMemo(() => new Date(today + 'T12:00:00'), [today]);
-  const [viewYear, setViewYear] = useState(todayDate.getFullYear());
-  const [viewMonth, setViewMonth] = useState(todayDate.getMonth()); // 0..11
+  const [viewYear, setViewYear] = useState(() => new Date((date ?? today) + 'T12:00:00').getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date((date ?? today) + 'T12:00:00').getMonth()); // 0..11
 
   const theme = useMemo(() => (task ? getHabitTheme(task) : undefined), [task]);
   const icon = useMemo(() => (task ? getHabitIcon(task) : 'bolt'), [task]);
@@ -93,7 +93,7 @@ export function HabitCalendarSheet({ id }: { id: string }) {
         <div className="row" style={{ gap: 6 }}>
           <button
             className="icon-btn sm"
-            onClick={() => openSheet({ type: 'task', id: task.id }, { stack: true })}
+            onClick={() => openSheet({ type: 'task', id: task.id, date: date ?? today, mode: 'edit' }, { stack: true })}
             aria-label="Editar hábito"
             title="Editar hábito"
           >

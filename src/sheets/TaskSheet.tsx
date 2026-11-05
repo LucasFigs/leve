@@ -15,6 +15,7 @@ import { SubtaskList } from '../components/SubtaskList';
 import { AutoGrowTextarea } from '../components/AutoGrowTextarea';
 import { HabitAppearance } from '../components/HabitAppearance';
 import { TaskOverview } from '../components/TaskOverview';
+import { HabitCalendarSheet } from './HabitCalendarSheet';
 import { CATEGORIES } from '../domain/category';
 import { Disclosure } from '../components/Disclosure';
 import { archiveWithFeedback, completeWithFeedback, removeWithFeedback } from '../components/feedback';
@@ -29,7 +30,7 @@ const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso',
  * Capturas e tarefas novas abrem o formulário completo com rascunho.
  * Com `initial`, é uma tarefa nova (capturar e já detalhar) que só é criada ao salvar.
  */
-export function TaskSheet({ id, date, initial }: { id?: string; date?: string; initial?: Task }) {
+export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: string; initial?: Task; mode?: 'edit' }) {
   const formId = useId();
   const stored = useStore((s) => (id ? s.tasks.find((t) => t.id === id) : undefined));
   const projects = useStore((s) => s.projects);
@@ -39,7 +40,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const [newSub, setNewSub] = useState('');
   const [original, setOriginal] = useState(live);
   const [draft, setDraft] = useState(live);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(mode === 'edit');
   const [customDuration, setCustomDuration] = useState(false);
   const gcalConnected = useGoogleCalendar((s) => s.connected && s.autoSync);
   /** Inbox: escolheu explicitamente “Quando der” (sem data) */
@@ -212,7 +213,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         <div className="row" style={{ gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => {
             if (!confirmDiscard()) return;
-            if (inbox) closeSheet();
+            if (inbox || mode === 'edit') closeSheet();
             else { setEditMode(false); setOriginal(live); setDraft(live); setSomeday(false); setNewSub(''); setCustomDuration(false); }
           }}>
             Cancelar
@@ -301,6 +302,8 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
       </div>
     );
   }
+
+  if (!editing && task.kind === 'habit') return <HabitCalendarSheet id={task.id} date={date} />;
 
   if (!editing) return (
     <BottomSheet key="overview" className="task-detail-sheet" label={task.title} title={KIND_LABEL[task.kind]} onClose={closeSheet}

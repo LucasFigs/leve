@@ -8,7 +8,7 @@ export type AgendaView = 'day' | 'week' | 'month';
 
 export type Sheet =
   | { type: 'quickAdd'; defaults?: CaptureDefaults }
-  | { type: 'task'; id: string; date?: string }
+  | { type: 'task'; id: string; date?: string; mode?: 'edit' }
   /** tarefa nova, ainda não salva (capturar e já detalhar) */
   | { type: 'newTask'; task: Task }
   | { type: 'eventMissed'; id: string; date: string }
