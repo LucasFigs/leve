@@ -21,11 +21,13 @@ interface Props {
   showDate?: boolean;
   showProject?: boolean;
   showStart?: boolean;
+  /** Lista do dia: mostra apenas o contexto necessário para executar. */
+  compact?: boolean;
   /** remove o item da lista com animação ao concluir */
   exitOnDone?: boolean;
 }
 
-export function TaskCard({ task, date, done, showTime, showDate, showProject = true, showStart, exitOnDone = true }: Props) {
+export function TaskCard({ task, date, done, showTime, showDate, showProject = true, showStart, compact = false, exitOnDone = true }: Props) {
   const project = useStore((s) => (task.projectId ? s.projects.find((p) => p.id === task.projectId) : undefined));
   const [leaving, setLeaving] = useState(false);
   const today = todayISO();
@@ -84,7 +86,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
         <div className="task-title">{task.title}</div>
         <div className="task-meta">
           {isHabit && <HabitIdentity task={task} />}
-          {isEvent && <span>Compromisso</span>}
+          {isEvent && !compact && <span>Compromisso</span>}
           {isEvent && isDone && <span className={missed ? 'warn' : ''}>{missed ? 'Não aconteceu' : 'Aconteceu'}</span>}
           {showDate && task.date && !task.recurrence && (
             <span className={overdue ? 'warn' : ''}>
@@ -99,31 +101,31 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
             </span>
           )}
           {task.duration && !isDone && <span>{formatDuration(task.duration)}</span>}
-          {task.recurrence && (
+          {!compact && task.recurrence && (
             <span>
               <Icon name="repeat" size={12} />
               {recurrenceLabel(task.recurrence)}
             </span>
           )}
-          {task.subtasks.length > 0 && (
-            <span>
+          {task.subtasks.length > 0 && (!compact || !isDone) && (
+            <span aria-label={`${subDone} de ${task.subtasks.length} passos concluídos`}>
               <Icon name="list" size={12} />
               {subDone}/{task.subtasks.length}
             </span>
           )}
-          {task.category && !project && !task.priority && CATEGORY_MAP[task.category] && (
+          {!compact && task.category && !project && !task.priority && CATEGORY_MAP[task.category] && (
             <span>
               {CATEGORY_MAP[task.category].icon} {CATEGORY_MAP[task.category].label}
             </span>
           )}
-          {showProject && project && (
+          {!compact && showProject && project && (
             <span>
               {project.emoji} {project.name}
             </span>
           )}
           {!isDone && task.priority && task.priority !== 'optional' && <PriorityBadge priority={task.priority} />}
           {overdue && !showDate && <span className="warn">Atrasada</span>}
-          {!isDone && task.postponed >= 3 && <span>Adiada {task.postponed}×</span>}
+          {!compact && !isDone && task.postponed >= 3 && <span>Adiada {task.postponed}×</span>}
         </div>
       </button>
       {showStart && !isDone && !isEvent && (
