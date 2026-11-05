@@ -81,9 +81,11 @@ describe('saída sem perda de dados',()=>{
   });
   it('retorna do timeout mantendo a captura e sem encerrar sessão',async()=>{
     const {store,sync}=await ready();store.actions.capture('Captura fictícia');
-    backend.upsert.mockImplementationOnce(()=>new Promise(()=>{}));
+    let signal: AbortSignal | undefined;
+    backend.upsert.mockImplementationOnce(()=>{const work=new Promise(()=>{});return Object.assign(work,{abortSignal:(value:AbortSignal)=>{signal=value;return work;}});});
     const exit=sync.signOut();await vi.advanceTimersByTimeAsync(15_001);
     expect(await exit).toBe(false);expect(store.getState().tasks).toHaveLength(1);expect(backend.signOut).not.toHaveBeenCalled();
+    expect(signal?.aborted).toBe(true);
   });
   it('não apaga os dados da conta anterior ao receber outra sessão com pendências',async()=>{
     const {store}=await ready();store.actions.capture('Da conta original');

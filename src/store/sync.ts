@@ -199,6 +199,7 @@ function saveJournal() {
 
 let userId: string | undefined;
 let syncVersion = 0;
+let syncRequests = new AbortController();
 let channel: RealtimeChannel | undefined;
 let chain: Promise<void> = Promise.resolve();
 let pushQueued = false;
@@ -269,14 +270,14 @@ async function push() {
     const stamp = new Date().toISOString();
     for (const part of chunk(upserts, 500)) {
       if (version !== syncVersion) return;
-      const { error } = await bounded(supabase.from(TABLE).upsert(
+      const { error } = await syncRequest(supabase.from(TABLE).upsert(
         part.map((r) => ({ user_id: uidNow, id: r.id, type: r.type, data: r.data, origin: CLIENT_ID, updated_at: stamp })),
       ));
       if (error) throw error;
     }
     for (const part of chunk(deletes, 200)) {
       if (version !== syncVersion) return;
-      const { error } = await bounded(supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part));
+      const { error } = await syncRequest(supabase.from(TABLE).delete().eq('user_id', uidNow).in('id', part));
       if (error) throw error;
     }
     if (version !== syncVersion) return; // saiu da conta no meio do envio
@@ -302,7 +303,7 @@ async function fetchAll(uidNow: string, version: number): Promise<Row[]> {
   const rows: Row[] = [];
   for (let from = 0; ; from += PAGE) {
     if (version !== syncVersion) return [];
-    const { data, error } = await bounded(supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1));
+    const { data, error } = await syncRequest(supabase!.from(TABLE).select('id,type,data').eq('user_id', uidNow).order('id').range(from, from + PAGE - 1));
     if (error) throw error;
     rows.push(...(data as Row[]));
     if (!data || data.length < PAGE) return rows;
@@ -499,6 +500,7 @@ function start(session: Session) {
 
 function stop() {
   syncVersion++;
+  syncRequests.abort(); syncRequests = new AbortController();
   resetGoogleCalendarSession();
   userId = undefined;
   clearTimeout(pushTimer);
@@ -539,6 +541,13 @@ let exiting: Promise<boolean> | undefined;
 function bounded<T>(work: PromiseLike<T>, ms = 15_000): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   return Promise.race([Promise.resolve(work), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de espera esgotado. Tente novamente.')), ms); })]).finally(() => clearTimeout(timer));
+}
+function syncRequest<T>(work: PromiseLike<T> & {abortSignal?: (signal: AbortSignal) => PromiseLike<T>}): Promise<T> {
+  const parent = syncRequests.signal;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  parent.addEventListener('abort', abort, {once:true});
+  return bounded(work.abortSignal ? work.abortSignal(controller.signal) : work).finally(() => {controller.abort();parent.removeEventListener('abort',abort);});
 }
 export function signOut(discardPending = false): Promise<boolean> {
   if (exiting) return exiting;
