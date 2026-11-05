@@ -21,4 +21,7 @@ Thumbs.db
 vite.shot.config.mjs
 
 # Contexto privado do projeto (LinkedIn)
+/docs/publicacao-linkedin.md
+/docs/midia-linkedin/
+/docs/*linkedin*
 /[Cc][Oo][Nn][Tt][Ee][Xx][Tt][Oo]-[Pp][Rr][Oo][Jj][Ee][Tt][Oo]-[Ll][Ii][Nn][Kk][Ee][Dd][Ii][Nn].[Mm][Dd]
