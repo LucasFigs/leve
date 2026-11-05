@@ -41,3 +41,17 @@ Há testes de recomendação temporal, início direto, retomada, troca de tarefa
 A suíte desta revisão passou com 75 testes em 10 arquivos. O build TypeScript/Vite passou e a auditoria npm retornou zero vulnerabilidades conhecidas na consulta realizada.
 
 Não foi adicionado modo visitante à instância com Supabase. Isso exige definir separação e migração dos dados locais por conta, sem enfraquecer o isolamento existente. Também não se adicionaram analytics ou novas integrações. A validação de valor com usuários continua pendente.
+
+## Refino visual dos controles de expansão
+
+A visão semanal agora tem um único cabeçalho para expandir, sem acordeão externo duplicado. Disponibilidade, filtros, categorias e opções de foco compartilham o componente Disclosure: ícones do próprio app, chevron à direita, espaçamentos e estados de interação consistentes. Os marcadores nativos dos navegadores foram substituídos visualmente, preservando o comportamento nativo de teclado dos elementos details/summary e o indicador de foco.
+
+Após esse refino, passaram 77 testes em 11 arquivos e o build TypeScript/Vite. A conferência visual em navegador e dispositivo real continua necessária; os testes de DOM não avaliam a aparência renderizada.
+
+## Capturas, consulta e edição
+
+O Inbox deixou de expandir um formulário rápido por item: tocar na captura abre diretamente sua configuração completa. Tarefas organizadas abrem em uma visualização com título, notas, datas, prioridade, projeto e checklist acionável. Marcar passos salva imediatamente; título e demais configurações só mudam após entrar em Editar e salvar. Cancelar a edição preserva os passos já marcados anteriormente.
+
+Criação e capturas continuam usando o formulário; salvar uma recorrência mantém a escolha explícita de alcance, e concluir usa a ocorrência exibida. Os passos continuam compartilhados entre repetições, conforme o modelo existente, com esse comportamento explicado na visualização. Arquivamento e exclusão ficam sob ações secundárias.
+
+Essa revisão passou com 83 testes em 12 arquivos, incluindo consulta/checklist sem rascunho, cancelamento, salvamento, recorrências e abertura direta do Inbox.
