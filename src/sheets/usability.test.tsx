@@ -7,6 +7,7 @@ import { emptyState, getState, replaceState, newTask } from '../store/store';
 import { closeAllSheets, getUI, setUI } from '../store/ui';
 import { AgendaScreen } from '../screens/Agenda';
 import { TodayScreen } from '../screens/Today';
+import { todayISO } from '../domain/dates';
 
 let root: Root;
 let host: HTMLDivElement;
@@ -36,9 +37,19 @@ describe('proteção de rascunhos e recuperação de resultados', () => {
     const summary = host.querySelector<HTMLDetailsElement>('.day-summary')!;
     expect(summary.open).toBe(false);
     expect(summary.querySelector('summary')?.textContent).not.toContain('Google Agenda');
-    expect(summary.querySelector('.pulse-ring')).toBeNull();
+    expect(summary.querySelector('.pulse-ring')?.getAttribute('aria-label')).toBe('0 de 0 tarefas concluídas hoje');
     expect(summary.querySelectorAll('button')).toHaveLength(1);
     expect(summary.textContent).toContain('Google Agenda não são importados');
+  });
+  it('atualiza a rosquinha conforme as tarefas do dia são concluídas', () => {
+    const tasks = [newTask({ title: 'Enviar relatório', status: 'active', date: todayISO() }), newTask({ title: 'Revisar dados', status: 'active', date: todayISO() })];
+    replaceState({ ...emptyState(), tasks });
+    act(() => root.render(<TodayScreen />));
+    expect(host.querySelector('.day-summary .pulse-ring')?.textContent).toBe('0/2');
+    act(() => replaceState({ ...getState(), tasks: [{ ...tasks[0], status: 'done', completedAt: Date.now() }, tasks[1]] }));
+    expect(host.querySelector('.day-summary .pulse-ring')?.textContent).toBe('1/2');
+    expect(host.querySelector('.day-summary .pulse-ring')?.getAttribute('aria-label')).toBe('1 de 2 tarefas concluídas hoje');
+    expect(host.querySelector<HTMLDetailsElement>('.day-summary')?.open).toBe(false);
   });
   it('mantém uma captura quando o descarte é recusado e permite salvá-la', () => {
     act(() => root.render(<QuickAddSheet />));

@@ -215,15 +215,26 @@ function DayPulse({ doneToday, totalToday }: { doneToday: number; totalToday: nu
   const { today, now, tasks, settings } = useTodayContext();
   const cap = useMemo(() => dayCapacity(tasks, today, settings, now), [tasks, today, settings, now]);
   const meta = CAPACITY[cap.status];
+  const progress = totalToday ? Math.min(1, Math.max(0, doneToday / totalToday)) : 0;
+  const circumference = 2 * Math.PI * 16;
   const estimate = cap.status === 'ended'
     ? cap.left ? `${formatDuration(cap.left)} ficaram pendentes` : 'Tudo certo por hoje'
     : cap.left ? `${formatDuration(cap.left)} de tarefas · ${formatDuration(cap.free) || '0 min'} disponíveis*` : 'Nenhuma tarefa pendente';
 
   return (
-    <Disclosure className="card day-summary" title={<span className="day-summary-title">
+    <Disclosure className="card day-summary" title={<span className="day-summary-heading">
+      <span className="pulse-ring" role="img" aria-label={`${doneToday} de ${totalToday} tarefas concluídas hoje`}>
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+          <circle cx="20" cy="20" r="16" className="pulse-track" />
+          <circle cx="20" cy="20" r="16" className="pulse-fill" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress)} />
+        </svg>
+        <span className="num" aria-hidden="true">{doneToday}/{totalToday}</span>
+      </span>
+      <span className="day-summary-title">
       <span className={`pulse-status tone-text-${meta.tone}`}><i aria-hidden="true" />{meta.label}</span>
       <span className="xs muted day-summary-estimate">{estimate}</span>
       <span className="sr-only">Ver detalhes da estimativa e ajustar plano</span>
+      </span>
     </span>}>
       <div className="day-summary-details">
         <p className="small muted">{doneToday} de {totalToday} tarefas concluídas.</p>
