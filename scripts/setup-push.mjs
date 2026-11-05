@@ -42,6 +42,7 @@ let env = readEnv();
 const url = env.VITE_SUPABASE_URL;
 const token = env.SUPABASE_ACCESS_TOKEN;
 if (!url || url.includes('SEU-PROJETO')) throw new Error('Preencha VITE_SUPABASE_URL no .env.local');
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url)) throw new Error('VITE_SUPABASE_URL inválida para a API administrativa.');
 if (!token || !token.startsWith('sbp_')) {
   throw new Error('Preencha SUPABASE_ACCESS_TOKEN (começa com sbp_) no .env.local — crie em https://supabase.com/dashboard/account/tokens');
 }
@@ -117,13 +118,15 @@ console.log(`✓ Função "${FN}" publicada`);
 /* ---------- 6) Agenda: a cada minuto ---------- */
 const fnUrl = `${url.replace(/\/+$/, '')}/functions/v1/${FN}`;
 const headers = JSON.stringify({ 'Content-Type': 'application/json', 'x-cron-secret': env.PUSH_CRON_SECRET });
+const sqlLiteral = (value) => `'${value.replace(/'/g, "''")}'`;
+const cronCommand = `select net.http_post(url := ${sqlLiteral(fnUrl)}, headers := ${sqlLiteral(headers)}::jsonb, body := '{}'::jsonb)`;
 await api('/database/query', 'POST', {
   query: `
     select cron.unschedule(jobid) from cron.job where jobname = 'leve-reminders';
     select cron.schedule(
       'leve-reminders',
       '* * * * *',
-      $cron$ select net.http_post(url := '${fnUrl}', headers := '${headers}'::jsonb, body := '{}'::jsonb) $cron$
+      ${sqlLiteral(cronCommand)}
     );`,
 });
 console.log('✓ Agendamento a cada minuto criado');

@@ -22,6 +22,19 @@ export interface VapidKeys {
 
 const enc = new TextEncoder();
 
+/** Provedores dos navegadores suportados. Nunca aceitar destinos arbitrários. */
+export function isAllowedPushEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== 'string' || endpoint.length > 2048) return false;
+  try {
+    const url = new URL(endpoint);
+    const host = url.hostname;
+    return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.hash && (
+      host === 'fcm.googleapis.com' || host === 'updates.push.services.mozilla.com' ||
+      host === 'web.push.apple.com' || host === 'wns.windows.com' || host.endsWith('.wns.windows.com')
+    );
+  } catch { return false; }
+}
+
 export function b64urlDecode(s: string): Uint8Array {
   const pad = '='.repeat((4 - (s.length % 4)) % 4);
   const bin = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
@@ -89,8 +102,13 @@ export async function vapidAuthorization(endpoint: string, vapid: VapidKeys, now
 
 /** Envia uma notificação. Status 404/410 = aparelho cancelou a inscrição (pode apagar). */
 export async function sendPush(sub: PushSubscription, payload: string, vapid: VapidKeys, ttlSeconds = 900): Promise<number> {
+  if (!isAllowedPushEndpoint(sub.endpoint)) throw new Error('Destino push não permitido.');
+  if (b64urlDecode(sub.p256dh).length !== 65 || b64urlDecode(sub.auth).length !== 16) throw new Error('Inscrição inválida.');
+  if (enc.encode(payload).length > 3500) throw new Error('Notificação muito grande.');
   const res = await fetch(sub.endpoint, {
     method: 'POST',
+    redirect: 'error',
+    signal: AbortSignal.timeout(5000),
     headers: {
       'Content-Encoding': 'aes128gcm',
       'Content-Type': 'application/octet-stream',
@@ -100,5 +118,7 @@ export async function sendPush(sub: PushSubscription, payload: string, vapid: Va
     },
     body: await encryptPayload(sub, payload),
   });
-  return res.status;
+  const status = res.status;
+  await res.body?.cancel();
+  return status;
 }

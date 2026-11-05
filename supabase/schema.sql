@@ -28,3 +28,44 @@ begin
   alter publication supabase_realtime add table public.records;
 exception when duplicate_object then null;
 end $$;
+
+-- Somente CRUD autenticado; operações administrativas ficam fora da API cliente.
+revoke all on public.records from public, anon, authenticated;
+grant select, insert, update, delete on public.records to authenticated;
+
+create or replace function public.validate_leve_record() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if TG_OP = 'INSERT' then
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(new.user_id::text, 1));
+    if (select count(*) from public.records where user_id = new.user_id and id <> new.id) >= 10000 then
+      raise exception 'Limite de 10000 registros atingido' using errcode = '23514';
+    end if;
+  end if;
+  if length(new.id) not between 1 and 200 or octet_length(new.data::text) > 262144
+     or jsonb_typeof(new.data) is distinct from 'object' then
+    raise exception 'Registro inválido ou muito grande' using errcode = '23514';
+  end if;
+  if new.type in ('task', 'project') and (new.data->>'id') is distinct from new.id then
+    raise exception 'Identificador inconsistente' using errcode = '23514';
+  end if;
+  if new.type = 'task' and (
+    jsonb_typeof(new.data->'title') is distinct from 'string' or length(new.data->>'title') > 1000
+    or coalesce(new.data->>'status', '') not in ('inbox', 'active', 'done', 'archived')
+    or coalesce(new.data->>'kind', '') not in ('task', 'event', 'habit')
+    or jsonb_typeof(new.data->'subtasks') is distinct from 'array'
+    or jsonb_typeof(new.data->'createdAt') is distinct from 'number'
+    or jsonb_typeof(new.data->'updatedAt') is distinct from 'number'
+  ) then
+    raise exception 'Tarefa inválida' using errcode = '23514';
+  end if;
+  if new.type = 'meta' and (new.id <> 'meta' or jsonb_typeof(new.data->'settings') is distinct from 'object') then
+    raise exception 'Preferências inválidas' using errcode = '23514';
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+revoke all on function public.validate_leve_record() from public;
+drop trigger if exists validate_leve_record on public.records;
+create trigger validate_leve_record before insert or update on public.records
+for each row execute function public.validate_leve_record();

@@ -36,3 +36,29 @@ alter table public.push_sent enable row level security;
 -- Extensões usadas pelo agendamento.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
+
+revoke all on public.push_subscriptions from public, anon, authenticated;
+grant select, insert, update, delete on public.push_subscriptions to authenticated;
+revoke all on public.push_sent from public, anon, authenticated;
+
+create or replace function public.validate_leve_push() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if length(new.endpoint) > 2048 or new.endpoint !~ '^https://(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|([a-z0-9-]+\.)*wns\.windows\.com)/[^#[:space:]]+$'
+     or new.p256dh !~ '^[A-Za-z0-9_-]{87}={0,1}$'
+     or new.auth !~ '^[A-Za-z0-9_-]{22}={0,2}$'
+     or not exists (select 1 from pg_catalog.pg_timezone_names where name = new.tz) then
+    raise exception 'Inscrição push inválida' using errcode = '23514';
+  end if;
+  -- Serializa inscrições por usuário para a quota não sofrer corrida.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(new.user_id::text, 0));
+  if (select count(*) from public.push_subscriptions where user_id = new.user_id and endpoint <> new.endpoint) >= 10 then
+    raise exception 'Limite de 10 aparelhos atingido' using errcode = '23514';
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+revoke all on function public.validate_leve_push() from public;
+drop trigger if exists validate_leve_push on public.push_subscriptions;
+create trigger validate_leve_push before insert or update on public.push_subscriptions
+for each row execute function public.validate_leve_push();

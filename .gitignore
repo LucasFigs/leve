@@ -6,6 +6,10 @@ dist
 .env.*
 !.env.example
 *.local
+/.security-backups.local/
+
+# Relatório operacional local (dados do ambiente e pendências de implantação)
+/ANALISE-SEGURANCA.md
 
 # Vercel
 .vercel
@@ -15,3 +19,6 @@ dist
 Thumbs.db
 *.log
 vite.shot.config.mjs
+
+# Contexto privado do projeto (LinkedIn)
+/[Cc][Oo][Nn][Tt][Ee][Xx][Tt][Oo]-[Pp][Rr][Oo][Jj][Ee][Tt][Oo]-[Ll][Ii][Nn][Kk][Ee][Dd][Ii][Nn].[Mm][Dd]

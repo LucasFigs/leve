@@ -143,6 +143,16 @@ function dueReminders(tasks, prefs, today, now, grace = 5) {
 
 // supabase/functions/send-reminders/webpush.ts
 var enc = new TextEncoder();
+function isAllowedPushEndpoint(endpoint) {
+  if (typeof endpoint !== "string" || endpoint.length > 2048) return false;
+  try {
+    const url = new URL(endpoint);
+    const host = url.hostname;
+    return url.protocol === "https:" && !url.username && !url.password && !url.port && !url.hash && (host === "fcm.googleapis.com" || host === "updates.push.services.mozilla.com" || host === "web.push.apple.com" || host === "wns.windows.com" || host.endsWith(".wns.windows.com"));
+  } catch {
+    return false;
+  }
+}
 function b64urlDecode(s) {
   const pad2 = "=".repeat((4 - s.length % 4) % 4);
   const bin = atob((s + pad2).replace(/-/g, "+").replace(/_/g, "/"));
@@ -197,8 +207,13 @@ async function vapidAuthorization(endpoint, vapid, now = Date.now()) {
   return `vapid t=${header}.${claims}.${b64urlEncode(signature)}, k=${vapid.publicKey}`;
 }
 async function sendPush(sub, payload, vapid, ttlSeconds = 900) {
+  if (!isAllowedPushEndpoint(sub.endpoint)) throw new Error("Destino push n\xE3o permitido.");
+  if (b64urlDecode(sub.p256dh).length !== 65 || b64urlDecode(sub.auth).length !== 16) throw new Error("Inscri\xE7\xE3o inv\xE1lida.");
+  if (enc.encode(payload).length > 3500) throw new Error("Notifica\xE7\xE3o muito grande.");
   const res = await fetch(sub.endpoint, {
     method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(5e3),
     headers: {
       "Content-Encoding": "aes128gcm",
       "Content-Type": "application/octet-stream",
@@ -208,7 +223,34 @@ async function sendPush(sub, payload, vapid, ttlSeconds = 900) {
     },
     body: await encryptPayload(sub, payload)
   });
-  return res.status;
+  const status = res.status;
+  await res.body?.cancel();
+  return status;
+}
+
+// src/domain/validation.ts
+var isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+var text = (v, max) => typeof v === "string" && v.length <= max;
+var number = (v) => typeof v === "number" && Number.isFinite(v);
+var optional = (v, check) => v == null || check(v);
+var isDate = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
+var time = (v) => typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+var dates = (v) => Array.isArray(v) && v.length <= 25e3 && v.every(isDate);
+var integer = (v, low, high) => number(v) && Number.isInteger(v) && v >= low && v <= high;
+function isTask(v) {
+  if (!isObject(v) || !text(v.id, 200) || !v.id || !text(v.title, 1e3) || !["task", "event", "habit"].includes(v.kind) || !["inbox", "active", "done", "archived"].includes(v.status) || !number(v.createdAt) || !number(v.updatedAt) || !number(v.postponed) || !optional(v.notes, (x) => text(x, 5e4)) || !optional(v.date, isDate) || !optional(v.due, isDate) || !optional(v.time, time) || !optional(v.duration, (x) => integer(x, 1, 10080)) || !optional(v.googleEventId, (x) => text(x, 1024)) || !optional(v.doneDates, dates) || !optional(v.skipDates, dates) || !optional(v.missedDates, dates) || !Array.isArray(v.subtasks) || v.subtasks.length > 1e3 || !v.subtasks.every((s) => isObject(s) && text(s.id, 200) && text(s.title, 1e3) && typeof s.done === "boolean")) return false;
+  if (v.recurrence != null) {
+    const r = v.recurrence;
+    if (!isObject(r) || !["daily", "weekly", "monthly", "yearly", "interval"].includes(r.freq) || !isDate(r.anchor) || !optional(r.until, isDate) || !optional(r.interval, (x) => integer(x, 1, 1e4)) || !optional(r.count, (x) => integer(x, 1, 25e3)) || !optional(r.weekdays, (x) => Array.isArray(x) && x.length <= 7 && x.every((d) => integer(d, 0, 6))) || !optional(r.monthDay, (x) => integer(x, 1, 31)) || !optional(r.month, (x) => integer(x, 0, 11)) || !optional(r.weekday, (x) => integer(x, 0, 6)) || !optional(r.nth, (x) => x === -1 || integer(x, 1, 5))) return false;
+  }
+  return true;
+}
+function isSettings(v) {
+  if (!isObject(v)) return false;
+  return optional(v.name, (x) => text(x, 1e3)) && optional(v.theme, (x) => ["system", "light", "dark"].includes(x)) && ["dayStart", "dayEnd", "lunchStart", "lunchEnd"].every((k) => optional(v[k], time)) && optional(v.defaultDuration, (x) => integer(x, 1, 10080)) && optional(v.reminderLead, (x) => integer(x, 0, 1440)) && ["protectLunch", "nudges", "reminders", "onboarded"].every((k) => optional(v[k], (x) => typeof x === "boolean"));
+}
+function isMeta(v) {
+  return isObject(v) && isSettings(v.settings) && optional(v.dismissed, (x) => isObject(x) && Object.values(x).every(isDate)) && optional(v.focus, (x) => isObject(x) && text(x.taskId, 200) && isDate(x.date) && number(x.startedAt) && number(x.elapsedBefore) && typeof x.running === "boolean");
 }
 
 // supabase/functions/send-reminders/source.ts
@@ -229,35 +271,66 @@ function localNow(tz, at = /* @__PURE__ */ new Date()) {
 async function run(env, at = /* @__PURE__ */ new Date()) {
   const rest = (path, init = {}) => fetch(`${env.supabaseUrl}/rest/v1/${path}`, {
     ...init,
+    signal: AbortSignal.timeout(5e3),
     headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}`, "Content-Type": "application/json", ...init.headers ?? {} }
   });
-  const subs = await (await rest("push_subscriptions?select=*&order=updated_at.desc")).json();
+  const readRows = async (path) => {
+    const all = [];
+    for (let offset = 0; offset < 1e5; offset += 500) {
+      const res = await rest(`${path}&limit=500&offset=${offset}`);
+      if (!res.ok) throw new Error("Falha ao consultar lembretes.");
+      const page = await res.json();
+      if (!Array.isArray(page)) throw new Error("Resposta inv\xE1lida.");
+      all.push(...page);
+      if (page.length < 500) return all;
+    }
+    throw new Error("Limite de processamento excedido.");
+  };
+  const subs = await readRows("push_subscriptions?select=*&order=endpoint.asc");
   const byUser = /* @__PURE__ */ new Map();
-  for (const s of Array.isArray(subs) ? subs : []) byUser.set(s.user_id, [...byUser.get(s.user_id) ?? [], s]);
+  for (const s of subs) {
+    if (typeof s.user_id !== "string") continue;
+    const devices = byUser.get(s.user_id) ?? [];
+    if (devices.length < 10) devices.push(s);
+    byUser.set(s.user_id, devices);
+  }
   let sent = 0;
   let removed = 0;
   for (const [userId, devices] of byUser) {
-    const rows = await (await rest(`records?user_id=eq.${userId}&type=in.(task,meta)&select=id,type,data`)).json();
-    if (!Array.isArray(rows)) continue;
-    const meta = rows.find((r) => r.type === "meta")?.data;
-    if (!meta?.settings?.reminders) continue;
-    const tasks = rows.filter((r) => r.type === "task").map((r) => r.data);
-    const { today, now } = localNow(devices[0].tz || "America/Sao_Paulo", at);
-    for (const r of dueReminders(tasks, meta.settings, today, now)) {
-      const mark = await rest("push_sent", {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ user_id: userId, key: `${today}:${r.key}` })
-      });
-      if (!mark.ok) continue;
-      const payload = JSON.stringify({ title: r.title, body: r.body, tag: r.key, data: { taskId: r.taskId, date: r.date } });
-      for (const d of devices) {
-        const status = await sendPush(d, payload, env.vapid).catch(() => 0);
-        if (status === 404 || status === 410) {
-          await rest(`push_subscriptions?endpoint=eq.${encodeURIComponent(d.endpoint)}`, { method: "DELETE" });
-          removed++;
-        } else if (status >= 200 && status < 300) sent++;
+    try {
+      devices.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+      const rows = await readRows(`records?user_id=eq.${encodeURIComponent(userId)}&type=in.(task,meta)&select=id,type,data&order=id.asc`);
+      if (!Array.isArray(rows)) continue;
+      const rawMeta = rows.find((r) => r.id === "meta" && r.type === "meta")?.data;
+      if (!isMeta(rawMeta)) continue;
+      const meta = rawMeta;
+      if (!meta?.settings?.reminders) continue;
+      const tasks = rows.filter((r) => r.type === "task").map((r) => r.data).filter(isTask);
+      const { today, now } = localNow(devices[0].tz || "America/Sao_Paulo", at);
+      for (const r of dueReminders(tasks, meta.settings, today, now)) {
+        const payload = JSON.stringify({ title: [...r.title].slice(0, 180).join(""), body: r.body, tag: r.key, data: { taskId: r.taskId, date: r.date } });
+        for (const d of devices) {
+          if (!isAllowedPushEndpoint(d.endpoint)) continue;
+          const deviceKey = b64urlEncode(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(d.endpoint))));
+          const key = `${today}:${r.key}:${deviceKey}`;
+          const mark = await rest("push_sent", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ user_id: userId, key })
+          });
+          if (!mark.ok) continue;
+          const status = await sendPush(d, payload, env.vapid).catch(() => 0);
+          if (status === 404 || status === 410) {
+            await rest(`push_subscriptions?endpoint=eq.${encodeURIComponent(d.endpoint)}`, { method: "DELETE" });
+            removed++;
+          } else if (status >= 200 && status < 300) sent++;
+          if (status === 0 || status === 429 || status >= 500) {
+            await rest(`push_sent?user_id=eq.${encodeURIComponent(userId)}&key=eq.${encodeURIComponent(key)}`, { method: "DELETE" });
+          }
+        }
       }
+    } catch {
+      console.warn("N\xE3o foi poss\xEDvel processar um grupo de lembretes.");
     }
   }
   if (at.getUTCMinutes() === 0) {
@@ -265,26 +338,45 @@ async function run(env, at = /* @__PURE__ */ new Date()) {
   }
   return { users: byUser.size, sent, removed };
 }
+async function validCronSecret(actual, expected) {
+  if (!actual || !expected || expected.length < 32 || actual.length > 256) return false;
+  const digest = (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  const [a, b] = await Promise.all([digest(actual), digest(expected)]);
+  const x = new Uint8Array(a), y = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+var running = false;
+var lastRun = 0;
+async function handleRequest(req, secret, env) {
+  if (req.method !== "POST") return new Response("method not allowed", { status: 405, headers: { Allow: "POST" } });
+  if (!await validCronSecret(req.headers.get("x-cron-secret"), secret)) return new Response("forbidden", { status: 403 });
+  if (running || Date.now() - lastRun < 3e4) return new Response("busy", { status: 429 });
+  running = true;
+  lastRun = Date.now();
+  try {
+    return Response.json(await run(env()));
+  } catch {
+    return Response.json({ error: "Falha ao processar lembretes." }, { status: 500 });
+  } finally {
+    running = false;
+  }
+}
 if (typeof Deno !== "undefined") {
-  Deno.serve(async (req) => {
-    if (req.headers.get("x-cron-secret") !== Deno.env.get("CRON_SECRET")) return new Response("forbidden", { status: 403 });
-    try {
-      const result = await run({
-        supabaseUrl: Deno.env.get("SUPABASE_URL"),
-        serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-        vapid: {
-          publicKey: Deno.env.get("VAPID_PUBLIC_KEY"),
-          privateKey: Deno.env.get("VAPID_PRIVATE_KEY"),
-          subject: Deno.env.get("VAPID_SUBJECT") ?? "mailto:contato@example.com"
-        }
-      });
-      return Response.json(result);
-    } catch (e) {
-      return Response.json({ error: String(e) }, { status: 500 });
+  Deno.serve((req) => handleRequest(req, Deno.env.get("CRON_SECRET"), () => ({
+    supabaseUrl: Deno.env.get("SUPABASE_URL"),
+    serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+    vapid: {
+      publicKey: Deno.env.get("VAPID_PUBLIC_KEY"),
+      privateKey: Deno.env.get("VAPID_PRIVATE_KEY"),
+      subject: Deno.env.get("VAPID_SUBJECT") ?? "mailto:contato@example.com"
     }
-  });
+  })));
 }
 export {
+  handleRequest,
   localNow,
-  run
+  run,
+  validCronSecret
 };
