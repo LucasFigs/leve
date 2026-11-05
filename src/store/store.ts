@@ -61,7 +61,10 @@ function emit() {
 
 function set(updater: (s: AppState) => AppState, opts: { undoable?: boolean } = {}) {
   const next = updater(state);
-  if (!isGoogleDeletions(next.googleDeletions) || next.tasks.some(t => !state.tasks.includes(t) && !isTask(t)) || next.projects.some(p => !state.projects.includes(p) && !isProject(p))) {
+  if (next === state) return;
+  const previousTasks = next.tasks === state.tasks ? undefined : new Set(state.tasks);
+  const previousProjects = next.projects === state.projects ? undefined : new Set(state.projects);
+  if (!isGoogleDeletions(next.googleDeletions) || (previousTasks && next.tasks.some(t => !previousTasks.has(t) && !isTask(t))) || (previousProjects && next.projects.some(p => !previousProjects.has(p) && !isProject(p)))) {
     toast('Não foi possível salvar: confira o tamanho e o formato dos campos. Seus dados anteriores foram mantidos.');
     return;
   }

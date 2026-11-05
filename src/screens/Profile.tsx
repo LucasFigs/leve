@@ -208,7 +208,7 @@ export function ProfileScreen() {
             </div>
           )}
           {settings.reminders && <div className="settings-row">
-            <span>Lembretes discretos<span className="xs faint" style={{display:'block'}}>Ocultar o título da atividade nas notificações</span></span>
+            <span>Lembretes discretos<span className="xs faint" style={{display:'block'}}>Ocultar o título nos avisos locais. Com o app fechado, essa proteção requer o serviço de lembretes atualizado.</span></span>
             <Switch label="Lembretes discretos" checked={!!settings.discreetReminders} onChange={discreetReminders => set({discreetReminders})} />
           </div>}
         </div>

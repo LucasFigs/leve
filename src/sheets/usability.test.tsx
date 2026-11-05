@@ -8,6 +8,7 @@ import { closeAllSheets, getUI, setUI } from '../store/ui';
 import { AgendaScreen } from '../screens/Agenda';
 import { TodayScreen } from '../screens/Today';
 import { todayISO } from '../domain/dates';
+import { WeekSheet } from './PlanningSheets';
 
 let root: Root;
 let host: HTMLDivElement;
@@ -32,6 +33,14 @@ function change(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
 function close() { act(() => (host.querySelector('[aria-label="Fechar"]') as HTMLButtonElement).click()); }
 
 describe('proteção de rascunhos e recuperação de resultados', () => {
+  it('explica a falta de encaixe sem afirmar que as tarefas já têm dia',()=>{
+    const state=emptyState();state.settings={...state.settings,dayStart:'12:00',dayEnd:'13:00',protectLunch:true,lunchStart:'12:00',lunchEnd:'13:00'};
+    state.tasks=[newTask({title:'Fictícia sem espaço',status:'active',duration:45})];replaceState(state);
+    act(()=>root.render(<WeekSheet />));
+    expect(host.textContent).not.toContain('Sua semana já está organizada');
+    expect(host.textContent).toContain('Não encontrei espaço para distribuir');
+    expect(getState().tasks[0].date).toBeUndefined();
+  });
   it('mantém o resumo do dia compacto, com critérios e ajustes recolhidos', () => {
     act(() => root.render(<TodayScreen />));
     const summary = host.querySelector<HTMLDetailsElement>('.day-summary')!;

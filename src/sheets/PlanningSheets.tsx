@@ -3,7 +3,7 @@ import type { Priority } from '../domain/types';
 import { addDays, formatDay, formatDuration, formatLongDate, minToTime, nowMin, timeToMin, todayISO, weekdayOf } from '../domain/dates';
 import { PRIORITY_META } from '../domain/priority';
 import { DAY_PARTS, nextFreeSlot, slotsByPart } from '../domain/planner';
-import { durationOf, inboxTasks } from '../domain/selectors';
+import { durationOf, inboxTasks, unscheduledTasks } from '../domain/selectors';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
 import { actions, getState, uid, useStore } from '../store/store';
@@ -303,9 +303,12 @@ export function ReviewSheet() {
 /* ------------------------------------------------------------------ */
 
 export function WeekSheet() {
-  const [assignments] = useState(() => {
+  const [{assignments,unassigned}] = useState(() => {
     const s = getState();
-    return assistant.planWeek(s.tasks, s.settings);
+    const assignments = assistant.planWeek(s.tasks, s.settings);
+    const assigned = new Set(assignments.map(a => a.task.id));
+    const unassigned = unscheduledTasks(s.tasks).filter(t => t.kind !== 'event' && t.priority !== 'optional' && !assigned.has(t.id)).length;
+    return {assignments,unassigned};
   });
   const byDay = useMemo(() => {
     const map = new Map<string, typeof assignments>();
@@ -336,12 +339,13 @@ export function WeekSheet() {
       }
     >
       {assignments.length === 0 ? (
-        <EmptyState icon="🗓️" title="Sua semana já está organizada." text="Todas as tarefas têm um dia. Tarefas “se der” ficam livres de propósito." />
+        <EmptyState icon="🗓️" title={unassigned ? 'Não encontrei espaço para distribuir' : 'Não há tarefas para distribuir'} text={unassigned ? 'As tarefas continuam sem data. Revise a disponibilidade ou a duração antes de tentar novamente. Nada foi movido.' : 'Itens com dia definido e tarefas “se der” não entram nesta distribuição.'} />
       ) : (
         <>
           <p className="small muted" style={{ marginBottom: 16 }}>
             Distribuí {assignments.length} {assignments.length === 1 ? 'tarefa' : 'tarefas'} respeitando prazos, compromissos e o tempo livre de cada dia.
           </p>
+          {unassigned > 0 && <p className="small muted" style={{marginBottom:16}}>{unassigned} {unassigned === 1 ? 'tarefa continua sem data porque não coube' : 'tarefas continuam sem data porque não couberam'} nesta proposta.</p>}
           <div className="stack" style={{ gap: 16 }}>
             {byDay.map(([day, list]) => (
               <div key={day}>

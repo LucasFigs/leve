@@ -22,6 +22,20 @@ afterEach(() => { resetGoogleCalendarSession(); vi.useRealTimers(); vi.restoreAl
 async function connect() { await restoreGoogleCalendarConnection(); expect(getGoogleCalendarState().connected).toBe(true); }
 
 describe('isolamento do Google Agenda persistente', () => {
+  it.each([[204,true],[404,true],[410,true],[401,false],[403,false],[429,false],[503,false]] as const)('exclusão HTTP %s tem confirmação %s',async(status,confirmed)=>{
+    await connect();vi.stubGlobal('fetch',vi.fn(async()=>new Response(null,{status})));
+    expect(await deleteGoogleEvent('fixture-event')).toBe(confirmed);
+  });
+  it.each([true,false])('reconcilia 409 somente se a identidade privada confere: %s',async(owned)=>{
+    await connect();let eventId='';
+    const request=vi.fn(async(_url:string,init?:RequestInit)=>{
+      if(init?.method==='POST'){eventId=JSON.parse(init.body as string).id;return Response.json({}, {status:409});}
+      if(init?.method==='PATCH')return Response.json({id:eventId});
+      return Response.json({id:eventId,extendedProperties:{private:{leveTaskId:owned?task.id:'other-task'}}});
+    });vi.stubGlobal('fetch',request);
+    expect(await syncTaskToGoogle({...task,googleEventId:undefined})).toBe(owned);
+    expect(request.mock.calls.some(([,init])=>init?.method==='PATCH')).toBe(owned);
+  });
   it('repete envio transitório sem perder a alteração da fila', async () => {
     vi.useFakeTimers(); await connect();replaceState({...emptyState(),tasks:[task]});
     const unsubscribe=initGoogleCalendarListener();
