@@ -4,27 +4,42 @@ Use o texto depois de confirmar que a instância pública recebeu a revisão e t
 
 ---
 
-Como transformar uma lista de tarefas em um plano que cabe no dia?
+Uma lista cheia de tarefas nem sempre ajuda a saber por onde começar.
 
-Essa pergunta guiou o desenvolvimento do Leve, meu projeto pessoal de organização de tarefas, compromissos e hábitos.
+Foi pensando nisso que desenvolvi o Leve: um app para tirar as pendências da cabeça e transformar tudo isso em um plano possível para o dia.
 
-A ideia é reduzir o esforço entre lembrar de algo e começar a fazer: capturar em linguagem natural em português, organizar prioridades, planejar conforme a disponibilidade e acompanhar a execução.
+Você pode escrever “enviar relatório amanhã às 14h”, organizar o que importa e planejar as atividades considerando o tempo disponível. Quando uma tarefa parece grande demais, dá para dividi-la em passos e ir concluindo um de cada vez.
 
-Também refinei o produto para que a organização não virasse mais uma tarefa: a tela inicial destaca o essencial, os passos podem ser concluídos sem entrar na edição e os hábitos têm um calendário visual próprio, com cores e ícones personalizáveis.
+Tarefas, compromissos e hábitos ficam no mesmo lugar. A tela do dia mostra o essencial; os detalhes aparecem quando você precisa deles. Os hábitos têm um calendário próprio para acompanhar a constância.
 
-No desenvolvimento, trabalhei com React e TypeScript, persistência local, recorrências, planejamento de atividades, sincronização com Supabase e integração com Google Agenda. O aplicativo também pode ser instalado como PWA.
+O critério que guiou as últimas melhorias foi simples: organizar a rotina precisa exigir menos esforço do que tentar lembrar de tudo.
 
-Uma das partes mais interessantes foi separar as regras de negócio da interface. A interpretação de tarefas e o planejamento usam heurísticas locais, o que permite testar essas decisões e executá-las sem depender de uma API de IA.
+Por isso, revisei os fluxos de uso, retirei informações que disputavam atenção com as atividades e separei a visualização da edição. Também cuidei da autenticação, da proteção dos dados e dos testes automatizados.
 
-Antes de ampliar a divulgação, revisei também o ciclo de autenticação, o isolamento entre usuários, as integrações e as dependências. Esse trabalho trouxe testes de regressão e reforçou um aprendizado: segurança precisa acompanhar a evolução do produto.
+Desenvolvi o projeto com React e TypeScript. Ele pode ser instalado no celular e usa regras locais para interpretar as tarefas, sem depender de uma API de IA.
 
-O Leve continua em desenvolvimento. Quero seguir melhorando a experiência com uso real e feedback.
+O Leve está em evolução, e agora quero entender como ele se encaixa na rotina de outras pessoas.
 
 Experimente: https://leve-flame.vercel.app
 Código: https://github.com/LucasFigs/leve
 
-A integração com Google Agenda está em testes com contas autorizadas; os demais recursos podem ser usados sem conectá-la.
+Uma observação: no meu deploy, a integração com Google Agenda está em testes e liberada apenas para minha conta. Essa restrição é da conexão com o calendário; o login Google e os demais recursos são separados dela.
 
-O que mais dificulta seu planejamento hoje: capturar as tarefas, decidir prioridades ou reorganizar o dia quando os planos mudam?
+Na sua rotina, o mais difícil é decidir por onde começar ou reorganizar o dia quando os planos mudam?
 
 #React #TypeScript #DesenvolvimentoWeb #ProjetosPessoais
+
+---
+
+## Imagens para acompanhar o post
+
+Use capturas reais da versão publicada, com dados fictícios. A sequência abaixo mostra o problema, a organização e a execução sem precisar explicar todas as telas.
+
+1. **Tela Hoje — imagem principal.** Mostre o resumo compacto do dia, o progresso em rosca e uma lista curta com tarefa, compromisso e hábito. Sugestões de títulos: “Preparar apresentação”, “Reunião de alinhamento” e “Ler 15 minutos”. Texto de apoio: “Um próximo passo para o seu dia”.
+2. **Do pensamento ao plano.** Monte duas capturas lado a lado: a captura “Preparar apresentação amanhã às 14h por 45 min” e a atividade organizada na Agenda. Use um exemplo cujo reconhecimento você tenha conferido no app. Texto de apoio: “Capture em uma frase. Encontre no seu planejamento”.
+3. **Tarefa aberta com passos.** Mostre “Preparar apresentação” com três passos, um concluído e dois pendentes. Deixe o progresso e a ação principal visíveis. Texto de apoio: “Divida o que parece grande. Comece pelo próximo passo”.
+4. **Calendário de um hábito — opcional.** Mostre “Ler 15 minutos”, com cor e ícone personalizados e histórico fictício de realizações. Texto de apoio: “Acompanhe a constância dos seus hábitos”.
+
+Para um post enxuto, use as três primeiras. A quarta complementa a apresentação se quiser destacar os hábitos.
+
+Mantenha o mesmo tema, enquadramento e tipografia nas imagens. Prefira recortes legíveis a uma tela inteira com textos pequenos. Evite código, painéis de configuração e a conexão com Google Agenda nas imagens desta publicação. Confira nomes, foto de perfil, notificações e conteúdo pessoal antes de exportar.
