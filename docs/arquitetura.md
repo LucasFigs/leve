@@ -26,8 +26,8 @@ flowchart TD
 | `supabase` | Schema, políticas de acesso, worker e testes SQL |
 | `scripts` | Preparação de infraestrutura, verificações e geração de artefatos |
 
-A persistência local permite uso sem backend configurado. Com Supabase, o cliente mantém um diário de alterações pendentes, sincroniza entidades e recebe atualizações por Realtime. As políticas RLS do banco fazem a autorização; os filtros do cliente são uma camada adicional.
+A persistência local permite uso sem backend configurado. Estado e diário de alterações são gravados sem debounce; conflitos entre abas e dados inválidos pausam gravação/sincronização e oferecem exportação para recuperação, preservando o snapshot original. Com Supabase, o cliente sincroniza entidades e recebe atualizações por Realtime. As políticas RLS do banco fazem a autorização; os filtros do cliente são uma camada adicional. Não há transação atômica entre as chaves locais nem fusão automática de versões conflitantes.
 
-A integração Google envia alterações do Leve para o calendário escolhido. Ela não importa automaticamente alterações feitas no Google. Autorizações ficam em memória por aba e são descartadas ao encerrar ou trocar a sessão.
+A integração Google envia alterações do Leve para o calendário escolhido para novos itens; os vínculos existentes mantêm o calendário original. Não importa automaticamente alterações feitas no Google. Access tokens ficam em memória por aba; refresh tokens ficam cifrados no backend, conforme a configuração documentada. Troca de sessão cancela operações do cliente. Exclusões pendentes possuem outbox local por estado da conta; operações de rede são confirmadas antes de removê-las, com retry e ids de criação estáveis. Veja os limites de reconciliação no relatório de auditoria.
 
 O worker reutiliza as regras de lembretes do domínio. `source.ts` é o código editável; `index.ts` é o pacote gerado para publicação. Os testes SQL usam um PostgreSQL isolado com papéis e `auth.uid()` de teste, sem substituir a validação dos serviços reais do Supabase.
