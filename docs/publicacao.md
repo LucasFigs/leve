@@ -2,7 +2,9 @@
 
 ## Estado desta entrega
 
-As correções foram verificadas localmente com testes TypeScript e SQL. **A atualização da infraestrutura e da instância pública ainda está pendente.** O backup remoto/local precisa ser resolvido antes das alterações no ambiente existente. Não apresente a instância atual como validada por estas correções.
+A revisão inclui uma lista diária mais enxuta, consulta de tarefas separada da edição e acompanhamento de hábitos por calendário e histórico visual. A comparação semanal foi preservada; uma demonstração sem cadastro ficou para uma próxima etapa.
+
+O backend da conexão persistente com Google Agenda foi publicado e teve controles de acesso verificados, conforme [registro da integração](google-agenda.md). Isso não substitui a validação do consentimento Google e da reabertura do PWA no celular. A versão hospedada deve ser conferida separadamente dos testes locais; um commit ou build aprovado não comprova o deploy.
 
 ## Repositório
 
@@ -24,7 +26,7 @@ Antes do commit, revise o diff e a lista de arquivos. `.env.local`, backups, o c
 ## Infraestrutura e Vercel
 
 1. Verifique e preserve um backup dos dados/configurações antes de aplicar mudanças. Uma cópia parcial não substitui um plano de recuperação completo.
-2. Valide os SQLs em teste; depois aplique `supabase/schema.sql` e `supabase/push.sql` ao projeto alvo. Os scripts `setup:supabase` e `setup:push` também alteram Auth, função e cron: revise o destino e os efeitos antes de executá-los.
+2. Se houver mudanças de infraestrutura ainda não aplicadas, valide os SQLs em teste antes de aplicá-las ao projeto alvo. Os scripts `setup:supabase`, `setup:push` e `setup:google -- --apply` alteram o ambiente remoto: revise o destino e os efeitos antes de executá-los. Uma atualização apenas de interface não exige reaplicar esses scripts.
 3. Configure na Vercel somente as variáveis públicas necessárias de `.env.example`. Não importe o `.env.local` inteiro.
 4. Faça o deploy da revisão validada, confirme o Node configurado e teste os fluxos no domínio público. O build do frontend não aplica SQLs nem publica a função Supabase.
 5. Confira cabeçalhos, erros CSP, login, recuperação, troca de conta, Google Agenda, push e reabertura offline. Verifique os logs sem copiar conteúdo de usuários para issues.
