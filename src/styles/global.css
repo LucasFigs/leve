@@ -3565,3 +3565,18 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 @media (max-width: 360px) {
   .task-overview-facts > div { grid-template-columns: 1fr; gap: 4px; }
 }
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #0c0c0f;
+  transform: translateY(-150%);
+}
+.skip-link:focus { transform: translateY(0); }
+.project-color:focus-visible { outline: 3px solid var(--text); outline-offset: 4px; }
+.week-accordion-controls { display: flex; align-items: center; padding-right: 8px; }
+.week-accordion-controls .week-accordion-head { flex: 1; min-width: 0; }

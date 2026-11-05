@@ -9,9 +9,10 @@ import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
 
 export function QuickAddSheet({ defaults }: { defaults?: CaptureDefaults }) {
+  const [draft, setDraft] = useState('');
   return (
-    <BottomSheet title="Capturar" onClose={closeSheet}>
-      <QuickAdd autoFocus defaults={defaults} onDone={closeSheet} alwaysDetail />
+    <BottomSheet title="Capturar" onClose={closeSheet} canClose={() => !draft.trim() || confirm('Descartar a captura que você ainda não salvou?')}>
+      <QuickAdd autoFocus defaults={defaults} onDone={closeSheet} alwaysDetail onDraftChange={setDraft} />
       <div className="xs faint" style={{ marginTop: 12, lineHeight: 1.6 }}>
         Escreva do seu jeito: <i>“reunião com Ana quinta às 15”</i>, <i>“pagar aluguel todo dia 5”</i>,{' '}
         <i>“estudar inglês por 30 min amanhã”</i>. Já sabe tudo da tarefa? Toque em <b>Detalhar</b> para preencher os campos antes de salvar.
@@ -44,6 +45,7 @@ export function ProjectSheet({ id }: { id?: string }) {
     <BottomSheet
       title={existing ? 'Editar projeto' : 'Novo projeto'}
       onClose={closeSheet}
+      canClose={() => (name === (existing?.name ?? '') && emoji === (existing?.emoji ?? '📁') && color === (existing?.color ?? 'violet')) || confirm('Descartar as alterações do projeto que você não salvou?')}
       footer={
         <>
           {existing && (
@@ -87,10 +89,10 @@ export function ProjectSheet({ id }: { id?: string }) {
               <button
                 type="button"
                 key={c}
-                className={`tone-${c}`}
-                style={{ width: 36, height: 36, borderRadius: 12, outline: color === c ? '2px solid var(--accent)' : 'none', outlineOffset: 2 }}
+                className={`project-color tone-${c}`}
+                style={{ width: 44, height: 44, borderRadius: 12, boxShadow: color === c ? '0 0 0 2px var(--accent)' : undefined }}
                 onClick={() => setColor(c)}
-                aria-label={`Cor ${c}`}
+                aria-label={`Cor ${{ violet: 'violeta', blue: 'azul', green: 'verde', yellow: 'amarela', red: 'vermelha', gray: 'cinza' }[c]}`}
                 aria-pressed={color === c}
               />
             ))}
@@ -105,6 +107,8 @@ const SEARCH_HINTS = ['tarefas atrasadas', 'o que eu tinha para fazer ontem?', '
 
 export function SearchSheet() {
   const [q, setQ] = useState('');
+  const [limit, setLimit] = useState(40);
+  const changeQuery = (value: string) => { setQ(value); setLimit(40); };
   const tasks = useStore((s) => s.tasks);
   const projects = useStore((s) => s.projects);
   const result = useMemo(() => search(q, getState()), [q, tasks, projects]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,9 +123,9 @@ export function SearchSheet() {
       headerExtra={
         <div className="search-bar grow">
           <Icon name="search" size={18} className="faint" />
-          <input autoFocus data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar ou perguntar…" aria-label="Buscar" enterKeyHint="search" />
+          <input autoFocus data-autofocus value={q} onChange={(e) => changeQuery(e.target.value)} placeholder="Buscar tarefas e projetos…" aria-label="Buscar" enterKeyHint="search" />
           {q && (
-            <button className="icon-btn sm" onClick={() => setQ('')} aria-label="Limpar">
+            <button className="icon-btn sm" onClick={() => changeQuery('')} aria-label="Limpar">
               <Icon name="x" size={16} />
             </button>
           )}
@@ -133,7 +137,7 @@ export function SearchSheet() {
           <p className="label" style={{ marginBottom: 10 }}>Experimente</p>
           <div className="chips">
             {[...SEARCH_HINTS, ...projectHints].map((h) => (
-              <button key={h} className="chip" onClick={() => setQ(h)}>{h}</button>
+              <button key={h} className="chip" onClick={() => changeQuery(h)}>{h}</button>
             ))}
           </div>
         </>
@@ -163,13 +167,14 @@ export function SearchSheet() {
               <p className="section-title" style={{ marginBottom: 8 }}>{g.label} · {g.tasks.length}</p>
               {g.tasks.length ? (
                 <div className="list">
-                  {g.tasks.slice(0, 40).map((t) => (
+                  {g.tasks.slice(0, limit).map((t) => (
                     <TaskCard key={t.id} task={t} showDate exitOnDone={false} />
                   ))}
                 </div>
               ) : (
                 <p className="small faint">Nada aqui.</p>
               )}
+              {g.tasks.length > limit && <button className="btn btn-sm btn-soft" onClick={() => setLimit(value => value + 40)}>Mostrar mais resultados de {g.label.toLowerCase()}</button>}
             </section>
           ))}
         </>

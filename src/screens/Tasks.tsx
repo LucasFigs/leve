@@ -181,7 +181,14 @@ export function TasksScreen() {
       </p>
 
       {total === 0 ? (
-        <EmptyState icon="🗂️" title={filtered ? 'Nada com esses filtros.' : 'Nenhuma tarefa aqui.'} text={filtered ? 'Tente outro filtro.' : 'Use o + para capturar algo.'} />
+        <EmptyState
+          icon="🗂️"
+          title={filtered ? 'Nada com esses filtros.' : status === 'done' ? 'Nenhuma tarefa concluída ainda.' : status === 'open' ? 'Nenhuma tarefa aberta.' : 'Nenhuma tarefa aqui.'}
+          text={filtered ? 'Ajuste os filtros para encontrar outros itens.' : status === 'done' ? 'As tarefas que você concluir aparecem aqui.' : 'Capture algo quando precisar liberar espaço na cabeça.'}
+          action={filtered
+            ? <button className="btn btn-soft" onClick={() => { setQ(''); setKind(''); setPriority(''); setProjectId(''); setCategory(''); }}>Limpar filtros</button>
+            : status !== 'done' && <button className="btn btn-primary" onClick={() => openSheet({ type: 'quickAdd' })}>Capturar uma tarefa</button>}
+        />
       ) : (
         groups.map((g) => {
           const limit = g.key === 'done' && !showAllDone ? 30 : Infinity;
