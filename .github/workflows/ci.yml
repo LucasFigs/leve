@@ -44,6 +44,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Validar prontidao do runner sem Docker
+        shell: pwsh
+        run: ./scripts/test-database-runner.ps1
       - name: Testar PostgreSQL temporário sem acesso à produção
         shell: pwsh
         run: ./scripts/test-database.ps1

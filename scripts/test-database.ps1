@@ -13,7 +13,9 @@ try {
   $created = $true
   $ready = $false
   for ($attempt = 0; $attempt -lt 60; $attempt++) {
-    & docker exec $containerName pg_isready -U postgres *> $null
+    # O servidor temporario do entrypoint aceita somente socket Unix.
+    # TCP no loopback interno so fica pronto no servidor definitivo.
+    & docker exec $containerName pg_isready -h 127.0.0.1 -U postgres -d postgres *> $null
     if ($LASTEXITCODE -eq 0) { $ready = $true; break }
     Start-Sleep -Milliseconds 500
   }
@@ -34,7 +36,7 @@ try {
   )
   foreach ($file in $files) {
     Invoke-Docker cp $file "${containerName}:/tmp/test.sql"
-    Invoke-Docker exec $containerName psql -U postgres -v ON_ERROR_STOP=1 -f /tmp/test.sql
+    Invoke-Docker exec $containerName psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/test.sql
   }
   Write-Output 'PASSOU: schema, triggers e isolamento SQL local. Auth, Realtime, cron e entrega push não foram testados por este runner.'
 } finally {
