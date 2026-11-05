@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { formatDay, todayISO } from '../domain/dates';
 import type { ChipType } from '../domain/parser';
 import { assistant } from '../services/assistant';
@@ -27,6 +27,7 @@ interface Props {
 }
 
 export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true, alwaysDetail }: Props) {
+  const inputId = useId();
   const [text, setText] = useState('');
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -101,9 +102,9 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
       }}
     >
       <div className="quick-row">
-        <label htmlFor="quick-input" className="sr-only">{placeholder}</label>
+        <label htmlFor={inputId} className="sr-only">{placeholder}</label>
         <textarea
-          id="quick-input"
+          id={inputId}
           ref={ref}
           className="input-plain"
           rows={1}

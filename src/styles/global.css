@@ -11,7 +11,7 @@
   --border-strong: rgba(17, 17, 26, 0.14);
   --text: #121218;
   --text-2: #5c5c69;
-  --text-3: #8b8b98;
+  --text-3: #666675;
 
   --accent: #4f46e5;
   --accent-hover: #4338ca;
@@ -66,7 +66,7 @@
     --border-strong: rgba(255, 255, 255, 0.13);
     --text: #f2f2f5;
     --text-2: #a6a6b2;
-    --text-3: #75757f;
+    --text-3: #a0a0ad;
     --accent: #8b85ff;
     --accent-hover: #a19cff;
     --accent-soft: rgba(139, 133, 255, 0.12);
@@ -97,7 +97,7 @@
   --border-strong: rgba(255, 255, 255, 0.13);
   --text: #f2f2f5;
   --text-2: #a6a6b2;
-  --text-3: #75757f;
+  --text-3: #a0a0ad;
   --accent: #8b85ff;
   --accent-hover: #a19cff;
   --accent-soft: rgba(139, 133, 255, 0.12);
@@ -3477,3 +3477,27 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   color: var(--text-3);
   margin: 0;
 }
+
+/* Informações opcionais ficam acessíveis sem disputar a ação principal. */
+.secondary-panel {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.secondary-panel > summary,
+.focus-options > summary,
+.focus-checklist > summary {
+  cursor: pointer;
+  color: var(--text-2);
+  font-weight: 600;
+  padding: 8px 0;
+  min-height: 40px;
+}
+.secondary-panel[open] > summary { margin-bottom: 8px; }
+.onboarding-start { gap: 16px; width: 100%; max-width: 480px; }
+.onboarding-start .field, .onboarding-start .secondary-panel { width: 100%; text-align: left; }
+.focus-options { text-align: center; margin: 8px 0 20px; }
+.habit-grid-touch { width: 100%; text-align: left; }
+.focus-add-subtask input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

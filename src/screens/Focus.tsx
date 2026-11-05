@@ -5,6 +5,7 @@ import { openSheet, toast } from '../store/ui';
 import { Icon } from '../components/Icon';
 import { Checkbox } from '../components/ui';
 import { completeWithFeedback } from '../components/feedback';
+import { useModalFocus } from '../hooks/modalFocus';
 
 const fmt = (sec: number) => {
   const s = Math.max(0, Math.round(sec));
@@ -45,27 +46,35 @@ function playChime() {
   }
 }
 
-/** Modo foco com Pomodoro e checklist interativo de passos. */
+/** Execução livre, com Pomodoro e passos disponíveis sob demanda. */
 export function FocusMode() {
   const focus = useStore((s) => s.focus);
   const task = useStore((s) => (s.focus ? s.tasks.find((t) => t.id === s.focus!.taskId) : undefined));
   const [, tick] = useState(0);
 
   const [phase, setPhase] = useState<PomodoroPhase>('pomodoro');
+  const [timed, setTimed] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(modalRef, !!focus && !!task);
   const [cycle, setCycle] = useState(1);
   const [phaseMinutes, setPhaseMinutes] = useState<number>(25);
   const [newStep, setNewStep] = useState('');
   const phaseStartRef = useRef<{ startedAt: number; elapsedBefore: number }>({ startedAt: Date.now(), elapsedBefore: 0 });
   const completedAlertRef = useRef<boolean>(false);
+  const phaseTaskRef = useRef<string>();
 
   // Inicializa a fase com o target se houver (ex.: "Só 10 min")
   useEffect(() => {
+    phaseTaskRef.current = focus?.taskId;
+    setTimed(!!focus?.target);
+    setPhase('pomodoro');
+    setCycle(1);
     if (focus?.target) {
       setPhaseMinutes(focus.target);
     } else {
       setPhaseMinutes(PHASE_CONFIG.pomodoro.defaultMinutes);
     }
-    phaseStartRef.current = { startedAt: Date.now(), elapsedBefore: 0 };
+    phaseStartRef.current = { startedAt: focus?.startedAt ?? Date.now(), elapsedBefore: (focus?.elapsedBefore ?? 0) / 1000 };
     completedAlertRef.current = false;
   }, [focus?.taskId, focus?.target]);
 
@@ -79,31 +88,46 @@ export function FocusMode() {
     if (focus && !task) actions.endFocus();
   }, [focus, task]);
 
-  if (!focus || !task) return null;
-
   // Cálculo do tempo decorrido na fase Pomodoro atual
-  const running = focus.running;
+  const running = !!focus?.running;
   const now = Date.now();
-  const currentElapsed = phaseStartRef.current.elapsedBefore + (running ? (now - phaseStartRef.current.startedAt) / 1000 : 0);
+  const currentElapsed = timed
+    ? phaseStartRef.current.elapsedBefore + (running ? (now - phaseStartRef.current.startedAt) / 1000 : 0)
+    : focus ? (focus.elapsedBefore + (running ? now - focus.startedAt : 0)) / 1000 : 0;
   const targetSec = phaseMinutes * 60;
   const remainingSec = Math.max(0, targetSec - currentElapsed);
-  const isFinished = remainingSec <= 0;
-  const progress = Math.min(1, currentElapsed / targetSec);
+  const isFinished = timed && !!focus && phaseTaskRef.current === focus.taskId && remainingSec <= 0;
+  const progress = timed ? Math.min(1, currentElapsed / targetSec) : 0;
 
   // Alerta de término da fase Pomodoro
+  useEffect(() => {
   if (isFinished && !completedAlertRef.current) {
     completedAlertRef.current = true;
     playChime();
     if (phase === 'pomodoro') {
-      const nextCycle = cycle + 1;
-      setCycle(nextCycle);
+      setCycle(c => c + 1);
       toast('🍅 Pomodoro concluído! Hora de descansar 5 minutos.');
     } else {
       toast('☕ Pausa concluída! Pronto para o próximo foco?');
     }
   }
+  }, [isFinished, phase]);
+
+  useEffect(() => {
+    if (!focus || !task) return;
+    const oldTitle = document.title;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.title = oldTitle; document.body.style.overflow = oldOverflow; };
+  }, [focus?.taskId, !!task]);
+  useEffect(() => {
+    if (focus && task) document.title = `${fmt(timed ? remainingSec : currentElapsed)} · ${task.title}`;
+  }, [!!focus, task?.title, timed, remainingSec, currentElapsed]);
+
+  if (!focus || !task) return null;
 
   const switchPhase = (nextPhase: PomodoroPhase) => {
+    setTimed(true);
     setPhase(nextPhase);
     const mins = PHASE_CONFIG[nextPhase].defaultMinutes;
     setPhaseMinutes(mins);
@@ -142,17 +166,16 @@ export function FocusMode() {
     setNewStep('');
   };
 
-  document.title = `${fmt(remainingSec)} · ${task.title}`;
-
   return (
-    <div className="focus" role="dialog" aria-modal="true" aria-label={`Foco: ${task.title}`}>
+    <div ref={modalRef} tabIndex={-1} className="focus" role="dialog" aria-modal="true" aria-label={`Foco: ${task.title}`}
+      onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); exit(); } }}>
       <div className="row" style={{ justifyContent: 'space-between', width: '100%' }}>
         <button className="btn btn-ghost" onClick={() => exit((m) => (m > 0 ? `Foco encerrado · ${formatDuration(m)}` : 'Foco encerrado'))}>
           <Icon name="x" size={18} />
           Sair
         </button>
         <span className="eyebrow">
-          {phase === 'pomodoro' ? `🍅 Pomodoro #${cycle}` : phase === 'shortBreak' ? '☕ Pausa curta' : '🌴 Pausa longa'}
+          {!timed ? 'Em foco · no seu ritmo' : phase === 'pomodoro' ? `🍅 Pomodoro #${cycle}` : phase === 'shortBreak' ? '☕ Pausa curta' : '🌴 Pausa longa'}
         </span>
         <button
           className="btn btn-ghost btn-sm"
@@ -168,7 +191,9 @@ export function FocusMode() {
 
       <div className="focus-center">
         {/* Seletor de fases Pomodoro */}
-        <div className="focus-pomo-tabs" role="tablist">
+        <details className="focus-options">
+        <summary>{timed ? 'Opções de tempo' : 'Usar Pomodoro (opcional)'}</summary>
+        <div className="focus-pomo-tabs" role="group" aria-label="Duração do bloco">
           <button
             className={`focus-pomo-tab${phase === 'pomodoro' ? ' active' : ''}`}
             onClick={() => switchPhase('pomodoro')}
@@ -188,6 +213,8 @@ export function FocusMode() {
             🌴 Longa (15m)
           </button>
         </div>
+        {timed && <button className="btn btn-ghost btn-sm" onClick={() => setTimed(false)}>Continuar sem contagem regressiva</button>}
+        </details>
 
         <div className="focus-task" style={{ marginTop: 4 }}>{task.title}</div>
         {currentStep && (
@@ -213,9 +240,9 @@ export function FocusMode() {
               style={{ transition: 'stroke-dashoffset 1s linear' }}
             />
           </svg>
-          <div className="timer-value num">{fmt(remainingSec)}</div>
+          <div className="timer-value num">{fmt(timed ? remainingSec : currentElapsed)}</div>
           <div className="timer-label">
-            {!running ? 'pausado' : isFinished ? 'tempo concluído' : phase === 'pomodoro' ? 'restantes' : 'pausa'}
+            {!running ? 'pausado' : !timed ? 'de dedicação' : isFinished ? 'tempo concluído' : phase === 'pomodoro' ? 'restantes' : 'pausa'}
           </div>
         </div>
 
@@ -245,7 +272,8 @@ export function FocusMode() {
         ) : null}
 
         {/* Checklist de subtarefas / subáreas */}
-        <div className="focus-checklist">
+        <details className="focus-checklist" open={steps.length > 0 || undefined}>
+          <summary>Passos da tarefa (opcional)</summary>
           <div className="focus-checklist-head">
             <span>Checklist de passos</span>
             <span className="num">
@@ -290,7 +318,7 @@ export function FocusMode() {
               </button>
             )}
           </form>
-        </div>
+        </details>
       </div>
 
       {/* Controles de ação principal */}
@@ -332,9 +360,9 @@ export function FocusMode() {
       </div>
 
       <div className="row" style={{ justifyContent: 'center', marginTop: 10, gap: 8 }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => addTime(5)}>
+        {timed && <button className="btn btn-ghost btn-sm" onClick={() => addTime(5)}>
           +5 min
-        </button>
+        </button>}
         <button className="btn btn-ghost btn-sm" onClick={() => exit((m) => `Você avançou ${formatDuration(m)} em “${task.title}”`)}>
           Encerrar foco
         </button>

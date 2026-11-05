@@ -11,16 +11,18 @@ import { closeAllSheets, closeSheet, openSheet, toast } from '../store/ui';
 import { BottomSheet } from '../components/BottomSheet';
 import { Checkbox, EmptyState, Option } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { AvailabilityEditor } from '../components/AvailabilityEditor';
+import { useClock } from '../hooks/hooks';
 
 /* ------------------------------------------------------------------ */
 /* Organizar meu dia                                                   */
 /* ------------------------------------------------------------------ */
 
 export function PlanSheet({ date }: { date: string }) {
-  const [plan] = useState(() => {
-    const s = getState();
-    return assistant.planDay(s.tasks, date, s.settings);
-  });
+  const tasks = useStore(s => s.tasks);
+  const settings = useStore(s => s.settings);
+  const { now } = useClock();
+  const plan = useMemo(() => assistant.planDay(tasks, date, settings), [tasks, date, settings, now]);
   const dayEnd = useStore((s) => s.settings.dayEnd);
   // O que não coube: você escolhe o que vai para o dia seguinte (recorrentes não se movem)
   const movable = plan.deferred.filter((t) => !t.recurrence);
@@ -51,39 +53,41 @@ export function PlanSheet({ date }: { date: string }) {
 
   const slack = Math.max(0, plan.freeMinutes - plan.plannedMinutes);
   const nothing = plan.placements.length === 0 && movable.length === 0;
-  const canApply = plan.placements.length > 0 || defer.size > 0;
+  const selected = movable.filter(t => defer.has(t.id));
+  const canApply = plan.placements.length > 0 || selected.length > 0;
 
   const apply = () => {
-    actions.applyDayPlan(plan, [...defer]);
+    actions.applyDayPlan(plan, selected.map(t => t.id));
     closeSheet();
     const parts = [
       plan.placements.length && `${plan.placements.length} ${plan.placements.length === 1 ? 'tarefa encaixada' : 'tarefas encaixadas'}`,
-      defer.size && `${defer.size} para ${formatDay(tomorrow).toLowerCase()}`,
+      selected.length && `${selected.length} para ${formatDay(tomorrow).toLowerCase()}`,
     ].filter(Boolean);
     toast(`Dia organizado · ${parts.join(' · ')}`, { label: 'Desfazer', run: () => actions.undo() });
   };
 
   if (dayOver) {
     return (
-      <BottomSheet title="Organizar meu dia" onClose={closeSheet}
+      <BottomSheet title="Planejar horários" onClose={closeSheet}
         footer={
           <>
             <button className="btn btn-secondary" onClick={closeSheet}>Fechar</button>
             <button className="btn btn-primary grow" onClick={() => openSheet({ type: 'plan', date: tomorrow })}>
               <Icon name="wand" size={18} />
-              Organizar amanhã
+              Planejar amanhã
             </button>
           </>
         }
       >
-        <EmptyState icon="🌙" title="Seu dia já terminou." text={`Seu horário vai até ${dayEnd} (ajuste no Perfil). Que tal deixar amanhã organizado?`} />
+        <AvailabilityEditor />
+        <EmptyState icon="🌙" title="Seu período planejado terminou." text={`Seu horário vai até ${dayEnd}. Você pode ajustar o período acima ou deixar amanhã organizado.`} />
       </BottomSheet>
     );
   }
 
   return (
     <BottomSheet
-      title={date === today ? 'Organizar meu dia' : `Organizar ${formatDay(date).toLowerCase()}`}
+      title={date === today ? 'Planejar horários' : `Planejar ${formatDay(date).toLowerCase()}`}
       onClose={closeSheet}
       footer={
         !nothing && (
@@ -94,6 +98,8 @@ export function PlanSheet({ date }: { date: string }) {
         )
       }
     >
+      <p className="small muted" style={{ marginBottom: 12 }}>Estimativa com base nas tarefas e compromissos do Leve. Compromissos já existentes no Google Agenda não são importados. Sem duração informada, usamos {settings.defaultDuration} min.</p>
+      <AvailabilityEditor />
       {nothing ? (
         <EmptyState icon="🧘" title="Nada para organizar." text="Não há tarefas sem horário para encaixar neste dia." />
       ) : (

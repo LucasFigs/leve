@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { authProviders, endRecovery, signInWithGoogle, supabase, useCloud } from '../store/sync';
-import { formatPhone } from '../domain/phone';
 import { Icon } from '../components/Icon';
 
 type Mode = 'signin' | 'signup' | 'forgot';
@@ -9,7 +8,7 @@ const TRANSLATE: [RegExp, string][] = [
   [/invalid login credentials/i, 'E-mail ou senha incorretos.'],
   [/email not confirmed/i, 'Confirme seu e-mail antes de entrar (veja sua caixa de entrada).'],
   [/user already registered/i, 'Já existe uma conta com esse e-mail. Tente entrar.'],
-  [/password should be at least/i, 'A senha precisa ter pelo menos 6 caracteres.'],
+  [/password should be at least/i, 'A senha precisa ter pelo menos 12 caracteres.'],
   [/rate limit|too many/i, 'Muitas tentativas. Aguarde um pouco e tente de novo.'],
   [/provider is not enabled/i, 'Login com Google ainda não está ativado.'],
   [/failed to fetch|network/i, 'Sem conexão. Verifique a internet.'],
@@ -41,10 +40,7 @@ function GoogleLogo() {
 export function Login() {
   const recovery = useCloud((c) => c.recovery);
   const [mode, setMode] = useState<Mode>('signin');
-  const [fullName, setFullName] = useState('');
   const [preferredName, setPreferredName] = useState('');
-  const [nickTouched, setNickTouched] = useState(false);
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -94,18 +90,14 @@ export function Login() {
         if (error) throw error;
       } else if (mode === 'signup') {
         if (password.length < 12) throw new Error('Use uma senha com pelo menos 12 caracteres.');
-        if (fullName.trim().split(/\s+/).length < 2) throw new Error('Informe seu nome completo (nome e sobrenome).');
         if (password !== confirmPw) throw new Error('As senhas não conferem.');
-        if (phone && phone.replace(/\D/g, '').length < 10) throw new Error('Celular incompleto — use DDD + número, ou deixe em branco.');
         const { data, error } = await auth.signUp({
           email: email.trim(),
           password,
           options: {
             emailRedirectTo: window.location.origin,
             data: {
-              full_name: fullName.trim(),
-              preferred_name: (preferredName || fullName.split(' ')[0]).trim(),
-              phone: phone.trim(),
+              preferred_name: preferredName.trim(),
             },
           },
         });
@@ -183,26 +175,8 @@ export function Login() {
           {mode === 'signup' && (
             <>
               <label className="field">
-                <span className="label">Nome completo</span>
-                <input
-                  className="input"
-                  autoComplete="name"
-                  value={fullName}
-                  onChange={(e) => {
-                    setFullName(e.target.value);
-                    if (!nickTouched) setPreferredName(e.target.value.trim().split(/\s+/)[0] ?? '');
-                  }}
-                  required
-                  autoFocus
-                />
-              </label>
-              <label className="field">
-                <span className="label">Como quer ser chamado</span>
-                <input className="input" autoComplete="nickname" value={preferredName} onChange={(e) => { setPreferredName(e.target.value); setNickTouched(true); }} />
-              </label>
-              <label className="field">
-                <span className="label">Celular (opcional)</span>
-                <input className="input num" type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 91234-5678" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} />
+                <span className="label">Como quer ser chamado? (opcional)</span>
+                <input className="input" autoComplete="nickname" value={preferredName} onChange={(e) => setPreferredName(e.target.value)} />
               </label>
             </>
           )}

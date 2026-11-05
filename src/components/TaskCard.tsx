@@ -106,7 +106,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
               {subDone}/{task.subtasks.length}
             </span>
           )}
-          {task.category && CATEGORY_MAP[task.category] && (
+          {task.category && !project && !task.priority && CATEGORY_MAP[task.category] && (
             <span>
               {CATEGORY_MAP[task.category].icon} {CATEGORY_MAP[task.category].label}
             </span>

@@ -177,15 +177,14 @@ function HabitCard({
       </div>
 
       {/* Heatmap grid — ao clicar abre o calendário completo */}
-      <div
+      <button
+        type="button"
         className="habit-grid-touch"
         onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
-        role="button"
-        tabIndex={0}
         aria-label={`Abrir calendário de ${task.title}`}
       >
         <HabitGrid task={task} today={today} />
-      </div>
+      </button>
 
       {/* Footer stats */}
       <div className="habit-footer">

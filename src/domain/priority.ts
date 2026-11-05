@@ -33,7 +33,8 @@ export interface RankContext {
 const BASE: Record<Priority | 'none', number> = { essential: 25, important: 15, none: 10, optional: 0 };
 
 export function nextEventAfter(items: DayItem[], now: number): DayItem | undefined {
-  return items.find((i) => i.task.kind === 'event' && i.time && timeToMin(i.time) >= now && !i.done);
+  return items.filter((i) => i.task.kind === 'event' && i.time && timeToMin(i.time) >= now && !i.done)
+    .sort((a, b) => timeToMin(a.time!) - timeToMin(b.time!))[0];
 }
 
 export function scoreItem(item: DayItem, ctx: RankContext & { now: number }): Candidate {
@@ -143,18 +144,41 @@ export function rankCandidates(ctx: RankContext): Candidate[] {
 
 export type NowRecommendation =
   | { type: 'event'; item: DayItem; minutes: number; ongoing: boolean }
+  | { type: 'scheduled'; item: DayItem; minutes: number; ongoing: false }
   | { type: 'task'; candidates: Candidate[] }
-  | { type: 'empty' };
+  | { type: 'empty'; reason?: string };
 
 export function recommendNow(ctx: RankContext): NowRecommendation {
   const now = ctx.now ?? nowMin();
-  for (const i of ctx.items) {
+  const ordered = [...ctx.items].sort((a, b) => timeToMin(a.time ?? '23:59') - timeToMin(b.time ?? '23:59'));
+  for (const i of ordered) {
     if (i.task.kind !== 'event' || !i.time || i.done) continue;
     const start = timeToMin(i.time);
     const end = start + i.duration;
     if (now >= start && now < end) return { type: 'event', item: i, minutes: end - now, ongoing: true };
     if (start > now && start - now <= 15) return { type: 'event', item: i, minutes: start - now, ongoing: false };
   }
-  const candidates = rankCandidates({ ...ctx, now });
-  return candidates.length ? { type: 'task', candidates } : { type: 'empty' };
+  const end = timeToMin(ctx.settings.dayEnd);
+  if (now >= end) return { type: 'empty', reason: 'Seu período planejado terminou. O que ficou pode ser revisto amanhã.' };
+  if (now < timeToMin(ctx.settings.dayStart)) return { type: 'empty', reason: `Seu período planejado começa às ${ctx.settings.dayStart}.` };
+  const lunchStart = timeToMin(ctx.settings.lunchStart);
+  const lunchEnd = timeToMin(ctx.settings.lunchEnd);
+  if (ctx.settings.protectLunch && now >= lunchStart && now < lunchEnd) {
+    return { type: 'empty', reason: `Este horário está reservado para sua pausa, até ${ctx.settings.lunchEnd}.` };
+  }
+  const next = ordered.find(i => !i.done && i.time && timeToMin(i.time) > now);
+  const boundary = Math.min(end, next?.time ? timeToMin(next.time) - 5 : end,
+    ctx.settings.protectLunch && now < lunchStart ? lunchStart : end);
+  const seen = new Set<string>();
+  const candidates = rankCandidates({ ...ctx, now }).filter(c => {
+    if (seen.has(c.item.task.id)) return false;
+    seen.add(c.item.task.id);
+    if (c.item.time && timeToMin(c.item.time) > now) return false;
+    const remaining = c.ongoing && c.item.time ? timeToMin(c.item.time) + c.item.duration - now : c.item.duration;
+    return remaining <= boundary - now;
+  });
+  if (candidates.length) return { type: 'task', candidates };
+  if (next) return { type: 'scheduled', item: next, minutes: timeToMin(next.time!) - now, ongoing: false };
+  return { type: 'empty', reason: rankCandidates({ ...ctx, now }).length
+    ? 'Nenhuma tarefa cabe inteira no período disponível. Você pode escolher um passo menor ou replanejar.' : undefined };
 }
