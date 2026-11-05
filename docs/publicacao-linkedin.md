@@ -23,6 +23,8 @@ O Leve continua em desenvolvimento. Quero seguir melhorando a experiência com u
 Experimente: https://leve-flame.vercel.app
 Código: https://github.com/LucasFigs/leve
 
+A integração com Google Agenda está em testes com contas autorizadas; os demais recursos podem ser usados sem conectá-la.
+
 O que mais dificulta seu planejamento hoje: capturar as tarefas, decidir prioridades ou reorganizar o dia quando os planos mudam?
 
 #React #TypeScript #DesenvolvimentoWeb #ProjetosPessoais

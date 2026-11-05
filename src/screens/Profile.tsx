@@ -512,6 +512,7 @@ function GoogleCalendarSection() {
     <section className="section">
       <SectionHead title="Google Agenda" />
       <p className="small muted" style={{ marginBottom: 12 }}>Envia alterações do Leve para o calendário escolhido. Eventos já existentes no Google não são importados nem descontados do tempo disponível no Leve.</p>
+      <p className="small muted" style={{ marginBottom: 12 }}><strong>Integração em testes.</strong> Disponível apenas para contas autorizadas no Google. Durante os testes, a autorização pode expirar após 7 dias e exigir uma nova conexão. Você pode usar o Leve sem conectar o calendário.</p>
       <div className="list">
         {!gcal.connected ? (
           <div className="settings-row" style={{ flexWrap: 'wrap', gap: 12 }}>
@@ -522,7 +523,7 @@ function GoogleCalendarSection() {
                 <span className="xs faint" style={{ display: 'block' }}>
                   Tarefas e compromissos criados e editados sobem direto para a sua agenda Google
                 </span>
-                <span className="xs faint" style={{ display: 'block' }}>O vínculo fica salvo na sua conta do Leve. Ao reabrir o app, a conexão é restaurada automaticamente.</span>
+                <span className="xs faint" style={{ display: 'block' }}>O vínculo fica salvo na sua conta do Leve e é restaurado ao reabrir o app enquanto a autorização estiver válida.</span>
               </span>
             </span>
             <button

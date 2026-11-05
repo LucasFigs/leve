@@ -555,7 +555,8 @@ export async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     // sempre pergunta qual conta Google usar (permite trocar de conta)
-    options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } },
+    // Login não solicita acesso ao calendário; a integração tem autorização própria no Perfil.
+    options: { scopes: 'openid email profile', redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } },
   });
   if (error) throw error;
 }
