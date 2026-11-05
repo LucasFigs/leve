@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef } from 'react';
 import {
   addDays, formatDay, formatDuration, fromISODate, monthMatrix, MONTHS_LONG, startOfWeek, toISODate, todayISO, WEEKDAYS_SHORT,
 } from '../domain/dates';
@@ -134,7 +134,7 @@ function DayView({ date }: { date: string }) {
       )}
 
       {items.length === 0 && (
-        <EmptyState icon="🌤️" title="Seu dia está livre." text="Que tal aproveitar esse espaço? Toque em um horário para adicionar algo." />
+        <EmptyState icon="🌤️" title="Nada registrado neste dia." text="Toque em um horário para adicionar algo. Confira também seus compromissos fora do Leve." />
       )}
 
       <div className="card" style={{ padding: '16px 8px 16px 0' }}>
@@ -217,6 +217,7 @@ function WeekAccordions({ date }: { date: string }) {
 
 function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, items: DayItem[], today: string, isOpen: boolean, setOpenDay: (d: string | null) => void }) {
   const ref = useRef<HTMLElement>(null);
+  const bodyId = useId();
 
   useEffect(() => {
     if (isOpen && ref.current) {
@@ -242,9 +243,11 @@ function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, 
 
   return (
     <section ref={ref} className={`week-accordion${isOpen ? ' open' : ''}`}>
+      <div className="week-accordion-controls">
       <button
         className="week-accordion-head"
         aria-expanded={isOpen}
+        aria-controls={bodyId}
         onClick={() => setOpenDay(isOpen ? null : d)}
       >
         <span style={{ color: d === today ? 'var(--accent)' : undefined, fontWeight: 650, fontSize: 'var(--fs-sm)' }}>
@@ -254,19 +257,16 @@ function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, 
           {items.length > 0 && (
             <span className="xs faint">{pending > 0 ? `${pending} pendente${pending !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
           )}
-          <button
-            className="icon-btn sm"
-            onClick={(e) => { e.stopPropagation(); openSheet({ type: 'quickAdd', defaults: { date: d } }); }}
-            aria-label={`Adicionar em ${formatDay(d, today)}`}
-          >
-            <Icon name="plus" size={15} />
-          </button>
           <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
         </span>
       </button>
+      <button className="icon-btn" onClick={() => openSheet({ type: 'quickAdd', defaults: { date: d } })} aria-label={`Adicionar em ${formatDay(d, today)}`}>
+        <Icon name="plus" size={18} />
+      </button>
+      </div>
 
-      {isOpen && (
-        <div className="week-accordion-body">
+        <div id={bodyId} hidden={!isOpen} className="week-accordion-body">
+          {isOpen && <>
           {sorted.length ? (
             <div className="list">
               {sorted.map((i) => (
@@ -274,10 +274,10 @@ function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, 
               ))}
             </div>
           ) : (
-            <p className="small faint" style={{ padding: '4px 2px 8px' }}>Dia livre 🌤️</p>
+            <p className="small faint" style={{ padding: '4px 2px 8px' }}>Nada registrado neste dia 🌤️</p>
           )}
+          </>}
         </div>
-      )}
     </section>
   );
 }

@@ -40,14 +40,21 @@ function useTheme() {
     const root = document.documentElement;
     if (theme === 'system') root.removeAttribute('data-theme');
     else root.setAttribute('data-theme', theme);
-    const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0c0c0f' : '#f4f4f6');
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => {
+      const dark = theme === 'dark' || (theme === 'system' && media.matches);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0c0c0f' : '#f4f4f6');
+    };
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
   }, [theme]);
 }
 
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat || e.isComposing) return;
       if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       const el = e.target as HTMLElement;
       const typing = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
@@ -75,7 +82,7 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
     case 'quickAdd':
       return <QuickAddSheet defaults={sheet.defaults} />;
     case 'task':
-      return <TaskSheet key={sheet.id} id={sheet.id} date={sheet.date} />;
+      return <TaskSheet key={`${sheet.id}:${sheet.date ?? ''}`} id={sheet.id} date={sheet.date} />;
     case 'newTask':
       return <TaskSheet key={sheet.task.id} initial={sheet.task} />;
     case 'eventMissed':
@@ -93,7 +100,7 @@ function SheetHost({ sheet }: { sheet?: Sheet }) {
     case 'habitCalendar':
       return <HabitCalendarSheet key={sheet.id} id={sheet.id} />;
     case 'project':
-      return <ProjectSheet id={sheet.id} />;
+      return <ProjectSheet key={sheet.id ?? 'new'} id={sheet.id} />;
     case 'search':
       return <SearchSheet />;
     case 'account':
@@ -137,6 +144,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">Ir para o conteúdo</a>
       <nav className="sidebar" aria-label="Navegação principal">
         <div className="brand">
           <span className="brand-mark"><Icon name="leaf" size={16} stroke={2.2} /></span>
@@ -161,7 +169,7 @@ export default function App() {
         </button>
       </nav>
 
-      <main className="main" key={tab}>
+      <main className="main" id="main-content" tabIndex={-1} key={tab}>
         {screen}
       </main>
 

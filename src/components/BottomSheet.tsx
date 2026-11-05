@@ -173,14 +173,11 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
   }, []);
 
   const onTouchStart = (e: React.TouchEvent, source: 'handle' | 'head' | 'body') => {
+    // A área de conteúdo fica reservada à rolagem e à seleção de texto.
+    if (source === 'body' || e.touches.length !== 1) return;
     if (source === 'head') {
       const target = e.target as HTMLElement;
       if (target.closest('button, a, input, textarea, select')) return;
-    }
-    if (source === 'body') {
-      const target = e.target as HTMLElement;
-      if (target.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
-      if (bodyRef.current && bodyRef.current.scrollTop > 0) return;
     }
     const t = e.touches[0];
     if (t) handleDragStart(t.clientY, t.clientX, source);

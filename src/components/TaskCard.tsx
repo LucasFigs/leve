@@ -35,6 +35,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const missed = task.recurrence ? !!task.missedDates?.includes(occurrence) : task.status === 'done' && !!task.missed;
 
   const toggle = () => {
+    if (leaving) return;
     if (isDone) {
       actions.reopen(task.id, occurrence);
       return;

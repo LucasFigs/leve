@@ -24,15 +24,18 @@ interface Props {
   hint?: boolean;
   /** mostra “Detalhar” mesmo com o campo vazio (na folha de captura) */
   alwaysDetail?: boolean;
+  onDraftChange?: (text: string) => void;
 }
 
-export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true, alwaysDetail }: Props) {
+export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true, alwaysDetail, onDraftChange }: Props) {
   const inputId = useId();
   const [text, setText] = useState('');
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const ref = useRef<HTMLTextAreaElement>(null);
   const defaultDuration = useStore((s) => s.settings.defaultDuration);
   const projects = useStore((s) => s.projects);
+
+  useEffect(() => { onDraftChange?.(text); }, [text, onDraftChange]);
 
   const parsed = useMemo(
     () => (text.trim().length > 2 ? assistant.interpret(text, { defaultDuration }) : undefined),
@@ -112,7 +115,7 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
           placeholder={placeholder}
           onChange={(e) => setText(e.target.value.replace(/\n/g, ''))}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               submit();
             }
