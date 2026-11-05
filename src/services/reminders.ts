@@ -8,8 +8,9 @@
 import { nowMin, todayISO } from '../domain/dates';
 import { dueReminders } from '../domain/reminders';
 import { getState } from '../store/store';
-import { openSheet, toast } from '../store/ui';
+import { toast } from '../store/ui';
 import { rememberNotification, rememberNotificationUrl } from './notificationNavigation';
+import { cloudEnabled, notificationOwner } from '../store/sync';
 
 const SENT_KEY = 'leve.reminders.sent';
 
@@ -43,7 +44,10 @@ function saveSent(today: string, keys: Set<string>) {
   }
 }
 
-async function notify(title: string, body: string, tag: string, data: { taskId: string; date: string }) {
+function openReminder(data: {taskId: string;date: string;owner?: string}) {
+  rememberNotification(data); window.dispatchEvent(new Event('leve-notification'));
+}
+async function notify(title: string, body: string, tag: string, data: { taskId: string; date: string; owner?: string }) {
   if (reminderPermission() !== 'granted') return;
   const opts: NotificationOptions = { body, tag, icon: '/icon-192.png', badge: '/icon-192.png', data };
   try {
@@ -60,7 +64,7 @@ async function notify(title: string, body: string, tag: string, data: { taskId: 
     const n = new Notification(title, opts);
     n.onclick = () => {
       window.focus();
-      openSheet({ type: 'task', id: data.taskId, date: data.date });
+      openReminder(data);
     };
   } catch {
     /* noop */
@@ -69,6 +73,8 @@ async function notify(title: string, body: string, tag: string, data: { taskId: 
 
 /** Verifica o que está para começar e avisa uma vez por item. */
 export function checkReminders() {
+  const owner = notificationOwner();
+  if (cloudEnabled && !owner) return;
   const { settings, tasks } = getState();
   if (!settings.reminders) return;
   const today = todayISO();
@@ -79,9 +85,10 @@ export function checkReminders() {
     if (sent.has(r.key)) continue;
     sent.add(r.key);
     changed = true;
-    notify(r.title, r.body, r.key, { taskId: r.taskId, date: r.date });
+    const intent = { taskId:r.taskId,date:r.date,owner };
+    notify(r.title, r.body, r.key, intent);
     if (document.visibilityState === 'visible') {
-      toast(`${r.left > 0 ? `Em ${r.left} min` : 'Agora'}: ${r.title}`, { label: 'Abrir', run: () => openSheet({ type: 'task', id: r.taskId, date: r.date }) });
+      toast(`${r.left > 0 ? `Em ${r.left} min` : 'Agora'}: ${r.title}`, { label: 'Abrir', run: () => openReminder(intent) });
     }
   }
   if (changed) saveSent(today, sent);
