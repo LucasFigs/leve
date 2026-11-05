@@ -11,6 +11,7 @@ import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
 import { EmptyState, Segmented, SectionHead } from '../components/ui';
 import { TopActions } from './TopActions';
+import { Disclosure } from '../components/Disclosure';
 
 type StatusFilter = 'open' | 'done' | 'all';
 
@@ -136,8 +137,7 @@ export function TasksScreen() {
         ]}
       />
 
-      <details className="secondary-panel">
-      <summary>Mais filtros{(kind || priority || projectId || category) ? ' · aplicados' : ''}</summary>
+      <Disclosure icon="settings" title={`Mais filtros${(kind || priority || projectId || category) ? ' · aplicados' : ''}`}>
       <div className="filters" style={{ marginTop: 10 }}>
         <select className="input" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')} aria-label="Tipo">
           <option value="">Todos os tipos</option>
@@ -168,7 +168,7 @@ export function TasksScreen() {
         </select>
       </div>
 
-      </details>
+      </Disclosure>
 
       <p className="xs faint" style={{ margin: '10px 2px 0' }} aria-live="polite">
         {total} {total === 1 ? 'item' : 'itens'}

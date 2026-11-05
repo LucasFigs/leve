@@ -2,18 +2,19 @@ import { useState, type ReactNode } from 'react';
 import type { Kind, Priority, Recurrence, Task } from '../domain/types';
 import { addDays, formatDay, formatDuration, minToTime, nowMin, timeToMin, todayISO, weekdayOf } from '../domain/dates';
 import { PRIORITY_META } from '../domain/priority';
-import { parse } from '../domain/parser';
+
 import { occursOn, recurrenceError, recurrenceLabel } from '../domain/recurrence';
 import { assistant } from '../services/assistant';
 import { actions, uid, useStore, type SeriesScope } from '../store/store';
 import { closeSheet, openSheet, toast } from '../store/ui';
 import { BottomSheet } from '../components/BottomSheet';
-import { Option, ProgressBar, Segmented } from '../components/ui';
-import { Icon, type IconName } from '../components/Icon';
+import { Checkbox, Option, ProgressBar, Segmented } from '../components/ui';
+import { Icon } from '../components/Icon';
 import { RecurrenceEditor } from '../components/RecurrenceEditor';
 import { SubtaskList } from '../components/SubtaskList';
 import { CATEGORIES } from '../domain/category';
-import { completeWithFeedback, removeWithFeedback } from '../components/feedback';
+import { Disclosure } from '../components/Disclosure';
+import { archiveWithFeedback, completeWithFeedback, removeWithFeedback } from '../components/feedback';
 import { startTask } from '../components/focusFlow';
 import { useGoogleCalendar } from '../services/googleCalendar';
 
@@ -21,10 +22,8 @@ const DURATIONS = [15, 30, 45, 60, 90, 120, 150, 180, 240];
 const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso', habit: 'Hábito' };
 
 /**
- * Detalhes de uma tarefa, pensados para o celular:
- * - tudo fica visível, em seções com título, na ordem em que se decide (quando → quanto → o quê);
- * - o que ajuda a começar (próximo passo, passos, “Começar”) fica no alto e ao alcance do polegar;
- * - edição é rascunho (Cancelar/Salvar), mas marcar um passo como feito vale na hora.
+ * Tarefa organizada abre em consulta/execução; edição exige ação explícita.
+ * Capturas e tarefas novas abrem o formulário completo com rascunho.
  * Com `initial`, é uma tarefa nova (capturar e já detalhar) que só é criada ao salvar.
  */
 export function TaskSheet({ id, date, initial }: { id?: string; date?: string; initial?: Task }) {
@@ -35,6 +34,8 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const [newSub, setNewSub] = useState('');
   const [original, setOriginal] = useState(live);
   const [draft, setDraft] = useState(live);
+  const [editMode, setEditMode] = useState(false);
+  const gcalConnected = useGoogleCalendar((s) => s.connected && s.autoSync);
   /** Inbox: escolheu explicitamente “Quando der” (sem data) */
   const [someday, setSomeday] = useState(false);
   /** Pergunta “só este / este e os seguintes / todos” de uma série */
@@ -49,7 +50,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   if (!task || !original) return null;
 
   const inbox = isNew || original.status === 'inbox';
-  const editing = inbox || dirty;
+  const editing = inbox || editMode;
   const today = todayISO();
   const occurrence = date ?? task.date ?? today;
   const isEvent = task.kind === 'event';
@@ -59,9 +60,8 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const started = occurrence < today || (occurrence === today && (!task.time || timeToMin(task.time) <= nowMin()));
   const noun = isEvent ? 'compromisso' : 'tarefa';
   const project = projects.find((p) => p.id === task.projectId);
-  const gcalConnected = useGoogleCalendar((s) => s.connected && s.autoSync);
 
-  const upd = (patch: Partial<Task>) => setDraft({ ...task, ...patch });
+  const upd = (patch: Partial<Task>) => { setEditMode(true); setDraft({ ...task, ...patch }); };
   const addSubtasks = (titles: string[]) =>
     upd({ subtasks: [...task.subtasks, ...titles.filter(Boolean).map((title) => ({ id: uid(), title, done: false }))] });
 
@@ -189,32 +189,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
   const endTime = task.time ? minToTime(timeToMin(task.time) + (task.duration ?? 30)) : undefined;
   const overdue = !isDone && !isEvent && !task.recurrence && !!task.date && task.date < today;
   const subDone = task.subtasks.filter((s) => s.done).length;
-  const nextStep = task.subtasks.find((s) => !s.done);
-
-  /* ---------- Empurrão para começar (uma dica por vez) ---------- */
-  const acting = !editing && !isDone && !isEvent;
-  let hint: ReactNode = null;
-  if (acting && task.postponed >= 2) {
-    hint = (
-      <Hint icon="bolt" text={<>Adiada <b>{task.postponed} vezes</b>. Começar é a parte mais difícil — que tal um Pomodoro?</>}>
-        <button className="btn btn-sm btn-soft" onClick={() => { closeSheet(); startTask(task.id, occurrence); }}>
-          Iniciar Pomodoro
-        </button>
-      </Hint>
-    );
-  } else if (acting && nextStep) {
-    hint = <Hint icon="arrow-right" text={<>Próximo passo: <b>{nextStep.title}</b></>} />;
-  } else if (acting && task.kind === 'task' && task.subtasks.length === 0 && ((task.duration ?? 0) >= 60 || parse(task.title).big)) {
-    hint = (
-      <Hint icon="split" text="Parece grande. Dividir em passos pequenos deixa mais fácil começar.">
-        <button className="btn btn-sm btn-soft" onClick={() => addSubtasks(assistant.breakdown(task))}>
-          <Icon name="sparkles" size={14} />
-          Sugerir passos
-        </button>
-      </Hint>
-    );
-  }
-
   /* ---------- Rodapé: uma ação principal, o resto discreto ---------- */
   let footer: ReactNode;
   if (editing) {
@@ -228,7 +202,11 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
           </p>
         ) : null}
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => { if (confirmDiscard()) closeSheet(); }}>
+          <button className="btn btn-secondary" onClick={() => {
+            if (!confirmDiscard()) return;
+            if (inbox) closeSheet();
+            else { setEditMode(false); setOriginal(live); setDraft(live); setSomeday(false); }
+          }}>
             Cancelar
           </button>
           <button className="btn btn-primary grow" onClick={() => save()} disabled={!!error}>
@@ -238,6 +216,8 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         </div>
       </div>
     );
+  } else if (task.status === 'archived') {
+    footer = <button className="btn btn-secondary grow" onClick={() => { actions.update(task.id, { status: 'active' }); toast('Tarefa restaurada'); }}>Restaurar tarefa</button>;
   } else if (isEvent) {
     footer = isDone ? (
       <>
@@ -298,7 +278,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
       <div className="foot-stack">
         <button className="btn btn-primary btn-block" onClick={() => { closeSheet(); startTask(task.id, occurrence); }}>
           <Icon name="play" size={16} fill />
-          Começar com Pomodoro
+          Começar agora
         </button>
         <div className="foot-actions">
           <button className="btn btn-sm btn-ghost" onClick={() => { closeSheet(); completeWithFeedback(task.id, occurrence); }}>
@@ -313,6 +293,49 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
       </div>
     );
   }
+
+  if (!editing) return (
+    <BottomSheet key="overview" label={task.title} title={KIND_LABEL[task.kind]} onClose={closeSheet}
+      headerExtra={<button type="button" className="btn btn-sm btn-soft" onClick={() => { setOriginal(live); setDraft(live); setEditMode(true); }}>
+        <Icon name="edit" size={16} />Editar
+      </button>}
+      footer={footer}>
+      <article className="task-overview">
+        <header>
+          <h2 className="task-overview-title">{task.title}</h2>
+          <div className="task-overview-tags">
+            {task.status === 'archived' ? <span className="chip">Arquivada</span> : isDone && <span className="chip">{missed ? 'Não aconteceu' : isEvent ? 'Aconteceu' : 'Concluída'}</span>}
+            {task.priority && <span className={`prio ${task.priority}`}><span className="prio-dot" />{PRIORITY_META[task.priority].label}</span>}
+            {project && <span className="small muted">{project.emoji} {project.name}</span>}
+          </div>
+        </header>
+        <dl className="task-overview-facts">
+          <div><dt><Icon name="calendar" size={16} />Quando</dt><dd>{task.recurrence ? formatDay(occurrence, today, { long: true }) : task.date ? formatDay(task.date, today, { long: true }) : 'Quando der · sem data'}{task.time && ` · ${task.time}${endTime ? `–${endTime}` : ''}`}</dd></div>
+          {task.duration && <div><dt><Icon name="clock" size={16} />Duração</dt><dd>{formatDuration(task.duration)}</dd></div>}
+          {task.due && <div><dt><Icon name="flag" size={16} />Prazo final</dt><dd>{formatDay(task.due, today, { long: true })}</dd></div>}
+          {task.recurrence && <div><dt><Icon name="repeat" size={16} />Repetição</dt><dd>{recurrenceLabel(task.recurrence)}</dd></div>}
+          {task.category && <div><dt>Categoria</dt><dd>{CATEGORIES.find(c => c.id === task.category)?.label}</dd></div>}
+        </dl>
+        {task.notes && <section aria-label="Notas"><h3 className="section-title">Notas</h3><p className="task-overview-notes">{task.notes}</p></section>}
+        {task.subtasks.length > 0 ? <section aria-label="Passos da tarefa">
+          <div className="section-head"><h3 className="section-title">Passos</h3><span className="small muted num" aria-live="polite">{subDone} de {task.subtasks.length}</span></div>
+          <ProgressBar value={subDone / task.subtasks.length} label="Passos concluídos" />
+          <div className="task-overview-steps">
+            {task.subtasks.map(step => <div key={step.id} className={`task-overview-step${step.done ? ' done' : ''}`}>
+              <Checkbox checked={step.done} onToggle={() => actions.toggleSubtask(task.id, step.id)} label={`${step.done ? 'Reabrir' : 'Concluir'} passo: ${step.title}`} />
+              <span>{step.title}</span>
+            </div>)}
+          </div>
+          {task.recurrence && <p className="xs muted">Os passos são compartilhados entre as repetições. A ação de concluir esta tarefa se aplica à data exibida.</p>}
+        </section> : <p className="small muted">Você pode começar diretamente. Use Editar se quiser adicionar passos ou outros detalhes.</p>}
+        {(task.focusMinutes ?? 0) > 0 && <p className="small muted"><Icon name="target" size={16} /> {formatDuration(task.focusMinutes)} de foco nesta tarefa.</p>}
+        <Disclosure title="Outras ações">
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => { archiveWithFeedback(task.id); closeSheet(); }}><Icon name="archive" size={16} />{task.recurrence ? 'Arquivar tarefa e repetições' : 'Arquivar tarefa'}</button>
+          <button type="button" className="btn btn-sm btn-danger" onClick={() => remove()}><Icon name="trash" size={16} />Excluir {noun}</button>
+        </Disclosure>
+      </article>
+    </BottomSheet>
+  );
 
   return (
     <BottomSheet
@@ -329,9 +352,12 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
       }
       headerExtra={
         !isNew && (
+          <>
+          {inbox && <button type="button" className="icon-btn sm" onClick={() => { if (confirmDiscard()) { archiveWithFeedback(task.id); closeSheet(); } }} aria-label="Arquivar captura" title="Arquivar"><Icon name="archive" size={18} /></button>}
           <button className="icon-btn sm btn-danger" onClick={() => remove()} aria-label={`Excluir ${noun}`} title="Excluir">
             <Icon name="trash" size={18} />
           </button>
+          </>
         )
       }
       footer={footer}
@@ -348,7 +374,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         value={task.title}
         placeholder={isEvent ? 'Nome do compromisso' : 'O que precisa ser feito?'}
         autoFocus={isNew && !task.title}
-        data-autofocus={isNew && !task.title ? '' : undefined}
+        data-autofocus=""
         onChange={(e) => upd({ title: e.target.value.replace(/\n/g, '') })}
         aria-label="Título"
       />
@@ -361,7 +387,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
       )}
       {original.seriesId && <p className="xs faint" style={{ marginTop: 2 }}>Data alterada à parte de uma série que se repete.</p>}
 
-      {hint}
+
 
       <div className="stack" style={{ gap: 22, marginTop: 14 }}>
         <Segmented<Kind>
@@ -488,8 +514,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
           </div>
         </div>
 
-        <details className="secondary-panel">
-          <summary>Categoria (opcional){task.category ? ` · ${CATEGORIES.find(cat => cat.id === task.category)?.label ?? ''}` : ''}</summary>
+        <Disclosure icon="folder" title={`Categoria (opcional)${task.category ? ` · ${CATEGORIES.find(cat => cat.id === task.category)?.label ?? ''}` : ''}`}>
           <div className="chips">
             {CATEGORIES.map((cat) => (
               <button
@@ -503,7 +528,7 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
               </button>
             ))}
           </div>
-        </details>
+        </Disclosure>
 
         <div className="field">
           <label className="label" htmlFor="repeat">Repetir</label>
@@ -542,8 +567,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
               <SubtaskList
                 subtasks={task.subtasks}
                 onChange={(subtasks) => upd({ subtasks })}
-                // Fazer não é editar: fora de um rascunho, marcar um passo vale na hora
-                onToggle={!editing ? (sid) => actions.toggleSubtask(task.id, sid) : undefined}
               />
               <form
                 className="subtask"
@@ -624,16 +647,6 @@ export function TaskSheet({ id, date, initial }: { id?: string; date?: string; i
         </p>
       )}
     </BottomSheet>
-  );
-}
-
-function Hint({ icon, text, children }: { icon: IconName; text: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="task-hint">
-      <Icon name={icon} size={16} />
-      <span className="grow">{text}</span>
-      {children}
-    </div>
   );
 }
 

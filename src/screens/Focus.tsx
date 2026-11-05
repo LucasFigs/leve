@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { Checkbox } from '../components/ui';
 import { completeWithFeedback } from '../components/feedback';
 import { useModalFocus } from '../hooks/modalFocus';
+import { Disclosure } from '../components/Disclosure';
 
 const fmt = (sec: number) => {
   const s = Math.max(0, Math.round(sec));
@@ -191,8 +192,7 @@ export function FocusMode() {
 
       <div className="focus-center">
         {/* Seletor de fases Pomodoro */}
-        <details className="focus-options">
-        <summary>{timed ? 'Opções de tempo' : 'Usar Pomodoro (opcional)'}</summary>
+        <Disclosure className="focus-options" icon="clock" title={timed ? 'Opções de tempo' : 'Usar Pomodoro (opcional)'}>
         <div className="focus-pomo-tabs" role="group" aria-label="Duração do bloco">
           <button
             className={`focus-pomo-tab${phase === 'pomodoro' ? ' active' : ''}`}
@@ -214,7 +214,7 @@ export function FocusMode() {
           </button>
         </div>
         {timed && <button className="btn btn-ghost btn-sm" onClick={() => setTimed(false)}>Continuar sem contagem regressiva</button>}
-        </details>
+        </Disclosure>
 
         <div className="focus-task" style={{ marginTop: 4 }}>{task.title}</div>
         {currentStep && (
@@ -272,8 +272,7 @@ export function FocusMode() {
         ) : null}
 
         {/* Checklist de subtarefas / subáreas */}
-        <details className="focus-checklist" open={steps.length > 0 || undefined}>
-          <summary>Passos da tarefa (opcional)</summary>
+        <Disclosure className="focus-checklist" icon="list" title="Passos da tarefa (opcional)" defaultOpen={steps.length > 0}>
           <div className="focus-checklist-head">
             <span>Checklist de passos</span>
             <span className="num">
@@ -318,7 +317,7 @@ export function FocusMode() {
               </button>
             )}
           </form>
-        </details>
+        </Disclosure>
       </div>
 
       {/* Controles de ação principal */}

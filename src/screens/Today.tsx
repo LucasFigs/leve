@@ -187,10 +187,7 @@ export function TodayScreen() {
           )}
 
           <section className="section">
-            <details className="secondary-panel">
-            <summary>Visão da semana</summary>
             <WeekCard />
-            </details>
           </section>
         </div>
 

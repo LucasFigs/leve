@@ -1,5 +1,5 @@
 /** “Sua semana”: evolução dos últimos 7 dias — recolhido por padrão, abre com um toque. */
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { addDays, formatDay, formatDuration, todayISO, weekdayOf, WEEKDAYS_SHORT } from '../domain/dates';
 import { completedOn } from '../domain/selectors';
 import { useStore } from '../store/store';
@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 const OPEN_KEY = 'leve:week-open';
 
 export function WeekCard() {
+  const bodyId = useId();
   const tasks = useStore((s) => s.tasks);
   const today = todayISO();
   const [open, setOpen] = useState(() => {
@@ -45,19 +46,19 @@ export function WeekCard() {
 
   return (
     <div className="card week-card">
-      <button className="week-head" aria-expanded={open} onClick={toggle}>
+      <button type="button" className="week-head disclosure-trigger" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
+        <span className="disclosure-icon"><Icon name="calendar" size={18} /></span>
         <span className="grow">
-          <span className="week-title">Sua semana</span>
+          <span className="week-title">Visão da semana</span>
           <span className="xs muted" style={{ display: 'block' }}>
             <b className="num" style={{ color: 'var(--text)' }}>{data.week}</b> {data.week === 1 ? 'tarefa feita' : 'tarefas feitas'}
             {trend && ` · ${trend}`}
           </span>
         </span>
-        <Icon name="chevron-down" size={18} className="faint week-chevron" />
+        <span className="disclosure-chevron"><Icon name="chevron-down" size={16} /></span>
       </button>
 
-      {open && (
-        <div className="week-body">
+        <div id={bodyId} className="week-body" hidden={!open}>
           <div className="rhythm-chart" role="group" aria-label="Tarefas feitas nos últimos 7 dias">
             {data.counts.map((c) => {
               const isToday = c.date === today;
@@ -89,7 +90,6 @@ export function WeekCard() {
               : `${formatDuration(data.focus) || '0 min'} em foco no total · toque em um dia para ver`}
           </p>
         </div>
-      )}
     </div>
   );
 }

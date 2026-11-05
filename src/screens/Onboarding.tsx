@@ -3,6 +3,7 @@ import { actions, useStore } from '../store/store';
 import { useCloud } from '../store/sync';
 import { Icon } from '../components/Icon';
 import { timeToMin } from '../domain/dates';
+import { Disclosure } from '../components/Disclosure';
 
 export function Onboarding() {
   const settings = useStore(s => s.settings);
@@ -29,14 +30,13 @@ export function Onboarding() {
       <label className="field">O que está na sua cabeça? (opcional)
         <input className="input" placeholder="Ex.: enviar relatório amanhã às 14h" value={capture} onChange={e => setCapture(e.target.value)} />
       </label>
-      <details className="secondary-panel">
-        <summary>Período para planejar: {start}–{end}</summary>
+      <Disclosure icon="clock" title={`Período para planejar: ${start}–${end}`}>
         <p className="small muted">Ajuste quando você pode fazer suas tarefas. Você pode mudar isso depois no planejamento ou no Perfil.</p>
         <div className="row" style={{ gap: 12, marginTop: 12 }}>
           <label className="field">Começo<input type="time" className="input" value={start} onChange={e => setStart(e.target.value)} /></label>
           <label className="field">Fim<input type="time" className="input" value={end} onChange={e => setEnd(e.target.value)} /></label>
         </div>
-      </details>
+      </Disclosure>
       <p className="small muted">O plano considera os itens do Leve. Compromissos existentes no Google Agenda não são importados.</p>
       {error && <p role="alert">{error}</p>}
       <button className="btn btn-primary btn-lg btn-block" type="submit">{capture.trim() ? 'Guardar e abrir meu dia' : 'Abrir meu dia'}</button>
