@@ -102,7 +102,7 @@ export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) 
           <button
             className="icon-btn sm btn-danger"
             onClick={() => {
-              if (confirm(`Excluir o hábito “${task.title}”?`)) {
+              if (confirm(`Excluir o hábito “${task.title}” e todo o seu histórico?`)) {
                 closeSheet();
                 removeWithFeedback(task.id);
               }

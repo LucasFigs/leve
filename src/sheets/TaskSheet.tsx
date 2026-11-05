@@ -305,17 +305,20 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
 
   if (!editing && task.kind === 'habit') return <HabitCalendarSheet id={task.id} date={date} />;
 
+  const deleteAction = !isNew && <button type="button" className="icon-btn sm btn-danger" onClick={() => remove()} aria-label={`Excluir ${task.kind === 'habit' ? 'hábito' : noun}`} title={`Excluir ${task.kind === 'habit' ? 'hábito' : noun}`}>
+    <Icon name="trash" size={17} />
+  </button>;
+
   if (!editing) return (
     <BottomSheet key="overview" className="task-detail-sheet" label={task.title} title={KIND_LABEL[task.kind]} onClose={closeSheet}
-      headerExtra={<button type="button" className="btn btn-sm btn-soft" onClick={() => { setOriginal(live); setDraft(live); setEditMode(true); }}>
+      headerExtra={<div className="row" style={{ gap: 6 }}><button type="button" className="btn btn-sm btn-soft" onClick={() => { setOriginal(live); setDraft(live); setEditMode(true); }}>
         <Icon name="edit" size={16} />Editar
-      </button>}
+      </button>{deleteAction}</div>}
       footer={footer}>
       <TaskOverview task={task} project={project} today={today} occurrence={occurrence}
         endTime={endTime} defaultDuration={defaultDuration} isDone={isDone} missed={missed}
         onToggleStep={stepId => actions.toggleSubtask(task.id, stepId)}
-        onArchive={() => { archiveWithFeedback(task.id); closeSheet(); }}
-        onRemove={() => remove()} />
+        onArchive={() => { archiveWithFeedback(task.id); closeSheet(); }} />
     </BottomSheet>
   );
   const showCustomDuration = customDuration || (task.duration !== undefined && !DURATIONS.includes(task.duration));
@@ -331,6 +334,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
       label={isNew ? `Criar ${KIND_LABEL[task.kind].toLowerCase()}` : `Editar ${task.title}`}
       onClose={closeSheet}
       canClose={confirmDiscard}
+      headerExtra={deleteAction}
       title={isNew ? `Nov${task.kind === 'task' ? 'a' : 'o'} ${KIND_LABEL[task.kind].toLowerCase()}` : inbox ? 'Organizar captura' : `Editar ${KIND_LABEL[task.kind].toLowerCase()}`}
       footer={footer}
     >
@@ -470,10 +474,9 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
         {inbox && !task.recurrence && task.title.trim().length > 2 && <Disclosure className="task-editor-disclosure" icon="sparkles" title="Ajuda para planejar">
           <Suggestion task={task} onAccept={(patch, noDate) => { setSomeday(noDate); upd(patch); }} />
         </Disclosure>}
-        {!isNew && <Disclosure className="task-editor-disclosure" title="Outras ações">
+        {!isNew && inbox && <Disclosure className="task-editor-disclosure" title="Outras ações">
           <div className="task-editor-secondary-actions">
             {inbox && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (confirmDiscard()) { archiveWithFeedback(task.id); closeSheet(); } }}><Icon name="archive" size={16} />Arquivar captura</button>}
-            <button type="button" className="btn btn-sm btn-danger" onClick={() => remove()}><Icon name="trash" size={16} />Excluir {noun}</button>
           </div>
         </Disclosure>}
       </div>

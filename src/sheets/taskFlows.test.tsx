@@ -85,6 +85,41 @@ describe('navegação de hábitos', () => {
 });
 
 describe('consulta e edição de tarefas', () => {
+  it.each(['active', 'done', 'archived'] as const)('exclui diretamente da consulta uma tarefa %s e permite desfazer', (status) => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, status }] });
+    openTask();
+    expect(host.querySelector('textarea')).toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>('.sheet-head [aria-label="Excluir tarefa"]')!.click());
+    expect(getState().tasks).toHaveLength(0);
+    expect(getUI().sheet).toBeUndefined();
+    act(() => getUI().toasts.slice(-1)[0].action!.run());
+    expect(getState().tasks[0].id).toBe(base.id);
+  });
+  it('cancelar a confirmação de exclusão mantém a tarefa e a visualização', () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    openTask();
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Excluir tarefa"]')!.click());
+    expect(getState().tasks).toHaveLength(1);
+    expect(host.querySelector('.task-overview')).not.toBeNull();
+  });
+  it('exclui somente a ocorrência escolhida de um compromisso pela consulta', () => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, kind: 'event', date: undefined, recurrence: {freq:'daily',anchor:'2026-11-01'} }] });
+    openTask();
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Excluir compromisso"]')!.click());
+    expect(getState().tasks).toHaveLength(1);
+    act(() => Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('Só este evento'))!.click());
+    expect(getState().tasks[0].skipDates).toEqual(['2026-11-05']);
+    act(() => getUI().toasts.slice(-1)[0].action!.run());
+    expect(getState().tasks[0].skipDates ?? []).toEqual([]);
+  });
+  it('oferece exclusão no cabeçalho de uma captura, mas não de um rascunho novo', () => {
+    replaceState({ ...emptyState(), tasks: [{ ...base, status: 'inbox' }] });
+    openTask();
+    act(() => host.querySelector<HTMLButtonElement>('.sheet-head [aria-label="Excluir tarefa"]')!.click());
+    expect(getState().tasks).toHaveLength(0);
+    act(() => root.render(<TaskSheet initial={newTask({title:'Ainda não salva'})} />));
+    expect(host.querySelector('.sheet-head [aria-label="Excluir tarefa"]')).toBeNull();
+  });
   it('prioriza título, planejamento e passos antes das notas, mantendo o contexto visível', () => {
     replaceState({ ...emptyState(), tasks: [{ ...base, time: '09:05', category: 'trabalho', priority: 'important' }] });
     openTask();

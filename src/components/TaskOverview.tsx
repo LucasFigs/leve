@@ -20,11 +20,10 @@ interface Props {
   missed: boolean;
   onToggleStep: (id: string) => void;
   onArchive: () => void;
-  onRemove: () => void;
 }
 
 /** Consulta voltada à execução: contexto breve, passos acionáveis e detalhes legíveis. */
-export function TaskOverview({ task, project, today, occurrence, endTime, defaultDuration, isDone, missed, onToggleStep, onArchive, onRemove }: Props) {
+export function TaskOverview({ task, project, today, occurrence, endTime, defaultDuration, isDone, missed, onToggleStep, onArchive }: Props) {
   const done = task.subtasks.filter(step => step.done).length;
   const nextStep = !isDone && task.status === 'active' ? task.subtasks.find(step => !step.done)?.id : undefined;
   const scheduled = task.recurrence ? occurrence : task.date;
@@ -92,11 +91,10 @@ export function TaskOverview({ task, project, today, occurrence, endTime, defaul
     </section>}
     {(task.focusMinutes ?? 0) > 0 && <p className="task-overview-focus"><Icon name="target" size={14} />{formatDuration(task.focusMinutes)} de foco nesta tarefa</p>}
 
-    <Disclosure className="task-overview-more" title="Outras ações">
+    {!archived && <Disclosure className="task-overview-more" title="Outras ações">
       <div className="task-overview-other-actions">
-        {!archived && <button type="button" className="btn btn-sm btn-ghost" onClick={onArchive}><Icon name="archive" size={16} />{task.recurrence ? 'Arquivar e pausar repetições' : 'Arquivar'}</button>}
-        <button type="button" className="btn btn-sm btn-danger" onClick={onRemove}><Icon name="trash" size={16} />Excluir {task.kind === 'event' ? 'compromisso' : task.kind === 'habit' ? 'hábito' : 'tarefa'}</button>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={onArchive}><Icon name="archive" size={16} />{task.recurrence ? 'Arquivar e pausar repetições' : 'Arquivar'}</button>
       </div>
-    </Disclosure>
+    </Disclosure>}
   </article>;
 }
