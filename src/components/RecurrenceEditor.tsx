@@ -1,5 +1,5 @@
 /** Editor de repetição no estilo Google Agenda / Teams: atalhos + “Personalizado…”. */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { Freq, Recurrence } from '../domain/types';
 import { addDays, formatDay, fromISODate, MONTHS_LONG, todayISO, WEEKDAYS_SHORT } from '../domain/dates';
 import { freqOf, intervalOf, nextOccurrence, nthOfMonth, ordinalWeekday, recurrenceError, recurrenceLabel, UNIT_LABEL } from '../domain/recurrence';
@@ -63,13 +63,15 @@ function reanchor(r: Recurrence, anchor: string): Recurrence {
 }
 
 interface Props {
+  id?: string;
   value?: Recurrence;
   onChange: (r: Recurrence | undefined) => void;
   /** data usada como início quando a repetição é ligada */
   defaultAnchor: string;
 }
 
-export function RecurrenceEditor({ value, onChange, defaultAnchor }: Props) {
+export function RecurrenceEditor({ value, onChange, defaultAnchor, id }: Props) {
+  const inputId = useId();
   const detected = detectPreset(value);
   // A opção escolhida fica fixa enquanto você ajusta (marcar seg–sex em “Dias da semana” não troca de modo)
   const [mode, setMode] = useState<Preset>(detected);
@@ -117,7 +119,7 @@ export function RecurrenceEditor({ value, onChange, defaultAnchor }: Props) {
 
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <select id="repeat" className="input" value={preset} onChange={(e) => pick(e.target.value as Preset)}>
+      <select id={id ?? inputId} className="input" aria-label="Repetição" value={preset} onChange={(e) => pick(e.target.value as Preset)}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
