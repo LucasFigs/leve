@@ -7,6 +7,7 @@
 import type { DayItem, Priority, Settings, Task } from './types';
 import { diffDays, formatDuration, nowMin, timeToMin } from './dates';
 import { durationOf } from './selectors';
+import { fitsContext, taskWindow, usesWorkSchedule } from './context';
 
 export const PRIORITY_META: Record<Priority, { label: string; short: string; tone: string }> = {
   essential: { label: 'Essencial', short: 'Essencial', tone: 'red' },
@@ -139,7 +140,9 @@ export function rankCandidates(ctx: RankContext): Candidate[] {
       pool.push({ task: t, date: ctx.today, duration: durationOf(t, fallback), done: false, missed: false, recurring: false });
     }
   }
-  return pool.map((i) => scoreItem(i, full)).sort((a, b) => b.score - a.score);
+  return pool.filter(i => !usesWorkSchedule(i.task, ctx.settings) || fitsContext(i.task, ctx.today, now,
+    i.time && timeToMin(i.time) <= now && timeToMin(i.time) + i.duration > now ? timeToMin(i.time) + i.duration - now : i.duration, ctx.settings))
+    .map((i) => scoreItem(i, full)).sort((a, b) => b.score - a.score);
 }
 
 export type NowRecommendation =
@@ -158,24 +161,29 @@ export function recommendNow(ctx: RankContext): NowRecommendation {
     if (now >= start && now < end) return { type: 'event', item: i, minutes: end - now, ongoing: true };
     if (start > now && start - now <= 15) return { type: 'event', item: i, minutes: start - now, ongoing: false };
   }
-  const end = timeToMin(ctx.settings.dayEnd);
+  const work = taskWindow({category:'trabalho'}, ctx.today, ctx.settings);
+  const end = Math.max(timeToMin(ctx.settings.dayEnd), work.end);
   if (now >= end) return { type: 'empty', reason: 'Seu período planejado terminou. O que ficou pode ser revisto amanhã.' };
-  if (now < timeToMin(ctx.settings.dayStart)) return { type: 'empty', reason: `Seu período planejado começa às ${ctx.settings.dayStart}.` };
+  if (now < Math.min(timeToMin(ctx.settings.dayStart), work.end > work.start ? work.start : Infinity)) return { type: 'empty', reason: `Seu período planejado começa às ${ctx.settings.dayStart}.` };
   const lunchStart = timeToMin(ctx.settings.lunchStart);
   const lunchEnd = timeToMin(ctx.settings.lunchEnd);
   if (ctx.settings.protectLunch && now >= lunchStart && now < lunchEnd) {
     return { type: 'empty', reason: `Este horário está reservado para sua pausa, até ${ctx.settings.lunchEnd}.` };
   }
-  const next = ordered.find(i => !i.done && i.time && timeToMin(i.time) > now);
-  const boundary = Math.min(end, next?.time ? timeToMin(next.time) - 5 : end,
+  const next = ordered.find(i => !i.done && i.time && timeToMin(i.time) > now &&
+    (!usesWorkSchedule(i.task, ctx.settings) || i.task.kind === 'event' ||
+      fitsContext(i.task, ctx.today, now, 0, ctx.settings) && fitsContext(i.task, ctx.today, timeToMin(i.time), i.duration, ctx.settings)));
+  const nextBusy = ordered.find(i => !i.done && i.time && timeToMin(i.time) > now);
+  const boundary = Math.min(end, nextBusy?.time ? timeToMin(nextBusy.time) - 5 : end,
     ctx.settings.protectLunch && now < lunchStart ? lunchStart : end);
   const seen = new Set<string>();
   const candidates = rankCandidates({ ...ctx, now }).filter(c => {
     if (seen.has(c.item.task.id)) return false;
     seen.add(c.item.task.id);
+    if (ordered.some(i => !i.done && i.time && i.task.id !== c.item.task.id && timeToMin(i.time) <= now && timeToMin(i.time) + i.duration > now)) return false;
     if (c.item.time && timeToMin(c.item.time) > now) return false;
     const remaining = c.ongoing && c.item.time ? timeToMin(c.item.time) + c.item.duration - now : c.item.duration;
-    return remaining <= boundary - now;
+    return remaining <= boundary - now && fitsContext(c.item.task, ctx.today, now, remaining, ctx.settings);
   });
   if (candidates.length) return { type: 'task', candidates };
   if (next) return { type: 'scheduled', item: next, minutes: timeToMin(next.time!) - now, ongoing: false };

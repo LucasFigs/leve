@@ -7,6 +7,7 @@ import { openSheet, toast } from '../store/ui';
 import { Icon, type IconName } from './Icon';
 
 const CHIP_ICON: Record<ChipType, IconName> = {
+  category: 'folder',
   kind: 'calendar',
   date: 'calendar',
   time: 'clock',

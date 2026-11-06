@@ -33,6 +33,18 @@ async function ready() {
   return {store,sync};
 }
 describe('saída sem perda de dados',()=>{
+  it('sincroniza expediente opcional como meta sem alterar tarefas e rejeita dias inválidos remotos',async()=>{
+    const {store,sync}=await ready();
+    const workSchedule={enabled:true,weekdays:[1,2,3,4,5],start:'09:00',end:'18:00'};
+    store.actions.updateSettings({workSchedule});sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const rows=backend.upsert.mock.calls.flatMap(call=>call[0]);
+    expect(rows.filter(row=>row.type==='meta').pop()?.data.settings.workSchedule).toEqual(workSchedule);
+    backend.realtime!({eventType:'UPDATE',new:{user_id:'owner-a',id:'meta',type:'meta',data:{settings:{...store.getState().settings,workSchedule:{...workSchedule,start:'10:00'}}},origin:'device-b'}});
+    expect(store.getState().settings.workSchedule?.start).toBe('10:00');
+    backend.realtime!({eventType:'UPDATE',new:{user_id:'owner-a',id:'meta',type:'meta',data:{settings:{workSchedule:{...workSchedule,weekdays:[9]}}},origin:'device-b'}});
+    expect(store.getState().settings.workSchedule?.start).toBe('10:00');
+    expect(store.getState().tasks).toEqual([]);
+  });
   it('normaliza listas ausentes do journal legado sem falhar na inicialização',async()=>{
     localStorage.setItem('leve.sync.v1',JSON.stringify({owner:'owner-a',dirty:null,deleted:null}));
     const sync=await import('./sync');expect(sync.localDataOwner()).toBe('owner-a');
