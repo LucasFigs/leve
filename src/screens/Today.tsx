@@ -96,10 +96,7 @@ export function TodayScreen() {
             <QuickAdd placeholder="Jogue aqui o que estiver na cabeça…" />
           </div>
 
-          <section className="section" aria-labelledby="now-h">
-            <SectionHead title={<span id="now-h">Agora</span>} />
-            <NowCard />
-          </section>
+          <NowCard />
 
           <section className="section" aria-label="Seu dia em resumo" style={{ marginTop: 14 }}>
             <DayPulse doneToday={done.length} totalToday={totalToday} />
@@ -241,6 +238,7 @@ function DayPulse({ doneToday, totalToday }: { doneToday: number; totalToday: nu
       <div className="day-summary-details">
         <p className="small muted">{doneToday} de {totalToday} tarefas concluídas.</p>
         <p className="xs muted">*Estimativa somente dos itens do Leve, no período {settings.dayStart}–{settings.dayEnd}. Compromissos existentes no Google Agenda não são importados.</p>
+        {settings.workSchedule?.enabled && <p className="xs muted">O total reúne os períodos pessoal e profissional, sem somar sobreposições. Cada tarefa precisa caber na sua janela; Trabalho respeita o expediente.</p>}
         <button className="btn btn-sm btn-soft" onClick={() => openSheet({ type: 'plan', date: cap.status === 'ended' && cap.left > 0 ? addDays(today, 1) : today })}>
           {cap.status === 'ended' && cap.left > 0 ? 'Planejar amanhã' : 'Ajustar disponibilidade e plano'}
         </button>
@@ -285,15 +283,17 @@ function OverdueCard() {
 function NowCard() {
   const ctx = useTodayContext();
   const projects = useStore((s) => s.projects);
-  const inboxCount = useStore((s) => s.tasks.filter((t) => t.status === 'inbox').length);
   const [skip, setSkip] = useState(0);
   const rec = useMemo(() => recommendNow(ctx), [ctx]);
+
+  // Itens distantes continuam em Seu dia, sem ocupar o destaque de Agora.
+  if (rec.type === 'scheduled' && rec.minutes > 30) return null;
 
   if (rec.type === 'event' || rec.type === 'scheduled') {
     const t = rec.item.task;
     const end = minToTime(timeToMin(rec.item.time!) + rec.item.duration);
     return (
-      <div className="now-card">
+      <section className="section" aria-label="Agora"><SectionHead title="Agora" /><div className="now-card">
         <div className="eyebrow">{rec.ongoing ? 'Acontecendo agora' : `Próxima agendada · em ${rec.minutes} min`}</div>
         <div className="now-title">{t.title}</div>
         <div className="now-meta num">
@@ -307,28 +307,12 @@ function NowCard() {
             Ver detalhes
           </button>
         </div>
-      </div>
+      </div></section>
     );
   }
 
   if (rec.type === 'empty') {
-    return (
-      <div className="now-card">
-        <div className="eyebrow">No seu ritmo</div>
-        <div className="now-title">Sem sugestão para começar agora.</div>
-        <p className="now-reason">
-          {rec.reason ?? (inboxCount > 0 ? `Você tem ${inboxCount} ${inboxCount === 1 ? 'captura' : 'capturas'} para revisar.` : 'Você pode descansar, capturar algo ou escolher uma tarefa na sua lista.')}
-        </p>
-        {inboxCount > 0 && (
-          <div className="now-actions">
-            <button className="btn btn-soft btn-block" onClick={() => openSheet({ type: 'review' })}>
-              <Icon name="sparkles" size={18} />
-              Revisar capturas
-            </button>
-          </div>
-        )}
-      </div>
-    );
+    return null;
   }
 
   const list = rec.candidates;
@@ -338,7 +322,7 @@ function NowCard() {
   const nextStep = t.subtasks.find((s) => !s.done);
 
   return (
-    <div className="now-card">
+    <section className="section" aria-label="Agora"><SectionHead title="Agora" /><div className="now-card">
       <div key={t.id} className="swap-enter">
         <div className="eyebrow">
           {c.ongoing ? 'Acontecendo agora' : c.item.time ? `Próxima hoje · às ${c.item.time}` : 'Próxima ação'}
@@ -377,6 +361,6 @@ function NowCard() {
         )}
       </div>
       <button className="btn btn-sm btn-ghost" onClick={() => openSheet({ type: 'breakdown', id: t.id })}>Dividir em passos (opcional)</button>
-    </div>
+    </div></section>
   );
 }

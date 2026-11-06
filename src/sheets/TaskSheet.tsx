@@ -17,6 +17,7 @@ import { HabitAppearance } from '../components/HabitAppearance';
 import { TaskOverview } from '../components/TaskOverview';
 import { HabitCalendarSheet } from './HabitCalendarSheet';
 import { CATEGORIES } from '../domain/category';
+import { outsideWorkWarning } from '../domain/context';
 import { Disclosure } from '../components/Disclosure';
 import { archiveWithFeedback, completeWithFeedback, removeWithFeedback } from '../components/feedback';
 import { startTask } from '../components/focusFlow';
@@ -35,6 +36,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
   const stored = useStore((s) => (id ? s.tasks.find((t) => t.id === id) : undefined));
   const projects = useStore((s) => s.projects);
   const defaultDuration = useStore((s) => s.settings.defaultDuration);
+  const settings = useStore(s => s.settings);
   const isNew = !!initial;
   const live = initial ?? stored;
   const [newSub, setNewSub] = useState('');
@@ -315,6 +317,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
         <Icon name="edit" size={16} />Editar
       </button>{deleteAction}</div>}
       footer={footer}>
+      {outsideWorkWarning(task, task.recurrence ? occurrence : task.date, settings) && <p className="small muted" role="note">Fora do expediente. Mantivemos o horário que você escolheu.</p>}
       <TaskOverview task={task} project={project} today={today} occurrence={occurrence}
         endTime={endTime} defaultDuration={defaultDuration} isDone={isDone} missed={missed}
         onToggleStep={stepId => actions.toggleSubtask(task.id, stepId)}
@@ -366,6 +369,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
 
         <section className="task-editor-section" aria-labelledby={`${formId}-plan`}>
           <h2 className="task-editor-heading" id={`${formId}-plan`}>Planejamento</h2>
+          {outsideWorkWarning(task, task.recurrence ? occurrence : task.date, settings) && <p className="small muted" role="note">Fora do expediente. Você pode manter este horário.</p>}
           {!task.recurrence && <div className="chips task-date-shortcuts" role="group" aria-label="Atalhos de data">
             {quickDates.map(q => <button type="button" key={q.label} className={`chip${task.date === q.value ? ' on' : ''}`} aria-pressed={task.date === q.value} onClick={() => pickDate(q.value)}>{q.label}</button>)}
             <button type="button" className={`chip${inbox ? someday ? ' on' : '' : !task.date ? ' on' : ''}`} aria-pressed={inbox ? someday : !task.date} onClick={() => { if (inbox) { setSomeday(!someday); upd({ date: undefined, time: undefined }); } else pickDate(undefined); }}>Quando der</button>

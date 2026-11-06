@@ -12,6 +12,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { Checkbox, EmptyState, Option } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { AvailabilityEditor } from '../components/AvailabilityEditor';
+import { nextContextDate, outsideWorkWarning } from '../domain/context';
 import { useClock } from '../hooks/hooks';
 
 /* ------------------------------------------------------------------ */
@@ -37,7 +38,7 @@ export function PlanSheet({ date }: { date: string }) {
 
   const today = todayISO();
   const tomorrow = addDays(date, 1);
-  const dayOver = date === today && nowMin() >= timeToMin(dayEnd);
+  const dayOver = date === today && nowMin() >= plan.end;
 
   type Row = { time: string; end: string; title: string; kind: 'fixed' | 'new' | 'break'; sub?: string };
   const rows: Row[] = [
@@ -61,7 +62,7 @@ export function PlanSheet({ date }: { date: string }) {
     closeSheet();
     const parts = [
       plan.placements.length && `${plan.placements.length} ${plan.placements.length === 1 ? 'tarefa encaixada' : 'tarefas encaixadas'}`,
-      selected.length && `${selected.length} para ${formatDay(tomorrow).toLowerCase()}`,
+      selected.length && `${selected.length} para o próximo dia disponível`,
     ].filter(Boolean);
     toast(`Dia organizado · ${parts.join(' · ')}`, { label: 'Desfazer', run: () => actions.undo() });
   };
@@ -137,12 +138,12 @@ export function PlanSheet({ date }: { date: string }) {
           {movable.length > 0 && (
             <div className="card card-pad" style={{ marginTop: 20, boxShadow: 'none', background: 'var(--surface-2)' }}>
               <div style={{ fontWeight: 600 }}>Não coube {date === today ? 'hoje' : 'neste dia'}</div>
-              <div className="small muted">Marque o que quer mover para {formatDay(tomorrow).toLowerCase()}. O resto fica como está.</div>
+              <div className="small muted">Marque o que quer mover para o próximo dia disponível. O resto fica como está.</div>
               <div style={{ marginTop: 8 }}>
                 {movable.map((t) => (
                   <div key={t.id} className="subtask">
                     <Checkbox checked={defer.has(t.id)} onToggle={() => toggleDefer(t.id)} label={`Mover ${t.title}`} />
-                    <span className="grow" style={{ padding: '8px 0' }}>{t.title}</span>
+                    <span className="grow" style={{ padding: '8px 0' }}>{t.title}<span className="xs faint" style={{display:'block'}}>{nextContextDate(t, tomorrow, settings) ? formatDay(nextContextDate(t, tomorrow, settings)!).toLowerCase() : 'Sem dia disponível'}</span></span>
                     <span className="xs faint num">{formatDuration(durationOf(t))}</span>
                   </div>
                 ))}
@@ -303,13 +304,14 @@ export function ReviewSheet() {
 /* ------------------------------------------------------------------ */
 
 export function WeekSheet() {
-  const [{assignments,unassigned}] = useState(() => {
-    const s = getState();
-    const assignments = assistant.planWeek(s.tasks, s.settings);
+  const tasks = useStore(s => s.tasks);
+  const settings = useStore(s => s.settings);
+  const {assignments,unassigned} = useMemo(() => {
+    const assignments = assistant.planWeek(tasks, settings);
     const assigned = new Set(assignments.map(a => a.task.id));
-    const unassigned = unscheduledTasks(s.tasks).filter(t => t.kind !== 'event' && t.priority !== 'optional' && !assigned.has(t.id)).length;
+    const unassigned = unscheduledTasks(tasks).filter(t => t.kind !== 'event' && t.priority !== 'optional' && !assigned.has(t.id)).length;
     return {assignments,unassigned};
-  });
+  },[tasks,settings]);
   const byDay = useMemo(() => {
     const map = new Map<string, typeof assignments>();
     for (const a of assignments) map.set(a.date, [...(map.get(a.date) ?? []), a]);
@@ -389,7 +391,7 @@ export function ReplanSheet({ id, date }: { id: string; date: string }) {
   if (!task) return null;
 
   const today = todayISO();
-  const tomorrow = addDays(today, 1);
+  const tomorrow = nextContextDate(task, addDays(today, 1), settings);
   const duration = durationOf(task, settings.defaultDuration);
   const todayHasRoom = slotsByPart(tasks, today, duration, settings, id).some((p) => p.slot);
 
@@ -481,6 +483,7 @@ export function ReplanSheet({ id, date }: { id: string; date: string }) {
             <input type="date" className="input num grow" value={cDate} min={today} onChange={(e) => setCDate(e.target.value)} aria-label="Data" />
             {exact && <input type="time" className="input num" style={{ width: 130 }} value={cTime} onChange={(e) => setCTime(e.target.value)} aria-label="Horário" />}
           </div>
+          {exact && outsideWorkWarning({...task,time:cTime}, cDate, settings) && <p className="small muted" role="note">Fora do expediente. Você pode manter este horário.</p>}
           <div className="row">
             <button className="btn btn-secondary" onClick={() => setStep(day ? 'part' : 'when')}>Voltar</button>
             <button
@@ -503,7 +506,7 @@ export function ReplanSheet({ id, date }: { id: string; date: string }) {
       </p>
       <div className="stack" style={{ gap: 2 }}>
         <Option icon="clock" title="Mais tarde hoje" sub={todayHasRoom ? 'Escolha manhã, tarde ou noite' : 'Sem espaço livre hoje'} disabled={!todayHasRoom} onClick={() => chooseDay(today)} />
-        <Option icon="calendar-arrow" title="Amanhã" sub={capFirst(formatLongDate(tomorrow))} onClick={() => chooseDay(tomorrow)} />
+        {tomorrow && <Option icon="calendar-arrow" title={capFirst(formatDay(tomorrow))} sub={capFirst(formatLongDate(tomorrow))} onClick={() => chooseDay(tomorrow)} />}
         <Option icon="calendar" title="Outro dia" onClick={() => setStep('pickDay')} />
         <Option icon="hourglass" title="Manter sem horário" sub="Continua na lista de hoje" onClick={() => run('unschedule')} />
       </div>
@@ -673,13 +676,13 @@ export function EventMissedSheet({ id, date }: { id: string; date: string }) {
   if (!task) return null;
 
   const today = todayISO();
-  const tomorrow = addDays(today, 1);
+  const tomorrow = nextContextDate(task, addDays(today, 1), settings);
   const duration = durationOf(task, settings.defaultDuration);
   // Sugestões: ainda hoje, ou amanhã perto do mesmo horário
   const laterToday = nextFreeSlot(tasks, today, duration, settings, { after: nowMin(), excludeId: id });
-  const tomorrowSlot =
+  const tomorrowSlot = tomorrow && (
     nextFreeSlot(tasks, tomorrow, duration, settings, { after: task.time ? timeToMin(task.time) : undefined, excludeId: id }) ??
-    nextFreeSlot(tasks, tomorrow, duration, settings, { excludeId: id });
+    nextFreeSlot(tasks, tomorrow, duration, settings, { excludeId: id }));
 
   const reschedule = (d: string, time: string) => {
     actions.postpone(id, 'custom', { date: d, time }, date);
@@ -696,8 +699,8 @@ export function EventMissedSheet({ id, date }: { id: string; date: string }) {
         {laterToday && (
           <Option icon="clock" title={`Ainda hoje, às ${laterToday}`} sub="Próximo horário livre" onClick={() => reschedule(today, laterToday)} />
         )}
-        {tomorrowSlot && (
-          <Option icon="calendar-arrow" title={`Amanhã às ${tomorrowSlot}`} sub={capFirst(formatLongDate(tomorrow))} onClick={() => reschedule(tomorrow, tomorrowSlot)} />
+        {tomorrow && tomorrowSlot && (
+          <Option icon="calendar-arrow" title={`${capFirst(formatDay(tomorrow))} às ${tomorrowSlot}`} sub={capFirst(formatLongDate(tomorrow))} onClick={() => reschedule(tomorrow, tomorrowSlot)} />
         )}
         <Option
           icon="calendar"

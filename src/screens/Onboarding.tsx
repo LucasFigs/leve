@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { actions, useStore } from '../store/store';
 import { useCloud } from '../store/sync';
 import { Icon } from '../components/Icon';
-import { timeToMin } from '../domain/dates';
+import { periodError } from '../domain/context';
 import { Disclosure } from '../components/Disclosure';
 
 export function Onboarding() {
@@ -16,7 +16,8 @@ export function Onboarding() {
   return <main className="onboarding">
     <form className="ob-slide onboarding-start" onSubmit={event => {
       event.preventDefault();
-      if (!start || !end || timeToMin(start) >= timeToMin(end)) { setError('O fim do período precisa ser posterior ao começo, no mesmo dia.'); return; }
+      const error = periodError(start,end);
+      if (error) { setError(error); return; }
       actions.updateSettings({ dayStart: start, dayEnd: end });
       if (capture.trim()) actions.capture(capture);
       actions.finishOnboarding(name);

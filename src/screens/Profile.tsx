@@ -9,6 +9,10 @@ import { BottomSheet } from '../components/BottomSheet';
 import { Segmented, SectionHead, Switch } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
+import { Disclosure } from '../components/Disclosure';
+import { WorkScheduleEditor } from '../components/WorkScheduleEditor';
+import { AvailabilityEditor } from '../components/AvailabilityEditor';
+import { periodError } from '../domain/context';
 import { formatPhone } from '../domain/phone';
 import { reminderPermission, requestReminderPermission } from '../services/reminders';
 import { disablePush, enablePush, pushConfigured } from '../services/push';
@@ -24,14 +28,14 @@ import {
 const LUNCH_DURATIONS = [30, 45, 60, 90, 120];
 
 function settingsError(s: Settings): string | undefined {
-  if (timeToMin(s.dayEnd) <= timeToMin(s.dayStart)) return 'O fim do dia precisa ser depois do começo.';
+  if (periodError(s.dayStart,s.dayEnd)) return periodError(s.dayStart,s.dayEnd);
   if (s.protectLunch && timeToMin(s.lunchEnd) <= timeToMin(s.lunchStart)) return 'O fim do almoço precisa ser depois do início.';
   return undefined;
 }
 
 export function ProfileScreen() {
   const settings = useStore((s) => s.settings);
-  // Preferências valem na hora (o efeito é visível); só tarefas pedem confirmação.
+  // Preferencias simples valem na hora; intervalos sao validados antes de salvar.
   const set = (patch: Partial<Settings>) => actions.updateSettings(patch);
   const error = settingsError(settings);
   const lunchMin = timeToMin(settings.lunchEnd) - timeToMin(settings.lunchStart);
@@ -55,12 +59,11 @@ export function ProfileScreen() {
         </div>
       </div>
 
-      {cloudEnabled && <AccountSection />}
-      <GoogleCalendarSection />
-      <InstallSection />
+      {cloudEnabled && <AccountStatus />}
+      <IntegrationAlerts />
 
       <section className="section">
-        <SectionHead title="Aparência" />
+        <Disclosure title={`Aparência · ${settings.theme === 'system' ? 'automático' : settings.theme === 'dark' ? 'escuro' : 'claro'}`} icon="sun">
         <Segmented<Settings['theme']>
           label="Tema"
           value={settings.theme}
@@ -71,19 +74,14 @@ export function ProfileScreen() {
             { value: 'dark', label: <><Icon name="moon" size={16} />Escuro</> },
           ]}
         />
+        </Disclosure>
       </section>
 
       <section className="section">
-        <SectionHead title="Seu dia" />
+        <Disclosure title={<><span>Meu tempo</span><span className="xs faint" style={{display:'block'}}>{settings.dayStart}–{settings.dayEnd} · tarefas de {formatDuration(settings.defaultDuration)}</span></>} icon="clock">
+        <AvailabilityEditor />
+        <WorkScheduleEditor />
         <div className="list">
-          <label className="settings-row">
-            <span>Começa às</span>
-            <input type="time" className="num" value={settings.dayStart} onChange={(e) => e.target.value && set({ dayStart: e.target.value })} />
-          </label>
-          <label className="settings-row">
-            <span>Termina às</span>
-            <input type="time" className="num" value={settings.dayEnd} onChange={(e) => e.target.value && set({ dayEnd: e.target.value })} />
-          </label>
           <div className="settings-row">
             <span>
               Proteger horário de almoço
@@ -137,6 +135,7 @@ export function ProfileScreen() {
             </div>
           </div>
         </div>
+        </Disclosure>
       </section>
 
       {error && (
@@ -145,8 +144,7 @@ export function ProfileScreen() {
         </p>
       )}
 
-      <section className="section">
-        <SectionHead title="Assistente" />
+      <section className="section"><Disclosure title="Avisos e lembretes" icon="clock">
         <div className="list">
           <div className="settings-row">
             <span>
@@ -156,10 +154,6 @@ export function ProfileScreen() {
             <Switch checked={settings.nudges} onChange={(v) => set({ nudges: v })} label="Sugestões inteligentes" />
           </div>
         </div>
-      </section>
-
-      <section className="section">
-        <SectionHead title="Lembretes" />
         <div className="list">
           <div className="settings-row">
             <span>
@@ -217,10 +211,16 @@ export function ProfileScreen() {
             ? 'O envio com o app fechado depende da permissão, da conexão e do sistema do aparelho. Ligue em cada aparelho em que quiser receber. No iPhone, o app precisa estar instalado na tela inicial.'
             : 'Os avisos chegam enquanto o app está aberto ou em segundo plano há pouco tempo. Com o app totalmente fechado, o celular não deixa avisar.'}
         </p>
-      </section>
+      </Disclosure></section>
+
+      <section className="section"><Disclosure title="Integrações e instalação" icon="calendar">
+        <GoogleCalendarSection />
+        <InstallSection />
+      </Disclosure></section>
 
       <section className="section">
-        <SectionHead title="Dados" />
+        <Disclosure title="Conta e dados" icon="folder">
+        {cloudEnabled && <AccountSection />}
         <div className="list">
           {demoCount > 0 && (
             <button
@@ -271,10 +271,24 @@ export function ProfileScreen() {
             Termos de Uso
           </a>
         </p>
+        </Disclosure>
       </section>
 
     </div>
   );
+}
+
+/** Falhas de integracao permanecem visiveis mesmo com controles recolhidos. */
+function IntegrationAlerts() {
+  const error = useGoogleCalendar(s => s.error);
+  return error ? <p role="alert" className="small warn-text">Google Agenda: {error}</p> : null;
+}
+
+function AccountStatus() {
+  const status = useCloud(c => c.status);
+  const error = useCloud(c => c.error);
+  return status === 'error' || status === 'offline' || status === 'loading' ?
+    <p className="small muted" role={status === 'error' ? 'alert' : 'status'}>{STATUS_LABEL[status]}{error ? ` · ${error}` : ''}</p> : null;
 }
 
 const STATUS_LABEL: Record<SyncStatus, string> = {
