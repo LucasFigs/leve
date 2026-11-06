@@ -40,6 +40,12 @@ it('identifica opções e valores sem expandir grupos e sem formulário permanen
   expect(host.querySelectorAll('.profile-setting-row')).toHaveLength(7);
   expect(host.textContent).toContain('Não conectado');expect(host.textContent).toContain('Desativado');
 });
+it('conta, dados e Google não têm rodapé de retorno redundante',()=>{
+  for(const title of ['Conta e sincronização','Dados e privacidade','Google Agenda']){
+    open(title);expect(dialog().querySelector('.sheet-foot')).toBeNull();expect(dialog().querySelector('[aria-label="Fechar"]')).not.toBeNull();close();
+  }
+  open('Meu tempo');expect(dialog().querySelector('.sheet-foot')?.textContent).toContain('Salvar alterações');
+});
 it('edita expediente em uma etapa, salva e devolve foco à linha original',()=>{
   act(()=>actions.updateSettings({workSchedule:{enabled:true,weekdays:[1,2,3,4,5],start:'09:00',end:'18:00'}}));
   open('Horário de trabalho');expect(dialog().querySelectorAll('details')).toHaveLength(0);
