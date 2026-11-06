@@ -4,7 +4,7 @@ import { isSettings } from '../domain/validation';
 import { actions, useStore } from '../store/store';
 import { Disclosure } from './Disclosure';
 import { Switch } from './ui';
-import { BottomSheet } from './BottomSheet';
+import { SettingsSheet as BottomSheet } from './SettingsSheet';
 import { toast } from '../store/ui';
 
 export function WorkScheduleEditor({onClose}: {onClose?: () => void} = {}) {

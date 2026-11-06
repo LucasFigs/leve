@@ -3735,3 +3735,19 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .settings-sheet .sheet-foot { flex-wrap: wrap; }
 .settings-sheet .sheet-foot .btn { min-width: 0; white-space: normal; overflow-wrap: anywhere; flex: 1 1 100px; }
 .settings-sheet .sheet-foot .btn-primary { flex-basis: 180px; }
+
+/* Dimensionamento exclusivo dos modais de configuracoes. */
+.settings-modal .backdrop {
+  top: var(--sheet-viewport-top, 0px);
+  bottom: auto;
+  height: var(--sheet-viewport-height, 100dvh);
+}
+.settings-modal .settings-sheet {
+  height: auto;
+  min-height: 0;
+  max-height: calc(var(--sheet-viewport-height, 100dvh) - var(--safe-t) - 24px);
+}
+.settings-modal .sheet-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+@media (min-width: 1024px) {
+  .settings-modal .settings-sheet { max-height: min(780px, calc(var(--sheet-viewport-height, 100dvh) - var(--safe-t) - 64px)); }
+}

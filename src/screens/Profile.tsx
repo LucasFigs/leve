@@ -5,7 +5,7 @@ import { actions, useStore } from '../store/store';
 import { goTo, toast } from '../store/ui';
 import { cloudEnabled, confirmSignOut, supabase, syncNow, useCloud, type SyncStatus } from '../store/sync';
 import { useInstall } from '../hooks/install';
-import { BottomSheet } from '../components/BottomSheet';
+import { SettingsSheet as BottomSheet } from '../components/SettingsSheet';
 import { Segmented, SectionHead, Switch } from '../components/ui';
 import { Icon, type IconName } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
@@ -72,7 +72,7 @@ export function ProfileScreen() {
     {page==='time'&&<TimeSettingsSheet onClose={close}/>}
     {page==='work'&&<WorkScheduleEditor onClose={close}/>}
     {page==='reminders'&&<ReminderSettingsSheet onClose={close}/>}
-    {page&&['appearance','google','account','data','install'].includes(page)&&<BottomSheet key={page} className="settings-sheet" title={PAGE_LABEL[page]} onClose={close} footer={<button className="btn btn-secondary grow" onClick={close}>Voltar às configurações</button>}>
+    {page&&['appearance','google','account','data','install'].includes(page)&&<BottomSheet key={page} className="settings-sheet" title={PAGE_LABEL[page]} onClose={close}>
       {page==='appearance'&&<><p className="small muted">Escolha como o Leve aparece. A mudança é aplicada na hora.</p><Segmented<Settings['theme']> label="Tema" value={settings.theme} onChange={theme=>{actions.updateSettings({theme});toast(`Tema: ${THEME_LABEL[theme]}`);}} options={[{value:'system',label:'Automático'},{value:'light',label:'Claro'},{value:'dark',label:'Escuro'}]}/></>}
       {page==='google'&&<GoogleCalendarSection/>}
       {page==='account'&&(cloudEnabled?<AccountSection onEdit={()=>setPage('identity')}/>:<p className="small muted">Este ambiente salva os dados somente neste aparelho. Não há uma conta conectada para sincronizar.</p>)}

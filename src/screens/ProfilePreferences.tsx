@@ -5,7 +5,7 @@ import { periodError } from '../domain/context';
 import { isSettings } from '../domain/validation';
 import { actions, getState, useStore } from '../store/store';
 import { toast } from '../store/ui';
-import { BottomSheet } from '../components/BottomSheet';
+import { SettingsSheet as BottomSheet } from '../components/SettingsSheet';
 import { Disclosure } from '../components/Disclosure';
 import { Switch } from '../components/ui';
 import { reminderPermission, requestReminderPermission } from '../services/reminders';
@@ -91,7 +91,7 @@ export function ReminderSettingsSheet({onClose}:{onClose:()=>void}) {
     }catch{if(alive.current)setMessage('Não foi possível confirmar os avisos deste aparelho. Tente novamente.');}
     finally{if(alive.current)setBusy(false);}
   };
-  return <BottomSheet title="Lembretes" className="settings-sheet" onClose={onClose} footer={<button className="btn btn-secondary grow" onClick={onClose}>Voltar às configurações</button>}>
+  return <BottomSheet title="Lembretes" className="settings-sheet" onClose={onClose}>
     <p className="small muted">{remindersSummary(settings.reminders,permission)}</p>
     <p className="xs muted">Permissão neste aparelho: {permission==='granted'?'permitida':permission==='denied'?'bloqueada':permission==='unsupported'?'indisponível':'ainda não concedida'}.</p>
     <fieldset disabled={busy} className="settings-options">
