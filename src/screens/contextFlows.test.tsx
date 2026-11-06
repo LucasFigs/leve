@@ -24,10 +24,10 @@ afterEach(()=>{act(()=>root.unmount());host.remove();closeAllSheets();localRepos
 const click=(text:string)=>act(()=>Array.from(host.querySelectorAll('button')).find(b=>b.textContent===text)!.click());
 function input(el:HTMLInputElement,value:string) {act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});}
 
-it('Perfil recolhe controles secundários sem criar campos obrigatórios',()=>{
+it('Perfil identifica as preferências em linhas sem acordeões ou campos obrigatórios',()=>{
   act(()=>root.render(<ProfileScreen/>));
-  expect(Array.from(host.querySelectorAll('details')).every(d=>!d.open)).toBe(true);
-  for(const text of ['Meu tempo','Aparência','Avisos e lembretes','Integrações e instalação','Conta e dados']) expect(host.textContent).toContain(text);
+  expect(host.querySelectorAll('details')).toHaveLength(0);
+  for(const text of ['Meu tempo','Horário de trabalho','Aparência','Lembretes','Google Agenda','Conta e sincronização','Dados e privacidade']) expect(host.textContent).toContain(text);
   expect(host.querySelectorAll('[required]')).toHaveLength(0);
 });
 it('salva dias e horário com persistência e sem mover tarefas ou vínculos Google',()=>{

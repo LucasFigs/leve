@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { StorageNotice } from './components/StorageNotice';
 import { resumeNotification } from './services/notificationNavigation';
+import { resumeCalendarSettings } from './services/settingsNavigation';
 import { inboxTasks } from './domain/selectors';
 import { useStore } from './store/store';
 import { goTo, openSheet, useUI, type Sheet, type Tab } from './store/ui';
@@ -119,6 +120,7 @@ function Application() {
   const storageProblem = useStorageIssue();
   useTheme();
   useShortcuts();
+  useEffect(() => {if(resumeCalendarSettings())goTo('profile');},[]);
   useEffect(() => startReminders(), []);
   useEffect(() => initGoogleCalendarListener(), []);
   const onboarded = useStore((s) => s.settings.onboarded);

@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { formatDuration, minToTime, timeToMin } from '../domain/dates';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { formatDuration, WEEKDAYS_SHORT } from '../domain/dates';
 import type { Settings } from '../domain/types';
 import { actions, useStore } from '../store/store';
 import { goTo, toast } from '../store/ui';
@@ -7,290 +7,95 @@ import { cloudEnabled, confirmSignOut, supabase, syncNow, useCloud, type SyncSta
 import { useInstall } from '../hooks/install';
 import { BottomSheet } from '../components/BottomSheet';
 import { Segmented, SectionHead, Switch } from '../components/ui';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
-import { Disclosure } from '../components/Disclosure';
 import { WorkScheduleEditor } from '../components/WorkScheduleEditor';
-import { AvailabilityEditor } from '../components/AvailabilityEditor';
-import { periodError } from '../domain/context';
 import { formatPhone } from '../domain/phone';
-import { reminderPermission, requestReminderPermission } from '../services/reminders';
-import { disablePush, enablePush, pushConfigured } from '../services/push';
+import { reminderPermission } from '../services/reminders';
+import { useStorageIssue } from '../store/persistence';
+import { LocalIdentitySheet, ReminderSettingsSheet, remindersSummary, TimeSettingsSheet } from './ProfilePreferences';
+import { rememberCalendarSettingsReturn, clearCalendarSettingsReturn, consumeCalendarSettingsReturn } from '../services/settingsNavigation';
 import {
-  connectGoogleCalendar,
-  disconnectGoogleCalendar,
-  setGoogleTargetCalendar,
-  syncAllUpcomingTasks,
-  toggleGoogleAutoSync,
-  useGoogleCalendar,
+  connectGoogleCalendar, disconnectGoogleCalendar, setGoogleTargetCalendar,
+  syncAllUpcomingTasks, toggleGoogleAutoSync, useGoogleCalendar,
+  getGoogleCalendarState,
 } from '../services/googleCalendar';
 
-const LUNCH_DURATIONS = [30, 45, 60, 90, 120];
-
-function settingsError(s: Settings): string | undefined {
-  if (periodError(s.dayStart,s.dayEnd)) return periodError(s.dayStart,s.dayEnd);
-  if (s.protectLunch && timeToMin(s.lunchEnd) <= timeToMin(s.lunchStart)) return 'O fim do almoço precisa ser depois do início.';
-  return undefined;
+type SettingsPage = 'identity'|'time'|'work'|'appearance'|'reminders'|'google'|'account'|'data'|'install';
+const THEME_LABEL = {system:'Automático',light:'Claro',dark:'Escuro'};
+const PAGE_LABEL: Record<SettingsPage,string> = {identity:'Meu perfil',time:'Meu tempo',work:'Horário de trabalho',appearance:'Aparência',reminders:'Lembretes',google:'Google Agenda',account:'Conta e sincronização',data:'Dados e privacidade',install:'Usar como app'};
+export function workSummary(work: Settings['workSchedule']) {
+  if(!work?.enabled)return 'Desativado';
+  const days=work.weekdays;
+  const label=days.length===5&&[1,2,3,4,5].every(d=>days.includes(d))?'Seg–Sex':days.length===7?'Todos os dias':[1,2,3,4,5,6,0].filter(d=>days.includes(d)).map(d=>WEEKDAYS_SHORT[d]).join(', ');
+  return `${label} · ${work.start}–${work.end}`;
 }
-
+function SettingsRow({title,value,icon,onClick,attention=false}:{title:string;value:string;icon:IconName;onClick:(trigger:HTMLButtonElement)=>void;attention?:boolean}) {
+  return <button type="button" className="profile-setting-row" onClick={event=>onClick(event.currentTarget)}>
+    <Icon name={icon} size={20}/><span className="profile-setting-copy"><span className="profile-setting-title">{title}</span><span className={`profile-setting-value${attention?' warn-text':''}`}>{value}</span></span><Icon name="chevron-right" size={17}/>
+  </button>;
+}
 export function ProfileScreen() {
-  const settings = useStore((s) => s.settings);
-  // Preferencias simples valem na hora; intervalos sao validados antes de salvar.
-  const set = (patch: Partial<Settings>) => actions.updateSettings(patch);
-  const error = settingsError(settings);
-  const lunchMin = timeToMin(settings.lunchEnd) - timeToMin(settings.lunchStart);
-  const demoCount = useStore((s) => s.tasks.filter((t) => t.id.startsWith('demo-')).length + s.projects.filter((p) => p.id.startsWith('demo-')).length);
-
-
-  return (
-    <div className="screen">
-      <div className="topbar" style={{ justifyContent: 'flex-start', gap: 4 }}>
-        <button className="icon-btn mobile-only" onClick={() => goTo('today')} aria-label="Voltar">
-          <Icon name="chevron-left" />
-        </button>
-        <h1 className="page-title">Perfil</h1>
-      </div>
-
-      <div className="card card-pad row" style={{ gap: 14 }}>
-        <UserAvatar size={52} />
-        <div className="grow field">
-          <label className="label" htmlFor="name">Como posso te chamar?</label>
-          <input id="name" className="input-plain" style={{ fontSize: '1.125rem', fontWeight: 600 }} placeholder="Seu nome" value={settings.name} onChange={(e) => set({ name: e.target.value })} />
-        </div>
-      </div>
-
-      {cloudEnabled && <AccountStatus />}
-      <IntegrationAlerts />
-
-      <section className="section">
-        <Disclosure title={`Aparência · ${settings.theme === 'system' ? 'automático' : settings.theme === 'dark' ? 'escuro' : 'claro'}`} icon="sun">
-        <Segmented<Settings['theme']>
-          label="Tema"
-          value={settings.theme}
-          onChange={(theme) => set({ theme })}
-          options={[
-            { value: 'system', label: 'Automático' },
-            { value: 'light', label: <><Icon name="sun" size={16} />Claro</> },
-            { value: 'dark', label: <><Icon name="moon" size={16} />Escuro</> },
-          ]}
-        />
-        </Disclosure>
-      </section>
-
-      <section className="section">
-        <Disclosure title={<><span>Meu tempo</span><span className="xs faint" style={{display:'block'}}>{settings.dayStart}–{settings.dayEnd} · tarefas de {formatDuration(settings.defaultDuration)}</span></>} icon="clock">
-        <AvailabilityEditor />
-        <WorkScheduleEditor />
-        <div className="list">
-          <div className="settings-row">
-            <span>
-              Proteger horário de almoço
-              <span className="xs faint" style={{ display: 'block' }}>
-                {settings.protectLunch
-                  ? `${settings.lunchStart}–${settings.lunchEnd} fica livre no planejamento (${formatDuration(Math.max(0, lunchMin))})`
-                  : 'Desligado: o almoço pode receber tarefas'}
-              </span>
-            </span>
-            <Switch checked={settings.protectLunch} onChange={(v) => set({ protectLunch: v })} label="Proteger horário de almoço" />
-          </div>
-          {settings.protectLunch && (
-            <>
-              <label className="settings-row">
-                <span>Almoço começa às</span>
-                <input
-                  type="time"
-                  className="num"
-                  value={settings.lunchStart}
-                  onChange={(e) => e.target.value && set({ lunchStart: e.target.value, lunchEnd: minToTime(timeToMin(e.target.value) + lunchMin) })}
-                />
-              </label>
-              <div className="settings-row" style={{ flexWrap: 'wrap' }}>
-                <span>Duração do almoço</span>
-                <div className="chips">
-                  {LUNCH_DURATIONS.map((m) => (
-                    <button
-                      key={m}
-                      className={`chip num${lunchMin === m ? ' on' : ''}`}
-                      aria-pressed={lunchMin === m}
-                      onClick={() => set({ lunchEnd: minToTime(timeToMin(settings.lunchStart) + m) })}
-                    >
-                      {formatDuration(m)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-          <div className="settings-row" style={{ flexWrap: 'wrap' }}>
-            <span>
-              Duração padrão das tarefas
-              <span className="xs faint" style={{ display: 'block' }}>Usada quando você não informa quanto tempo leva</span>
-            </span>
-            <div className="chips">
-              {[15, 30, 45, 60].map((m) => (
-                <button key={m} className={`chip${settings.defaultDuration === m ? ' on' : ''}`} onClick={() => set({ defaultDuration: m })}>
-                  {formatDuration(m)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        </Disclosure>
-      </section>
-
-      {error && (
-        <p className="small" role="alert" style={{ color: 'var(--red)', marginTop: 8 }}>
-          {error}
-        </p>
-      )}
-
-      <section className="section"><Disclosure title="Avisos e lembretes" icon="clock">
-        <div className="list">
-          <div className="settings-row">
-            <span>
-              Sugestões inteligentes
-              <span className="xs faint" style={{ display: 'block' }}>Avisos de tempo livre, tarefas adiadas e capturas</span>
-            </span>
-            <Switch checked={settings.nudges} onChange={(v) => set({ nudges: v })} label="Sugestões inteligentes" />
-          </div>
-        </div>
-        <div className="list">
-          <div className="settings-row">
-            <span>
-              Avisar antes do horário
-              <span className="xs faint" style={{ display: 'block' }}>Notificação de tarefas e compromissos com hora marcada</span>
-            </span>
-            <Switch
-              checked={!!settings.reminders && reminderPermission() === 'granted'}
-              label="Avisar antes do horário"
-              onChange={async (v) => {
-                if (!v) {
-                  set({ reminders: false });
-                  disablePush();
-                  return;
-                }
-                if (await requestReminderPermission()) {
-                  set({ reminders: true });
-                  const push = await enablePush();
-                  toast(
-                    push === 'ok'
-                      ? 'Lembretes ligados — chegam mesmo com o app fechado'
-                      : push === 'error'
-                        ? 'Lembretes ligados, mas não consegui registrar este aparelho para avisos com o app fechado. Tente de novo com internet.'
-                        : 'Lembretes ligados neste aparelho',
-                  );
-                } else {
-                  toast(
-                    reminderPermission() === 'unsupported'
-                      ? 'Este navegador não permite notificações. No iPhone, instale o app na tela inicial primeiro.'
-                      : 'As notificações estão bloqueadas. Libere nas configurações do navegador ou do app.',
-                  );
-                }
-              }}
-            />
-          </div>
-          {settings.reminders && reminderPermission() === 'granted' && (
-            <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-              <span>Quanto tempo antes</span>
-              <div className="chips">
-                {[5, 10, 15, 30, 60].map((m) => (
-                  <button key={m} className={`chip${(settings.reminderLead ?? 10) === m ? ' on' : ''}`} aria-pressed={(settings.reminderLead ?? 10) === m} onClick={() => set({ reminderLead: m })}>
-                    {formatDuration(m)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {settings.reminders && <div className="settings-row">
-            <span>Lembretes discretos<span className="xs faint" style={{display:'block'}}>Ocultar o título nos avisos locais. Com o app fechado, essa proteção requer o serviço de lembretes atualizado.</span></span>
-            <Switch label="Lembretes discretos" checked={!!settings.discreetReminders} onChange={discreetReminders => set({discreetReminders})} />
-          </div>}
-        </div>
-        <p className="xs faint" style={{ marginTop: 8 }}>
-          {pushConfigured
-            ? 'O envio com o app fechado depende da permissão, da conexão e do sistema do aparelho. Ligue em cada aparelho em que quiser receber. No iPhone, o app precisa estar instalado na tela inicial.'
-            : 'Os avisos chegam enquanto o app está aberto ou em segundo plano há pouco tempo. Com o app totalmente fechado, o celular não deixa avisar.'}
-        </p>
-      </Disclosure></section>
-
-      <section className="section"><Disclosure title="Integrações e instalação" icon="calendar">
-        <GoogleCalendarSection />
-        <InstallSection />
-      </Disclosure></section>
-
-      <section className="section">
-        <Disclosure title="Conta e dados" icon="folder">
-        {cloudEnabled && <AccountSection />}
-        <div className="list">
-          {demoCount > 0 && (
-            <button
-              className="settings-row"
-              style={{ width: '100%', textAlign: 'left' }}
-              onClick={() => {
-                if (!confirm(`Remover os ${demoCount} itens de exemplo? Suas tarefas e projetos continuam intactos.`)) return;
-                const n = actions.removeDemo();
-                toast(`${n} itens de exemplo removidos`, { label: 'Desfazer', run: () => actions.undo() });
-              }}
-            >
-              <span>
-                Remover dados de exemplo
-                <span className="xs faint" style={{ display: 'block' }}>{demoCount} itens de exemplo · os seus continuam</span>
-              </span>
-              <Icon name="trash" size={18} className="faint" />
-            </button>
-          )}
-          <button className="settings-row" style={{ width: '100%' }} onClick={() => actions.updateSettings({ onboarded: false })}>
-            <span>Ver introdução novamente</span>
-            <Icon name="chevron-right" size={18} className="faint" />
-          </button>
-          <button
-            className="settings-row"
-            style={{ width: '100%', color: 'var(--red)' }}
-            onClick={() => {
-              const msg = cloudEnabled
-                ? 'Apagar todas as tarefas, projetos e preferências da sua conta? Isso vale para todos os aparelhos.'
-                : 'Apagar todas as tarefas, projetos e preferências deste aparelho?';
-              if (confirm(msg)) actions.reset();
-            }}
-          >
-            <span>Apagar tudo</span>
-            <Icon name="trash" size={18} />
-          </button>
-        </div>
-        <p className="xs faint" style={{ marginTop: 12, textAlign: 'center' }}>
-          {cloudEnabled
-            ? 'Seus dados ficam na sua conta e neste aparelho. Sem internet, tudo continua funcionando e sincroniza quando a conexão voltar.'
-            : 'Seus dados ficam salvos neste aparelho e funcionam offline.'}
-        </p>
-        <p className="xs faint" style={{ marginTop: 8, textAlign: 'center' }}>
-          <a href="/privacidade.html" target="_blank" rel="noopener" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
-            Privacidade
-          </a>
-          {' · '}
-          <a href="/termos.html" target="_blank" rel="noopener" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
-            Termos de Uso
-          </a>
-        </p>
-        </Disclosure>
-      </section>
-
+  const settings=useStore(s=>s.settings);
+  const user=useCloud(c=>c.user);
+  const status=useCloud(c=>c.status);
+  const email=useCloud(c=>c.email);
+  const gcal=useGoogleCalendar();
+  const install=useInstall();
+  const issue=useStorageIssue();
+  const [page,setPage]=useState<SettingsPage>();
+  const trigger=useRef<HTMLElement|null>(null);
+  const open=(next:SettingsPage,element:HTMLElement)=>{trigger.current=element;setPage(next);};
+  const [permission,setPermission]=useState(reminderPermission());
+  useEffect(()=>{if(consumeCalendarSettingsReturn())setPage('google');},[]);
+  useEffect(()=>{const refresh=()=>setPermission(reminderPermission());window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);},[]);
+  const close=()=>{setPage(undefined);setPermission(reminderPermission());queueMicrotask(()=>{if(trigger.current?.isConnected)trigger.current.focus({preventScroll:true});});};
+  const googleStatus=gcal.status==='syncing'?'Verificando conexão…':gcal.status==='error'||gcal.error?'Requer atenção':gcal.connected?'Conectado':'Não conectado · integração em testes';
+  return <div className="screen profile-settings">
+    <div className="topbar"><div className="row"><button className="icon-btn mobile-only" aria-label="Voltar" onClick={()=>goTo('today')}><Icon name="chevron-left"/></button><h1 className="page-title">Configurações</h1></div></div>
+    <button className="profile-identity" onClick={e=>open('identity',e.currentTarget)} aria-label="Editar perfil">
+      <UserAvatar size={46}/><span className="profile-setting-copy"><strong>{settings.name||user?.fullName||'Seu perfil'}</strong><span className="profile-setting-value">Editar seus dados</span></span><Icon name="edit" size={18}/>
+    </button>
+    <section className="profile-settings-group" aria-labelledby="profile-preferences"><h2 id="profile-preferences">Preferências</h2><div className="profile-settings-list">
+      <SettingsRow title="Meu tempo" icon="clock" value={`${settings.dayStart}–${settings.dayEnd} · tarefas de ${formatDuration(settings.defaultDuration)}`} onClick={el=>open('time',el)}/>
+      <SettingsRow title="Horário de trabalho" icon="briefcase" value={workSummary(settings.workSchedule)} onClick={el=>open('work',el)}/>
+      <SettingsRow title="Aparência" icon="sun" value={THEME_LABEL[settings.theme]} onClick={el=>open('appearance',el)}/>
+      <SettingsRow title="Lembretes" icon="bell" value={remindersSummary(settings.reminders,permission)} onClick={el=>open('reminders',el)}/>
+    </div></section>
+    <section className="profile-settings-group" aria-labelledby="profile-connections"><h2 id="profile-connections">Conexões e dados</h2><div className="profile-settings-list">
+      <SettingsRow title="Google Agenda" icon="calendar" value={googleStatus} attention={!!gcal.error||gcal.status==='error'} onClick={el=>open('google',el)}/>
+      <SettingsRow title="Conta e sincronização" icon="cloud" value={cloudEnabled?`${STATUS_LABEL[status]}${email?` · ${email}`:''}`:'Dados neste aparelho · sem nuvem'} attention={status==='error'} onClick={el=>open('account',el)}/>
+      <SettingsRow title="Dados e privacidade" icon="folder" value={issue?'Recuperação de dados requer atenção':'Gerenciamento, privacidade e termos'} attention={!!issue} onClick={el=>open('data',el)}/>
+    </div></section>
+    {!install.installed&&(install.canPrompt||install.ios)&&<button type="button" className="profile-install" onClick={e=>open('install',e.currentTarget)}><Icon name="download" size={18}/>Adicionar à tela inicial<Icon name="chevron-right" size={16}/></button>}
+    {page==='identity'&&(cloudEnabled?<AccountSheet onClose={close}/>:<LocalIdentitySheet onClose={close}/>)}
+    {page==='time'&&<TimeSettingsSheet onClose={close}/>}
+    {page==='work'&&<WorkScheduleEditor onClose={close}/>}
+    {page==='reminders'&&<ReminderSettingsSheet onClose={close}/>}
+    {page&&['appearance','google','account','data','install'].includes(page)&&<BottomSheet key={page} className="settings-sheet" title={PAGE_LABEL[page]} onClose={close} footer={<button className="btn btn-secondary grow" onClick={close}>Voltar às configurações</button>}>
+      {page==='appearance'&&<><p className="small muted">Escolha como o Leve aparece. A mudança é aplicada na hora.</p><Segmented<Settings['theme']> label="Tema" value={settings.theme} onChange={theme=>{actions.updateSettings({theme});toast(`Tema: ${THEME_LABEL[theme]}`);}} options={[{value:'system',label:'Automático'},{value:'light',label:'Claro'},{value:'dark',label:'Escuro'}]}/></>}
+      {page==='google'&&<GoogleCalendarSection/>}
+      {page==='account'&&(cloudEnabled?<AccountSection onEdit={()=>setPage('identity')}/>:<p className="small muted">Este ambiente salva os dados somente neste aparelho. Não há uma conta conectada para sincronizar.</p>)}
+      {page==='data'&&<DataSettings onClose={close}/>}
+      {page==='install'&&<InstallSection/>}
+    </BottomSheet>}
+  </div>;
+}
+function DataSettings({onClose}:{onClose:()=>void}) {
+  const count=useStore(s=>s.tasks.filter(t=>t.id.startsWith('demo-')).length+s.projects.filter(p=>p.id.startsWith('demo-')).length);
+  const issue=useStorageIssue();
+  return <div className="settings-data">
+    {issue&&<div role="note"><p>Há dados locais que precisam de atenção. Use o aviso de recuperação para exportar as versões antes de fechar o app.</p><button className="btn btn-soft" onClick={onClose}>Ver opções de recuperação</button></div>}
+    <div className="list">
+      {count>0&&<button className="settings-row" onClick={()=>{if(confirm(`Remover os ${count} itens de exemplo? Seus itens continuam intactos.`)){actions.removeDemo();toast('Exemplos removidos',{label:'Desfazer',run:()=>actions.undo()});}}}><span>Remover dados de exemplo</span><Icon name="trash" size={18}/></button>}
+      <button className="settings-row" onClick={()=>{actions.updateSettings({onboarded:false});onClose();}}><span>Ver introdução novamente</span><Icon name="chevron-right" size={18}/></button>
+      <a className="settings-row" href="/privacidade.html" target="_blank" rel="noopener">Política de privacidade<Icon name="arrow-right" size={18}/></a>
+      <a className="settings-row" href="/termos.html" target="_blank" rel="noopener">Termos de uso<Icon name="arrow-right" size={18}/></a>
     </div>
-  );
+    <p className="small muted">{cloudEnabled?'Alterações ficam neste aparelho até a sincronização ser confirmada.':'Seus dados ficam neste aparelho e funcionam offline.'}</p>
+    <div className="settings-danger"><h3>Apagar dados</h3><p className="small muted">Esta ação remove tarefas, projetos e preferências. Na conta conectada, afeta os outros aparelhos.</p><button className="btn btn-danger" onClick={()=>{if(confirm(cloudEnabled?'Apagar todas as tarefas, projetos e preferências da sua conta em todos os aparelhos?':'Apagar todas as tarefas, projetos e preferências deste aparelho?')){actions.reset();onClose();}}}>Apagar tudo</button></div>
+  </div>;
 }
-
-/** Falhas de integracao permanecem visiveis mesmo com controles recolhidos. */
-function IntegrationAlerts() {
-  const error = useGoogleCalendar(s => s.error);
-  return error ? <p role="alert" className="small warn-text">Google Agenda: {error}</p> : null;
-}
-
-function AccountStatus() {
-  const status = useCloud(c => c.status);
-  const error = useCloud(c => c.error);
-  return status === 'error' || status === 'offline' || status === 'loading' ?
-    <p className="small muted" role={status === 'error' ? 'alert' : 'status'}>{STATUS_LABEL[status]}{error ? ` · ${error}` : ''}</p> : null;
-}
-
 const STATUS_LABEL: Record<SyncStatus, string> = {
   idle: 'Desconectado',
   loading: 'Carregando…',
@@ -308,20 +113,19 @@ function timeAgo(ms?: number) {
   return `às ${new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function AccountSection() {
+function AccountSection({onEdit}: {onEdit:()=>void}) {
   const email = useCloud((c) => c.email);
   const user = useCloud((c) => c.user);
   const status = useCloud((c) => c.status);
   const error = useCloud((c) => c.error);
   const lastSync = useCloud((c) => c.lastSync);
-  const [editing, setEditing] = useState(false);
   const tone = status === 'error' ? 'var(--red)' : status === 'synced' ? 'var(--green)' : 'var(--text-3)';
 
   return (
     <section className="section">
       <SectionHead title="Conta" />
       <div className="list">
-        <button className="settings-row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setEditing(true)}>
+        <button className="settings-row" style={{ width: '100%', textAlign: 'left' }} onClick={onEdit}>
           <span className="row grow" style={{ gap: 12 }}>
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt="" width={40} height={40} style={{ borderRadius: '50%' }} referrerPolicy="no-referrer" />
@@ -365,7 +169,6 @@ function AccountSection() {
           <Icon name="logout" size={18} />
         </button>
       </div>
-      {editing && <AccountSheet onClose={() => setEditing(false)} />}
     </section>
   );
 }
@@ -381,6 +184,8 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   const [confirmPw, setConfirmPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const isEmail = user?.provider !== 'google';
 
   const dirty =
@@ -393,25 +198,28 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
     if (password !== confirmPw) return setError('As senhas não conferem.');
     setBusy(true);
     setError('');
-    const { error } = await supabase.auth.updateUser({
+    try {const { error } = await supabase.auth.updateUser({
       data: { full_name: fullName.trim(), preferred_name: preferredName.trim(), phone: phone.trim() },
       ...(password ? { password } : {}),
     });
-    setBusy(false);
+    if(!mounted.current)return;
     if (error) return setError(error.message);
     if (preferredName.trim()) actions.updateSettings({ name: preferredName.trim() });
     toast('Dados da conta salvos');
     onClose();
+    }catch{if(mounted.current)setError('Não foi possível salvar. Suas alterações continuam aqui para tentar novamente.');}
+    finally{if(mounted.current)setBusy(false);}
   };
 
   return (
     <BottomSheet
       title="Meus dados"
       onClose={onClose}
-      canClose={() => !dirty || confirm('Descartar as alterações que você não salvou?')}
+      className="settings-sheet"
+      canClose={() => !busy && (!dirty || confirm('Descartar as alterações que você não salvou?'))}
       footer={
         <>
-          <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-secondary" disabled={busy} onClick={()=>{if(!dirty||confirm('Descartar as alterações que você não salvou?'))onClose();}}>Cancelar</button>
           <button className="btn btn-primary grow" disabled={!dirty || busy} onClick={() => submit()}>
             <Icon name="check" size={18} />
             {busy ? 'Salvando…' : 'Salvar alterações'}
@@ -501,34 +309,44 @@ function GoogleLogo({ size = 18 }: { size?: number }) {
 function GoogleCalendarSection() {
   const gcal = useGoogleCalendar();
   const [syncing, setSyncing] = useState(false);
+  const [localError,setLocalError] = useState('');
+  const [success,setSuccess] = useState('');
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
 
   const handleConnect = async () => {
-    const ok = await connectGoogleCalendar();
-    if (!ok && gcal.error) {
-      toast(gcal.error);
-    }
+    rememberCalendarSettingsReturn();setLocalError('');setSuccess('');
+    try {if(!await connectGoogleCalendar())clearCalendarSettingsReturn();}
+    catch {clearCalendarSettingsReturn();if(mounted.current)setLocalError('Não foi possível iniciar a conexão. Tente novamente.');}
   };
 
   const handleDisconnect = async () => {
     if (confirm('Desconectar o Google Agenda? Seus eventos já criados no Google Agenda permanecerão lá.')) {
-      await disconnectGoogleCalendar();
+      setSyncing(true);setLocalError('');setSuccess('');
+      try {await disconnectGoogleCalendar();}
+      catch {if(mounted.current)setLocalError('Não foi possível confirmar a desconexão. Tente novamente.');}
+      finally {if(mounted.current)setSyncing(false);}
     }
   };
 
   const handleManualSync = async () => {
     setSyncing(true);
+    setLocalError('');
+    setSuccess('');
     try {
-      await syncAllUpcomingTasks(true);
-    } finally {
-      setSyncing(false);
+      const count=await syncAllUpcomingTasks(true,true);
+      if(mounted.current&&getGoogleCalendarState().status==='synced')setSuccess(count?`${count} ${count===1?'item sincronizado':'itens sincronizados'}.`:'Nenhum item novo para sincronizar.');
+    } catch {if(mounted.current)setLocalError('Não foi possível sincronizar. Verifique a conexão e tente novamente.');}
+    finally {
+      if(mounted.current)setSyncing(false);
     }
   };
 
   const tone = gcal.status === 'error' ? 'var(--red)' : gcal.connected ? 'var(--green)' : 'var(--text-3)';
+  const hasError=gcal.status==='error'||!!gcal.error||!!localError;
 
   return (
     <section className="section">
-      <SectionHead title="Google Agenda" />
       <p className="small muted" style={{ marginBottom: 12 }}>Envia alterações do Leve para o calendário escolhido. Eventos já existentes no Google não são importados nem descontados do tempo disponível no Leve.</p>
       <p className="small muted" style={{ marginBottom: 12 }}><strong>Integração em testes.</strong> Disponível apenas para contas autorizadas no Google. Durante os testes, a autorização pode expirar após 7 dias e exigir uma nova conexão. Você pode usar o Leve sem conectar o calendário.</p>
       <div className="list">
@@ -538,10 +356,6 @@ function GoogleCalendarSection() {
               <GoogleLogo size={24} />
               <span className="grow">
                 <span style={{ fontWeight: 600, display: 'block' }}>Conectar ao Google Agenda</span>
-                <span className="xs faint" style={{ display: 'block' }}>
-                  Tarefas e compromissos criados e editados sobem direto para a sua agenda Google
-                </span>
-                <span className="xs faint" style={{ display: 'block' }}>O vínculo fica salvo na sua conta do Leve e é restaurado ao reabrir o app enquanto a autorização estiver válida.</span>
               </span>
             </span>
             <button
@@ -563,7 +377,7 @@ function GoogleCalendarSection() {
                     {gcal.status === 'syncing' || syncing
                       ? 'Sincronizando…'
                       : gcal.status === 'error'
-                      ? gcal.error || 'Erro na sincronização'
+                      ? 'Requer atenção'
                       : `Conectado${gcal.lastSync ? ` · ${timeAgo(gcal.lastSync)}` : ''}`}
                   </span>
                 </span>
@@ -624,11 +438,13 @@ function GoogleCalendarSection() {
           </>
         )}
       </div>
-      {gcal.error && (
+      {hasError && (
         <p className="xs" role="alert" style={{ color: 'var(--red)', marginTop: 8 }}>
-          {gcal.error}
+          {gcal.error||localError||'Não foi possível confirmar a sincronização. Tente novamente ou reconecte sua agenda.'}
         </p>
       )}
+      {hasError&&gcal.connected&&<button className="btn btn-soft" disabled={gcal.status==='syncing'||syncing} onClick={handleConnect}>Reconectar Google Agenda</button>}
+      {!hasError&&success&&<p className="small" role="status">{success}</p>}
     </section>
   );
 }
