@@ -11,7 +11,7 @@ import {
 } from './dates';
 import { recurrenceLabel } from './recurrence';
 
-export type ChipType = 'kind' | 'date' | 'time' | 'duration' | 'recurrence' | 'priority' | 'due';
+export type ChipType = 'kind' | 'date' | 'time' | 'duration' | 'recurrence' | 'priority' | 'due' | 'category';
 
 export interface ParseChip {
   type: ChipType;
@@ -407,6 +407,7 @@ export function parse(input: string, opts: ParseOptions = {}): Parsed {
 
   /* ---------- Chips ---------- */
   const chips: ParseChip[] = [];
+  if (category === 'trabalho') chips.push({ type: 'category', label: 'Trabalho' });
   if (kind === 'event') chips.push({ type: 'kind', label: 'Compromisso' });
   if (kind === 'habit') chips.push({ type: 'kind', label: 'Hábito' });
   if (date && !recurrence) {

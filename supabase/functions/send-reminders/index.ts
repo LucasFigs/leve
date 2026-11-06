@@ -270,6 +270,7 @@ function isTask(v) {
 }
 function isSettings(v) {
   if (!isObject(v)) return false;
+  if (!optional(v.workSchedule, (w) => isObject(w) && typeof w.enabled === "boolean" && Array.isArray(w.weekdays) && w.weekdays.length <= 7 && new Set(w.weekdays).size === w.weekdays.length && w.weekdays.every((d) => integer(d, 0, 6)) && (!w.enabled || w.weekdays.length > 0) && time(w.start) && time(w.end) && w.start < w.end)) return false;
   return optional(v.name, (x) => text(x, 1e3)) && optional(v.theme, (x) => ["system", "light", "dark"].includes(x)) && ["dayStart", "dayEnd", "lunchStart", "lunchEnd"].every((k) => optional(v[k], time)) && optional(v.defaultDuration, (x) => integer(x, 1, 10080)) && optional(v.reminderLead, (x) => integer(x, 0, 1440)) && ["protectLunch", "nudges", "reminders", "discreetReminders", "onboarded"].every((k) => optional(v[k], (x) => typeof x === "boolean"));
 }
 function isMeta(v) {

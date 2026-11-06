@@ -94,6 +94,8 @@ export interface Project {
 }
 
 export interface Settings {
+  /** Opcional: ausente/desligado preserva o planejamento legado. */
+  workSchedule?: { enabled: boolean; weekdays: number[]; start: string; end: string };
   name: string;
   theme: 'system' | 'light' | 'dark';
   dayStart: string;

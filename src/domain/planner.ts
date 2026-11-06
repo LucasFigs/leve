@@ -6,6 +6,7 @@ import type { DayItem, DayPart, Settings, Task } from './types';
 import { addDays, diffDays, minToTime, nowMin, roundUpTo, timeToMin, todayISO } from './dates';
 import { durationOf, itemsForDate, overdueTasks, unscheduledTasks } from './selectors';
 import { scoreItem } from './priority';
+import { taskWindow, usesWorkSchedule } from './context';
 
 export const TRANSITION_MIN = 10;
 export const BREAK_AFTER_MIN = 90;
@@ -63,11 +64,20 @@ function freeGaps(start: number, end: number, busy: Block[]): Block[] {
   return gaps;
 }
 
-function windowFor(date: string, settings: Settings, now = nowMin()) {
-  let start = timeToMin(settings.dayStart);
-  const end = timeToMin(settings.dayEnd);
+function windowFor(date: string, settings: Settings, now = nowMin(), task: Pick<Task, 'category'> = {}) {
+  let { start, end } = taskWindow(task, date, settings);
   if (date === todayISO()) start = Math.max(start, roundUpTo(now + 5, 15));
   return { start, end };
+}
+
+function planningWindows(date: string, settings: Settings, now = nowMin()): Block[] {
+  const general = windowFor(date, settings, now);
+  const work = windowFor(date, settings, now, { category: 'trabalho' });
+  return mergeBlocks([general, work].filter(w => w.end > w.start).map(w => [w.start, w.end]));
+}
+
+function availableGaps(date: string, settings: Settings, busy: Block[], now = nowMin()): Block[] {
+  return planningWindows(date, settings, now).flatMap(([s, e]) => freeGaps(s, e, busy));
 }
 
 function busyFor(items: DayItem[], exclude: Set<string>): Block[] {
@@ -87,10 +97,10 @@ export function lunchBlock(settings: Settings): Block | undefined {
 /** Primeiro horário livre do dia que comporte `duration`. */
 export function nextFreeSlot(
   tasks: Task[], date: string, duration: number, settings: Settings,
-  opts: { after?: number; before?: number; excludeId?: string } = {},
+  opts: { after?: number; before?: number; excludeId?: string; task?: Pick<Task, 'category'> } = {},
 ): string | undefined {
   const items = itemsForDate(tasks, date, settings.defaultDuration);
-  const win = windowFor(date, settings);
+  const win = windowFor(date, settings, nowMin(), opts.task ?? tasks.find(t => t.id === opts.excludeId));
   const start = Math.max(win.start, opts.after ?? 0);
   const end = Math.min(win.end, opts.before ?? Infinity);
   const busy = busyFor(items, new Set(opts.excludeId ? [opts.excludeId] : []));
@@ -119,11 +129,11 @@ export interface PartSlot {
 }
 
 /** Para cada período do dia (manhã/tarde/noite), o primeiro horário livre que comporta a tarefa. */
-export function slotsByPart(tasks: Task[], date: string, duration: number, settings: Settings, excludeId?: string): PartSlot[] {
-  const win = windowFor(date, settings);
+export function slotsByPart(tasks: Task[], date: string, duration: number, settings: Settings, excludeId?: string, task?: Pick<Task, 'category'>): PartSlot[] {
+  const win = windowFor(date, settings, nowMin(), task ?? tasks.find(t => t.id === excludeId));
   return DAY_PARTS.map(({ part, label, from, to }) => {
     const outside = Math.max(from, win.start) >= Math.min(to, win.end);
-    const slot = outside ? undefined : nextFreeSlot(tasks, date, duration, settings, { after: from, before: to, excludeId });
+    const slot = outside ? undefined : nextFreeSlot(tasks, date, duration, settings, { after: from, before: to, excludeId, task });
     return { part, label, slot, outside };
   });
 }
@@ -143,18 +153,30 @@ export interface DayCapacity {
 /** O que falta fazer hoje cabe no tempo livre? (folga de 20% para imprevistos) */
 export function dayCapacity(tasks: Task[], date: string, settings: Settings, now = nowMin()): DayCapacity {
   const items = itemsForDate(tasks, date, settings.defaultDuration).filter((i) => !i.done);
-  const { start, end } = windowFor(date, settings, now);
+  const windows = planningWindows(date, settings, now);
+  const start = windows[0]?.[0] ?? windowFor(date, settings, now).start;
+  const end = windows[windows.length - 1]?.[1] ?? start;
   const busy: Block[] = items.filter((i) => i.time).map((i) => [timeToMin(i.time!), timeToMin(i.time!) + i.duration]);
   const lunch = lunchBlock(settings);
   if (lunch) busy.push(lunch);
-  const free = start >= end ? 0 : freeGaps(start, end, busy).reduce((s, [a, b]) => s + b - a, 0);
+  const free = availableGaps(date, settings, busy, now).reduce((s, [a, b]) => s + b - a, 0);
   const work = items.filter((i) => i.task.kind !== 'event');
   const unscheduled = work.filter((i) => !i.time).reduce((s, i) => s + i.duration, 0);
   const left = work
     .filter((i) => !i.time || timeToMin(i.time) + i.duration > start)
     .reduce((s, i) => s + i.duration, 0);
+  const demand = new Map<boolean, number>();
+  for (const item of work) if (!item.time) {
+    const professional = usesWorkSchedule(item.task,settings);
+    demand.set(professional,(demand.get(professional) ?? 0) + item.duration);
+  }
+  const contextOver = settings.workSchedule?.enabled && [...demand].some(([professional, minutes]) => {
+    const eligible = windowFor(date, settings, now, professional ? {category:'trabalho'} : {});
+    const room = freeGaps(eligible.start, eligible.end, busy).reduce((sum, [a,b]) => sum + b-a, 0);
+    return minutes > room;
+  });
   const status: CapacityStatus =
-    start >= end ? 'ended' : unscheduled <= free * LOAD_FACTOR ? 'ok' : unscheduled <= free ? 'tight' : 'over';
+    start >= end ? 'ended' : contextOver ? 'over' : unscheduled <= free * LOAD_FACTOR ? 'ok' : unscheduled <= free ? 'tight' : 'over';
   return { free, unscheduled, left, status };
 }
 
@@ -163,7 +185,9 @@ export function planDay(tasks: Task[], date: string, settings: Settings, now = n
   const today = todayISO();
   const fallback = settings.defaultDuration;
   const items = itemsForDate(tasks, date, fallback);
-  const { start, end } = windowFor(date, settings, now);
+  const windows = planningWindows(date, settings, now);
+  const start = windows[0]?.[0] ?? windowFor(date, settings, now).start;
+  const end = windows[windows.length - 1]?.[1] ?? start;
 
   // O que pode ser movido
   const movable: DayItem[] = [];
@@ -195,13 +219,13 @@ export function planDay(tasks: Task[], date: string, settings: Settings, now = n
   if (lunch && start < lunch[1] && end > lunch[0]) {
     const [l0, l1] = lunch;
     const lunchFree = freeGaps(l0, l1, busy).reduce((s, [a, b]) => s + b - a, 0) >= (l1 - l0) * 0.75;
+    busy.push([l0, l1]);
     if (lunchFree) {
-      busy.push([Math.max(l0, start), l1]);
       if (start < l1 - 20) breaks.push({ time: minToTime(Math.max(l0, start)), duration: l1 - Math.max(l0, start), label: 'Almoço' });
     }
   }
 
-  const gaps = freeGaps(start, end, busy);
+  const gaps = availableGaps(date, settings, busy, now);
   const freeMinutes = gaps.reduce((s, [a, b]) => s + (b - a), 0);
   const capacity = freeMinutes * LOAD_FACTOR;
 
@@ -225,8 +249,10 @@ export function planDay(tasks: Task[], date: string, settings: Settings, now = n
       continue;
     }
     let placed = false;
+    cursorGaps.sort((a,b) => a[0]-b[0]);
     for (const g of cursorGaps) {
-      let s = g[0];
+      const eligible = windowFor(date, settings, now, item.task);
+      let s = Math.max(g[0], eligible.start);
       // Pausa depois de muito tempo seguido
       if (s === lastEnd && streakMin >= BREAK_AFTER_MIN) {
         breaks.push({ time: minToTime(s), duration: BREAK_MIN, label: 'Pausa' });
@@ -235,11 +261,14 @@ export function planDay(tasks: Task[], date: string, settings: Settings, now = n
         streakMin = 0;
       }
       s = roundUpTo(s, 5);
-      if (g[1] - s < d) continue;
+      if (Math.min(g[1], eligible.end) - s < d) continue;
       placements.push({ task: item.task, time: minToTime(s), duration: d });
       const finish = s + d;
       streakMin = s === lastEnd || s - lastEnd <= TRANSITION_MIN ? streakMin + d : d;
+      // Preserve a parte anterior do intervalo para tarefas de outro contexto.
+      const previousStart = g[0];
       g[0] = finish + TRANSITION_MIN;
+      if (s - TRANSITION_MIN > previousStart) cursorGaps.push([previousStart, s - TRANSITION_MIN]);
       lastEnd = g[0];
       planned += d;
       placed = true;
@@ -265,7 +294,7 @@ export function reflowDay(tasks: Task[], settings: Settings, now = nowMin()): { 
   let working = tasks.map((t) => (stale.includes(t) ? { ...t, time: undefined } : t));
   const updates: { id: string; time?: string }[] = [];
   for (const t of stale) {
-    const slot = nextFreeSlot(working, today, durationOf(t, settings.defaultDuration), settings, { after: now });
+    const slot = nextFreeSlot(working, today, durationOf(t, settings.defaultDuration), settings, { after: now, excludeId: t.id, task: t });
     updates.push({ id: t.id, time: slot });
     if (slot) working = working.map((w) => (w.id === t.id ? { ...w, time: slot } : w));
   }
@@ -278,16 +307,24 @@ export interface WeekAssignment {
 }
 
 /** Minutos de tarefas que cabem num dia (metade do tempo livre fora de compromissos). */
-export function dayBudget(tasks: Task[], date: string, settings: Settings): { budget: number; used: number } {
+export function dayBudget(tasks: Task[], date: string, settings: Settings, task?: Pick<Task, 'category'>): { budget: number; used: number } {
   const items = itemsForDate(tasks, date, settings.defaultDuration);
-  const { start, end } = windowFor(date, settings);
+  const { start, end } = windowFor(date, settings, nowMin(), task);
   const busy = busyFor(items.filter(i => i.task.kind === 'event'), new Set());
   const lunch = lunchBlock(settings);
   if (lunch) busy.push(lunch);
   const free = end > start ? freeGaps(start, end, busy).reduce((sum, [a, b]) => sum + b - a, 0) : 0;
   // Compromissos sem horário também consomem capacidade, sem inventar uma posição no calendário.
   const untimed = items.filter(i => i.task.kind === 'event' && !i.time).reduce((sum, i) => sum + i.duration, 0);
-  const used = items.filter((i) => i.task.kind !== 'event' && !i.done).reduce((s, i) => s + i.duration, 0);
+  const used = items.filter((i) => i.task.kind !== 'event' && !i.done).reduce((sum, item) => {
+    if (!settings.workSchedule?.enabled || !task) return sum + item.duration;
+    if (item.time) {
+      const at = timeToMin(item.time);
+      return sum + Math.max(0, Math.min(end,at+item.duration)-Math.max(start,at));
+    }
+    const eligible = windowFor(date,settings,nowMin(),item.task);
+    return sum + (Math.min(end,eligible.end) > Math.max(start,eligible.start) ? item.duration : 0);
+  }, 0);
   return { budget: Math.max(0, free - untimed) * 0.5, used };
 }
 
@@ -305,6 +342,7 @@ export function planWeek(tasks: Task[], settings: Settings, preferred: Record<st
   pool.sort((a, b) => rank(a) - rank(b));
 
   const out: WeekAssignment[] = [];
+  let working = [...tasks];
   for (const t of pool) {
     if (t.priority === 'optional' && !preferred[t.id]) continue;
     const d = durationOf(t, settings.defaultDuration);
@@ -313,6 +351,10 @@ export function planWeek(tasks: Task[], settings: Settings, preferred: Record<st
     const pref = preferred[t.id];
     const ordered = pref && options.includes(pref) ? [pref, ...options.filter((o) => o !== pref)] : options;
     const pick = ordered.find((day) => {
+      if (settings.workSchedule?.enabled) {
+        const { budget, used } = dayBudget(working, day, settings, t);
+        return used + d <= budget && !!nextFreeSlot(working, day, d, settings, { task: t });
+      }
       const l = load.get(day)!;
       return l.used + d <= l.budget;
     });
@@ -320,6 +362,10 @@ export function planWeek(tasks: Task[], settings: Settings, preferred: Record<st
     const l = load.get(pick);
     if (l) l.used += d;
     out.push({ task: t, date: pick });
+    if (settings.workSchedule?.enabled) {
+      const time = nextFreeSlot(working, pick, d, settings, { task: t });
+      working = working.map(item => item.id === t.id ? { ...item, status: 'active', date: pick, time } : item);
+    }
   }
   return out;
 }

@@ -6,8 +6,9 @@ import { nextFreeSlot, reflowDay, slotsByPart, type DayPlan, type WeekAssignment
 import { occurrencesBefore } from '../domain/recurrence';
 import type { Suggestion } from '../domain/organize';
 import { assistant } from '../services/assistant';
+import { nextContextDate } from '../domain/context';
 import { localRepository, reportStorageConflict, STATE_KEY } from './persistence';
-import { isTask, isProject, isGoogleDeletions } from '../domain/validation';
+import { isTask, isProject, isGoogleDeletions, isSettings } from '../domain/validation';
 import { toast } from './ui';
 
 export const uid = () =>
@@ -264,7 +265,7 @@ export const actions = {
     if (dayPart && !time && !recurrence) {
       const targetDate = date ?? defaults.date ?? todayISO();
       const dur = p.duration ?? state.settings.defaultDuration;
-      const parts = slotsByPart(state.tasks, targetDate, dur, state.settings);
+      const parts = slotsByPart(state.tasks, targetDate, dur, state.settings, undefined, { category: has('category') ? p.category : undefined });
       const match = parts.find((pt) => pt.part === dayPart);
       if (match?.slot) {
         time = match.slot;
@@ -294,7 +295,7 @@ export const actions = {
       duration: has('duration') ? p.duration : state.settings.defaultDuration,
       priority: has('priority') ? p.priority : undefined,
       recurrence,
-      category: p.category,
+      category: has('category') ? p.category : undefined,
       energy: p.energy,
       projectId: defaults.projectId,
     });
@@ -402,13 +403,13 @@ export const actions = {
     const t = findTask(id);
     if (!t) return '';
     const today = todayISO();
-    const tomorrow = addDays(today, 1);
+    const tomorrow = nextContextDate(t, addDays(today, 1), state.settings);
     let label = '';
 
     if (t.recurrence) {
       // Recorrentes: só esta ocorrência sai da série; as outras continuam iguais
       if (mode === 'later') {
-        const slot = nextFreeSlot(state.tasks, today, durationOf(t), state.settings, { after: nowMin(), excludeId: id });
+        const slot = nextFreeSlot(state.tasks, today, durationOf(t, state.settings.defaultDuration), state.settings, { after: nowMin(), excludeId: id });
         if (!slot) return 'Sem horário livre hoje';
         set((s) => detach(s, id, occurrence, { date: today, time: slot, postponed: 1 }), { undoable: true });
         return `Só esta vez: movida para ${slot}`;
@@ -424,18 +425,20 @@ export const actions = {
 
     let patch: Partial<Task> = {};
     if (mode === 'later') {
-      const slot = nextFreeSlot(state.tasks, today, durationOf(t), state.settings, { after: nowMin(), excludeId: id });
+      const slot = nextFreeSlot(state.tasks, today, durationOf(t, state.settings.defaultDuration), state.settings, { after: nowMin(), excludeId: id });
       if (slot) {
         patch = { date: today, time: slot };
         label = `Movida para ${slot}`;
       } else {
-        const slotTomorrow = nextFreeSlot(state.tasks, tomorrow, durationOf(t), state.settings, { excludeId: id });
+        if (!tomorrow) return 'Sem dia de trabalho disponível — escolha outro dia';
+        const slotTomorrow = nextFreeSlot(state.tasks, tomorrow, durationOf(t, state.settings.defaultDuration), state.settings, { excludeId: id });
         patch = { date: tomorrow, time: slotTomorrow };
-        label = 'Sem espaço hoje — movida para amanhã';
+        label = `Sem espaço hoje — movida para ${formatDay(tomorrow).toLowerCase()}`;
       }
     } else if (mode === 'tomorrow') {
+      if (!tomorrow) return 'Sem dia de trabalho disponível — escolha outro dia';
       patch = { date: tomorrow, time: undefined };
-      label = 'Movida para amanhã';
+      label = `Movida para ${formatDay(tomorrow).toLowerCase()}`;
     } else if (mode === 'unschedule') {
       patch = { time: undefined, date: t.date && t.date < today ? today : t.date };
       label = 'Mantida sem horário';
@@ -533,20 +536,25 @@ export const actions = {
     const times = new Map(plan.placements.map((p) => [p.task.id, p.time]));
     const deferred = new Set(deferIds);
     set(
-      (s) => ({
-        ...s,
-        tasks: s.tasks.map((t) => {
+      (s) => {
+        // Um encaixe contextual pertence a este dia, nao muda o horario da serie.
+        const base = plan.placements.reduce((acc, p) => p.task.recurrence
+          ? detach(acc, p.task.id, plan.date, { date: plan.date, time: p.time }) : acc, s);
+        return {
+        ...base,
+        tasks: base.tasks.map((t) => {
           if (times.has(t.id)) {
             return t.recurrence
-              ? { ...t, time: times.get(t.id), updatedAt: Date.now() }
+              ? t
               : { ...t, status: 'active', date: plan.date, time: times.get(t.id), updatedAt: Date.now() };
           }
           if (deferred.has(t.id) && !t.recurrence) {
-            return { ...t, date: tomorrow, time: undefined, postponed: t.postponed + 1, updatedAt: Date.now() };
+            const date = nextContextDate(t, tomorrow, s.settings);
+            return date ? { ...t, date, time: undefined, postponed: t.postponed + 1, updatedAt: Date.now() } : t;
           }
           return t;
         }),
-      }),
+      }; },
       { undoable: true },
     );
   },
@@ -613,6 +621,10 @@ export const actions = {
 
   /* ---------- Preferências ---------- */
   updateSettings(patch: Partial<Settings>) {
+    if (!isSettings({...state.settings,...patch})) {
+      toast('Confira os dias e horários antes de salvar. Suas preferências anteriores foram mantidas.');
+      return;
+    }
     set((s) => ({ ...s, settings: { ...s.settings, ...patch } }));
   },
   dismiss(key: string) {

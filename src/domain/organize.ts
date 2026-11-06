@@ -5,7 +5,8 @@
 import type { Priority, Settings, Task } from './types';
 import { addDays, diffDays, nowMin, timeToMin, todayISO, weekdayOf } from './dates';
 import { normalize, parse } from './parser';
-import { dayBudget } from './planner';
+import { dayBudget, nextFreeSlot } from './planner';
+import { usesWorkSchedule } from './context';
 import { suggestBreakdown } from './breakdown';
 
 export interface Suggestion {
@@ -66,7 +67,7 @@ export function suggestForTask(task: Task, tasks: Task[], settings: Settings): S
     let best = days[0];
     let bestFree = -Infinity;
     for (const d of days) {
-      const { budget, used } = dayBudget(tasks, d, settings);
+      const { budget, used } = dayBudget(tasks, d, settings, task);
       const free = budget - used;
       if (free > bestFree + 20) {
         best = d;
@@ -77,6 +78,17 @@ export function suggestForTask(task: Task, tasks: Task[], settings: Settings): S
     reason = best === firstDay ? 'Você tem espaço hoje' : 'Dia com mais espaço livre';
   }
 
+  if (!task.date && date && usesWorkSchedule(task, settings)) {
+    // Uma data sugerida tambem precisa comportar a tarefa inteira.
+    const first = date;
+    date = undefined;
+    for (let offset = 0; offset < 7; offset++) {
+      const candidate = addDays(first, offset);
+      if (task.due && candidate > task.due) break;
+      if (nextFreeSlot(tasks, candidate, duration, settings, { task, excludeId: task.id })) { date = candidate; break; }
+    }
+    reason = date ? 'Dentro do seu expediente' : 'Sem encaixe no expediente — escolha outro dia ou categoria';
+  }
   return {
     taskId: task.id,
     title: task.title,
