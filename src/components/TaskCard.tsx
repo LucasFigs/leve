@@ -69,6 +69,11 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const actionTitle = `${task.title}${catalog&&(task.recurrence||task.seriesId)&&date?`, ${formatDay(date)}`:''}`;
   const label = `${task.title}${catalog?`, ${task.status==='archived'?'arquivada':catalog.ended?'série encerrada':task.recurrence?'série recorrente':task.seriesId?'ocorrência alterada':task.status==='inbox'?'captura do Inbox':'atividade'}${date?`, ${formatDay(date)}`:''}`:''}${task.time ? `, às ${task.time}` : ''}`;
   const readOnly = !!catalog && (task.status === 'archived' || catalog.ended);
+  // Uma série encerrada permite editar suas regras, sem inventar uma ocorrência.
+  // Hábitos mantêm o calendário; arquivos mantêm a consulta/restauração.
+  const open = () => openSheet(catalog?.ended && !isHabit && task.status !== 'archived'
+    ? { type: 'task', id: task.id, mode: 'edit' }
+    : { type: 'task', id: task.id, date: occurrence });
 
   return (
     <div className={`task${catalog ? ' task-catalog' : ''}${isHabit ? ' task-habit' : ''}${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`} style={isHabit ? habitStyle(task) : undefined}>
@@ -89,9 +94,9 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
           label={`${isDone ? 'Reabrir' : 'Concluir'}: ${actionTitle}`}
         />
       )}
-      <button className="task-main" onClick={() => openSheet({ type: 'task', id: task.id, date: occurrence })} aria-label={`Abrir ${label}`}>
+      <button className="task-main" onClick={open} aria-label={`Abrir ${label}`}>
         <div className="task-title">{task.title}</div>
-        {catalog ? <CatalogMetadata task={task} project={project} date={date} ended={catalog.ended} isDone={isDone}/> : <div className="task-meta">
+        {catalog ? <CatalogMetadata task={task} project={showProject ? project : undefined} date={date} ended={catalog.ended} isDone={isDone}/> : <div className="task-meta">
           {isHabit && <HabitIdentity task={task} />}
           {isEvent && !compact && <span>Compromisso</span>}
           {isEvent && isDone && <span className={missed ? 'warn' : ''}>{missed ? 'Não aconteceu' : 'Aconteceu'}</span>}

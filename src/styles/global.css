@@ -1855,6 +1855,39 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 /* ---------- Projects ---------- */
 
+.projects-screen .topbar .btn { min-height: 44px; white-space: normal; }
+.projects-screen .tasks-projects-switch button { min-height: 44px; }
+.project-collection { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 16px; }
+.project-collection .project-card { align-items: flex-start; gap: 12px; padding: 16px; min-width: 0; height: 100%; }
+.project-card-content { flex: 1; min-width: 0; }
+.project-card-name { display: block; font-weight: 650; overflow-wrap: anywhere; line-height: 1.4; }
+.project-summary { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.project-progress { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.project-progress .progress { height: 4px; }
+.project-collection .project-card > svg { flex-shrink: 0; margin-top: 12px; }
+.project-heading { display: flex; align-items: flex-start; gap: 12px; }
+.project-heading .page-title { font-size: 1.5rem; line-height: 1.3; }
+.project-heading .page-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.project-detail-progress { margin-top: 16px; }
+.project-capture { margin: 22px 0; min-width: 0; }
+.project-capture textarea { min-width: 0; }
+.project-capture .chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding-top: 4px; padding-bottom: 4px; }
+.project-capture .chip svg { flex-shrink: 0; }
+.project-capture button.chip { min-height: 44px; }
+.project-capture .send { width: 44px; height: 44px; }
+.project-capture .quick-detail { min-height: 44px; white-space: normal; }
+.project-activities { margin-top: 22px; }
+.project-activities .section-title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.project-detail .task-catalog { padding: 12px; gap: 10px; }
+.project-detail .task-title { display: block; overflow: visible; overflow-wrap: anywhere; }
+.project-detail .task-action { opacity: 1; min-width: 44px; min-height: 44px; margin-top: -4px; }
+.project-detail .prio.important { color: var(--text-2); }
+.project-history { margin-top: 22px; }
+.project-history .collapse-btn { min-height: 44px; text-align: left; }
+.project-history .project-activities { margin-top: 8px; }
+.project-show-more { margin-top: 8px; min-height: 44px; }
+@media (min-width: 640px) { .project-collection { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 .project-card {
   display: flex;
   align-items: center;

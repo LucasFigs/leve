@@ -24,12 +24,14 @@ interface Props {
   placeholder?: string;
   onDone?: () => void;
   hint?: boolean;
+  /** O cabeçalho de Projetos já identifica o destino da captura. */
+  showProjectContext?: boolean;
   /** mostra “Detalhar” mesmo com o campo vazio (na folha de captura) */
   alwaysDetail?: boolean;
   onDraftChange?: (text: string) => void;
 }
 
-export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true, alwaysDetail, onDraftChange }: Props) {
+export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você precisa fazer?', onDone, hint = true, showProjectContext = true, alwaysDetail, onDraftChange }: Props) {
   const inputId = useId();
   const [text, setText] = useState('');
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
@@ -94,7 +96,7 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
   const contextChips: { label: string; icon: IconName }[] = [];
   if (defaults?.date && !parsed?.date) contextChips.push({ label: formatDay(defaults.date), icon: 'calendar' });
   if (defaults?.time && !parsed?.time) contextChips.push({ label: defaults.time, icon: 'clock' });
-  if (defaults?.projectId) {
+  if (defaults?.projectId && showProjectContext) {
     const p = projects.find((x) => x.id === defaults.projectId);
     if (p) contextChips.push({ label: p.name, icon: getProjectIcon(p) });
   }
