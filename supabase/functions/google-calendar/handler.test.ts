@@ -37,78 +37,42 @@ beforeEach(() => {
   handler = createHandler(config, network as typeof fetch);
 });
 const post = (body: unknown, overrides: Record<string, string> = {}) => handler(new Request(`${config.supabaseUrl}/functions/v1/google-calendar`, { method: 'POST', headers: { origin, authorization: 'Bearer user-session', ...overrides }, body: JSON.stringify(body) }));
-async function begin() { return (await post({ action: 'begin' })).json(); }
-async function complete(start: any) { return post({ action: 'complete', state: start.state, proof: start.proof, code: 'google-code' }); }
 
-describe('Google Agenda: fronteira do servidor', () => {
-  it('recusa origem estranha e sessões ausentes/inválidas antes de acessar credenciais', async () => {
-    expect((await post({ action: 'token' }, { origin: 'https://attacker.example' })).status).toBe(403);
-    expect(network).not.toHaveBeenCalled();
-    expect((await post({ action: 'token' }, { authorization: '' })).status).toBe(401);
-    expect((await post({ action: 'token' }, { authorization: 'Bearer invalid' })).status).toBe(401);
-    expect(tables.google_calendar_connections).toHaveLength(0);
-  });
-  it('usa PKCE e estado único com expiração e não expõe o verificador na URL', async () => {
-    const start = await begin();
-    const url = new URL(start.url);
-    expect(url.searchParams.get('access_type')).toBe('offline');
-    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
-    const pending = tables.google_calendar_oauth_states[0];
-    expect(url.href).not.toContain(pending.verifier);
-    expect(pending.state_hash).not.toBe(start.state);
-    expect(pending.browser_hash).not.toBe(start.proof);
-    expect(Date.parse(pending.expires_at) - Date.now()).toBeLessThanOrEqual(600000);
-    await begin(); expect(tables.google_calendar_oauth_states).toHaveLength(1);
-  });
-  it('retorno público somente redireciona código no fragmento, sem trocar tokens', async () => {
-    const start = await begin(); network.mockClear();
-    const response = await handler(new Request(`${config.supabaseUrl}/functions/v1/google-calendar/callback?code=test&state=${start.state}`));
-    expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe(`${origin}/#gcal_code=test&gcal_state=${start.state}`);
-    expect(network).not.toHaveBeenCalled();
-  });
-  it('não aceita prova de outro navegador nem estado vencido, e impede replay', async () => {
-    const start = await begin();
-    expect((await post({ action: 'complete', state: start.state, proof: 'x'.repeat(43), code: 'code' })).status).toBe(409);
-    expect((await complete(start)).status).toBe(200);
-    expect((await complete(start)).status).toBe(409);
-    const expired = await begin(); tables.google_calendar_oauth_states[0].expires_at = '2000-01-01T00:00:00.000Z';
-    expect((await complete(expired)).status).toBe(409);
-  });
-  it('salva refresh token cifrado e entrega somente access token após autenticação', async () => {
-    const start = await begin(); expect((await complete(start)).status).toBe(200);
-    const connection = tables.google_calendar_connections[0];
-    expect(JSON.stringify(tables)).not.toContain('long-refresh');
-    expect(await unseal(connection.refresh_cipher, config.encryptionKey, userId)).toBe('long-refresh');
-    const status = await post({ action: 'status', user_id: 'attacker' });
-    expect(await status.json()).toMatchObject({ connected: true, email: 'person@example.test' });
-    const response = await post({ action: 'token' });
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    const data = await response.json();
-    expect(data.accessToken).toBe('short-access');
-    expect(JSON.stringify(data)).not.toContain('long-refresh');
-    expect(JSON.stringify(data)).not.toContain('refresh_cipher');
-  });
-  it('não revela vínculo de outro usuário e salva preferências sem expor credenciais', async () => {
-    const start = await begin(); await complete(start);
-    expect((await post({ action: 'preferences', calendarId: 'work', autoSync: false })).status).toBe(200);
-    expect(await (await post({ action: 'status' })).json()).toMatchObject({ calendarId: 'work', autoSync: false });
-    await begin();
-    expect(tables.google_calendar_connections[0]).toMatchObject({ calendar_id: 'work', auto_sync: false });
-    tables.google_calendar_connections[0].user_id = '22222222-2222-4222-8222-222222222222';
-    expect(await (await post({ action: 'status' })).json()).toEqual({ connected: false });
-  });
-  it('desconectar remove credenciais e autorizações pendentes e solicita revogação', async () => {
-    const start = await begin(); await complete(start); const next = await begin();
-    expect(await (await post({ action: 'disconnect' })).json()).toMatchObject({ disconnected: true, revoked: true });
-    expect(tables.google_calendar_connections).toHaveLength(0);
-    expect(tables.google_calendar_oauth_states).toHaveLength(0);
-    expect((await complete(next)).status).toBe(409);
-  });
-  it('não consegue decifrar token movido para outra conta nem ciphertext adulterado', async () => {
-    const encrypted = await seal('private', config.encryptionKey, userId);
-    await expect(unseal(encrypted, config.encryptionKey, 'other-user')).rejects.toThrow();
-    const parts = encrypted.split('.'); parts[2] = (parts[2][0] === 'A' ? 'B' : 'A') + parts[2].slice(1);
-    await expect(unseal(parts.join('.'), config.encryptionKey, userId)).rejects.toThrow();
-  });
+async function existing(owner=userId){tables.google_calendar_connections.push({user_id:owner,generation:'fixture-generation',email:'person@example.test',refresh_cipher:await seal('fixture-refresh',config.encryptionKey,owner)});}
+describe('Google Agenda encerrado: fronteira do servidor',()=>{
+ it('mantém origem e autenticação antes de consultar vínculos',async()=>{
+  expect((await post({action:'status'},{origin:'https://attacker.example'})).status).toBe(403);expect(network).not.toHaveBeenCalled();
+  expect((await post({action:'disconnect'},{authorization:''})).status).toBe(401);expect((await post({action:'status'},{authorization:'Bearer invalid'})).status).toBe(401);
+ });
+ it.each(['begin','complete','token','preferences','sync','create','update','delete'])('cliente antigo não pode executar %s',async action=>{
+  await existing();const before=JSON.stringify(tables);const response=await post({action,code:'old-code',state:'x'.repeat(43),proof:'y'.repeat(43),autoSync:true});expect(response.status).toBe(410);expect(JSON.stringify(tables)).toBe(before);expect(network.mock.calls.every(([url])=>String(url).includes('/auth/v1/user'))).toBe(true);
+ });
+ it('callback antigo não transporta código nem consome estado, inclusive replay',async()=>{
+  tables.google_calendar_oauth_states.push({user_id:userId,verifier:'fixture-proof'});
+  for(let i=0;i<2;i++){const response=await handler(new Request(config.supabaseUrl+'/functions/v1/google-calendar/callback?code=private-code&state='+('x'.repeat(43))));expect(response.status).toBe(410);expect(response.headers.get('location')).toBeNull();expect(await response.text()).not.toContain('private-code');}
+  expect(network).not.toHaveBeenCalled();expect(tables.google_calendar_oauth_states).toHaveLength(1);
+ });
+ it('status mínimo não renova nem devolve tokens ou preferências de sincronização',async()=>{
+  await existing();const response=await post({action:'status',user_id:'other'});expect(await response.json()).toEqual({retired:true,connected:true,email:'person@example.test'});expect(response.headers.get('cache-control')).toBe('no-store');expect(network.mock.calls.some(([url])=>String(url).includes('googleapis.com'))).toBe(false);
+ });
+ it('novo usuário e outra conta não obtêm metadados do vínculo anterior',async()=>{
+  expect(await (await post({action:'status'})).json()).toEqual({retired:true,connected:false});await existing('22222222-2222-4222-8222-222222222222');expect(await (await post({action:'status'})).json()).toEqual({retired:true,connected:false});await post({action:'disconnect'});expect(tables.google_calendar_connections).toHaveLength(1);
+ });
+ it('desconexão explícita revoga somente o vínculo do usuário, sem eventos remotos',async()=>{
+  await existing();await existing('22222222-2222-4222-8222-222222222222');tables.google_calendar_oauth_states.push({user_id:userId});
+  expect(await (await post({action:'disconnect'})).json()).toEqual({retired:true,disconnected:true,revoked:true});expect(tables.google_calendar_connections).toHaveLength(1);expect(tables.google_calendar_oauth_states).toHaveLength(0);
+  expect(network.mock.calls.filter(([url])=>String(url).includes('googleapis.com')).map(([url])=>url)).toEqual(['https://oauth2.googleapis.com/revoke']);
+ });
+ it.each(['offline','rejected'])('revogação %s nunca é declarada como confirmada',async failure=>{
+  await existing();const base=network.getMockImplementation()!;network.mockImplementation(async(url,init)=>{if(String(url).endsWith('/revoke')){if(failure==='offline')throw Error('offline');return Response.json({},{status:503});}return base(url,init);});
+  expect(await (await post({action:'disconnect'})).json()).toEqual({retired:true,disconnected:true,revoked:false});expect(tables.google_calendar_connections).toHaveLength(0);
+ });
+ it('sem token armazenado não comprova revogação externa',async()=>{expect(await (await post({action:'disconnect'})).json()).toEqual({retired:true,disconnected:true,revoked:false});});
+ it('não decifra token de outra conta nem ciphertext adulterado',async()=>{
+  const encrypted=await seal('private',config.encryptionKey,userId);await expect(unseal(encrypted,config.encryptionKey,'other-user')).rejects.toThrow();const parts=encrypted.split('.');parts[2]=(parts[2][0]==='A'?'B':'A')+parts[2].slice(1);await expect(unseal(parts.join('.'),config.encryptionKey,userId)).rejects.toThrow();
+ });
+ it('preserva limites de entrada e métodos',async()=>{
+  expect((await post({action:'status',padding:'x'.repeat(5000)})).status).toBe(413);expect((await post([])).status).toBe(400);
+  expect((await handler(new Request(config.supabaseUrl+'/functions/v1/google-calendar',{method:'GET',headers:{origin}}))).status).toBe(405);
+ });
 });

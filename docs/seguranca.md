@@ -5,13 +5,13 @@ Este documento descreve o código do repositório. A aplicação desses controle
 ## Controles no código
 
 - Políticas RLS vinculam os registros ao usuário autenticado, incluindo validação do proprietário na escrita.
-- Access tokens Google ficam em memória; o refresh token fica cifrado com AES-GCM no servidor, associado à conta do Leve e sem acesso pela API cliente. Logout e troca de conta cancelam filas e invalidam respostas antigas. O fluxo de conexão usa estado de uso único, PKCE e prova do navegador iniciador.
+- Calendar descontinuado: o handler aceita somente status autenticado e desconexão, sem entregar access tokens. Credenciais antigas permanecem cifradas até desconexão explícita; não há exclusão retroativa de eventos. Ver [ativação e riscos de clientes antigos](google-agenda.md).
 - Envios push validam provedores e HTTPS, bloqueiam redirects e usam timeout. O banco limita inscrições e registros por conta.
 - Dados recebidos pela sincronização e pelo worker passam por validação estrutural.
 - A configuração Vercel inclui CSP e outros cabeçalhos; o service worker limita o cache aos arquivos do app.
 - Testes de regressão e verificações de dependências e padrões de segredos apoiam a manutenção.
 
-Esses controles não são garantia contra ataques. Tarefas e sessão Supabase continuam armazenadas no navegador para permitir uso local/offline. Acesso ao perfil do dispositivo ou execução de JavaScript malicioso na origem pode comprometer os dados. Com a Edge Function Google configurada, a integração é restaurada após autenticar no Leve; revogação ou expiração da autorização pelo Google exige conectar novamente. Veja [configuração da integração](google-agenda.md).
+Esses controles não são garantia contra ataques. Tarefas e sessão Supabase continuam armazenadas no navegador para permitir uso local/offline. Acesso ao perfil do dispositivo ou execução de JavaScript malicioso na origem pode comprometer os dados. O bloqueio de clientes Calendar antigos depende da publicação do handler de encerramento; tokens emitidos antes disso podem continuar utilizáveis até expirar. O frontend novo não executa operações de eventos. Veja [plano de transição](google-agenda.md).
 
 ## Configuração e credenciais
 
@@ -25,7 +25,7 @@ Tokens administrativos, client secret Google, chave privada VAPID e segredo do c
 
 - Aplicar as migrações e publicar worker e frontend da mesma revisão, após backup e validação dos dados existentes.
 - Confirmar RLS, permissões, URLs OAuth exatas, confirmação de e-mail, política de senhas e limites Auth no projeto alvo.
-- Validar login, recuperação, duas contas, Google Agenda, notificações e modo offline no ambiente publicado.
+- Validar login, recuperação, duas contas, desconexão Calendar legada, notificações e modo offline no ambiente publicado.
 - Configurar MFA dos administradores, acesso da equipe e backups com restauração verificada.
 - Usar dados fictícios em demonstrações e screenshots.
 

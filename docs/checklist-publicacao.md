@@ -26,7 +26,7 @@ O teste SQL usa container local descartável, sem porta/volume/rede e sem creden
 - Sem mudança SQL nesta rodada. `googleCalendarId` e `discreetReminders` são opcionais em registros existentes; `googleDeletions` é uma outbox **local** no estado v1 da conta, sem tokens. Snapshots antigos continuam legíveis. Não atribuir retroativamente origem a eventos sem verificar o destino.
 - `supabase/functions/send-reminders/index.ts` foi regenerado apenas localmente. A função publicada continua na revisão anterior até implantação autorizada. Owner no push e opção discreta com app fechado dependem dessa implantação.
 - Manter uma exportação revisada dos dados antes de qualquer rollout. O arquivo de recuperação contém conteúdo das tarefas e não deve ser publicado ou enviado em issues.
-- Fazer atualização coordenada dos clientes: uma versão antiga pode ignorar destino vinculado/outbox. Não trocar destino nem fazer downgrade com exclusões pendentes.
+- Calendar: publicar o handler de encerramento antes do frontend e considerar tokens antigos ainda válidos. Não reativar o handler anterior em rollback. Ver [ordem e limites de ativação](google-agenda.md).
 - Se precisar de rollback de frontend, manter os campos novos intactos e exportar a outbox. Não limpar armazenamento nem copiar dados entre contas para “resolver” conflitos. Voltar o frontend não desfaz operações que já chegaram ao Google.
 - Recuperação inválida/conflito exige revisão das versões exportadas, validação dos registros e confirmação de dono. Não foi entregue importação automática; preservar o snapshot original até revisão. Cópia legada sem conta de origem não deve ser anexada à conta que entrar depois.
 
@@ -34,8 +34,8 @@ O teste SQL usa container local descartável, sem porta/volume/rede e sem creden
 
 - Login A → editar offline → 401/403/503/timeout → tentar sair: cancelar preserva os dados; retry confirma envio; descarte exige decisão consciente. Não testar falhas provocadas contra produção.
 - Criar e recarregar antes de 600ms; duas abas com edições distintas; chave de lembretes; storage bloqueado/quota; exportar e verificar recuperação; mudança de conta não mostra/exporta dados anteriores.
-- Google com mocks: erro na obtenção do token, 429/5xx, delete 404/410, 409 com identidade compatível/incompatível, edição durante envio, logout durante request. Em conta de teste autorizada futuramente: repetir 409, troca de destino e reconectar outro Google.
-- Criação Google em voo seguida de exclusão tem id tentativo e teste local. Ainda pendente: resposta perdida, DELETE retornando 404 e POST concluindo tardiamente no servidor; não declarar reconciliação distribuída completa nesse cenário.
+- Calendar com mocks: 410 para begin/complete/token/preferences e callback antigo; status mínimo autenticado; revogação positiva/falha, sem chamadas de eventos. Confirmar que login Google e pendências reais Supabase continuam funcionando.
+- Clientes antigos podem manter requests e tokens anteriores. Confirmar a janela de emissão/validade antes de declarar encerramento efetivo; não testar operações destrutivas contra produção.
 - Push: abrir com app encerrado → login → dados → ocorrência correta; repetir em conta errada e depois voltar à original. Nova opção discreta não muda avisos já entregues e não garante entrega.
 - Celulares Android/iOS: teclado virtual, offline/reabertura, zoom 200%, contraste, leitor de tela, foco/Tab/Escape, alvos de toque e movimento reduzido. Edge headless não substitui esses testes.
 - Capturar → começar sem passos/Pomodoro → pausar → recarregar → retomar → concluir → desfazer → replanejar. Verificar tempo acumulado e alcance de recorrências.

@@ -26,6 +26,27 @@ export function recoveryExport(current: AppState) {
 }
 
 export const localRepository = {
+  /** Arquivo inerte da outbox encerrada, separado por conta e sem tokens. */
+  preserveRetiredGoogleDeletions(owner: string, entries: NonNullable<AppState['googleDeletions']>): boolean {
+    if (!entries.length) return true;
+    try {
+      const key = `leve.gcal.retired-outbox.v1.${encodeURIComponent(owner)}`;
+      const raw = localStorage.getItem(key);
+      const previous = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(previous) || !isGoogleDeletions(previous)) { report('recovery'); return false; }
+      const unique = new Map([...previous, ...entries].map(entry => [JSON.stringify([entry.calendarId, entry.eventId]), entry]));
+      localStorage.setItem(key, JSON.stringify([...unique.values()]));
+      return true;
+    } catch { report('storage'); return false; }
+  },
+  retiredGoogleDeletions(owner: string): NonNullable<AppState['googleDeletions']> {
+    try {
+      const raw = localStorage.getItem(`leve.gcal.retired-outbox.v1.${encodeURIComponent(owner)}`);
+      const entries = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(entries) || !isGoogleDeletions(entries)) { report('recovery'); return []; }
+      return entries;
+    } catch { report('storage'); return []; }
+  },
   load(): AppState | undefined {
     try {
       const primary = localStorage.getItem(STATE_KEY);

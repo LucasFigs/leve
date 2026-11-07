@@ -27,7 +27,7 @@ function input(el:HTMLInputElement,value:string) {act(()=>{Object.getOwnProperty
 it('Perfil identifica as preferências em linhas sem acordeões ou campos obrigatórios',()=>{
   act(()=>root.render(<ProfileScreen/>));
   expect(host.querySelectorAll('details')).toHaveLength(0);
-  for(const text of ['Meu tempo','Horário de trabalho','Aparência','Lembretes','Google Agenda','Conta e sincronização','Dados e privacidade']) expect(host.textContent).toContain(text);
+  for(const text of ['Meu tempo','Horário de trabalho','Aparência','Lembretes','Conta e sincronização','Dados e privacidade']) expect(host.textContent).toContain(text);
   expect(host.querySelectorAll('[required]')).toHaveLength(0);
 });
 it('salva dias e horário com persistência e sem mover tarefas ou vínculos Google',()=>{
@@ -99,4 +99,7 @@ it('aplicar encaixe de recorrência altera só a ocorrência escolhida',()=>{
   expect(original.recurrence).toEqual(task.recurrence);expect(original.time).toBeUndefined();
   expect(original.skipDates).toContain('2026-11-09');
   expect(getState().tasks.find(t=>t.seriesId===task.id)).toMatchObject({date:'2026-11-09',time:'09:00',seriesDate:'2026-11-09'});
+});
+it('edição de compromisso legado não promete envio Google e preserva agenda interna',()=>{
+ const task=newTask({id:'legacy-calendar',title:'Reunião antiga',kind:'event',status:'active',date:'2026-11-10',time:'08:30',duration:60,googleEventId:'fixture-event',googleCalendarId:'fixture-calendar'});act(()=>replaceState({...getState(),tasks:[task]}));act(()=>root.render(<TaskSheet id={task.id} mode="edit"/>));expect(host.textContent).not.toContain('envio ao Google');expect(host.querySelector<HTMLInputElement>('input[type="time"]')!.value).toBe('08:30');expect(getState().tasks[0].googleEventId).toBe('fixture-event');
 });
