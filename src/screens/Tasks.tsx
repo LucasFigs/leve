@@ -1,227 +1,98 @@
-/** Todas as tarefas num lugar só, para gerir tudo (filtros + grupos por quando). */
-import { useMemo, useState } from 'react';
-import type { Category, Kind, Priority, Task } from '../domain/types';
+/** Acervo de atividades: localizar e gerenciar sem reproduzir a agenda. */
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CATEGORIES } from '../domain/category';
-import { addDays, timeToMin, todayISO } from '../domain/dates';
-import { nextOccurrence } from '../domain/recurrence';
-import { normalize } from '../domain/parser';
+import { PRIORITY_META } from '../domain/priority';
 import { newTask, useStore } from '../store/store';
-import { goTo, openSheet } from '../store/ui';
+import { goTo, openSheet, useUI } from '../store/ui';
 import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
-import { EmptyState, Segmented, SectionHead } from '../components/ui';
+import { EmptyState, Segmented } from '../components/ui';
 import { TopActions } from './TopActions';
-import { Disclosure } from '../components/Disclosure';
+import { useClock } from '../hooks/hooks';
+import { emptyCatalogFilters, taskCatalog, type CatalogFilters } from './taskCatalog';
 
-type StatusFilter = 'open' | 'done' | 'all';
-
-interface Group {
-  key: string;
-  title: string;
-  tasks: Task[];
-  hint?: string;
-}
-
-const PRIO_ORDER: Record<string, number> = { essential: 0, important: 1, optional: 2 };
-
-function byWhen(a: Task, b: Task) {
-  if ((a.date ?? '') !== (b.date ?? '')) return (a.date ?? '9999') < (b.date ?? '9999') ? -1 : 1;
-  if (a.time && b.time) return timeToMin(a.time) - timeToMin(b.time);
-  if (a.time !== b.time) return a.time ? -1 : 1;
-  return (PRIO_ORDER[a.priority ?? 'optional'] ?? 2) - (PRIO_ORDER[b.priority ?? 'optional'] ?? 2) || b.createdAt - a.createdAt;
-}
-
-/** Abas Tarefas/Hábitos/Projetos no celular (no computador elas ficam na barra lateral). */
+/** Navegação compartilhada preservada. */
 export function TasksProjectsSwitch({ current }: { current: 'tasks' | 'habits' | 'projects' }) {
-  return (
-    <div className="mobile-only tasks-projects-switch" style={{ marginBottom: 14 }}>
-      <Segmented<'tasks' | 'habits' | 'projects'>
-        label="Ver"
-        value={current}
-        onChange={(v) => v !== current && goTo(v)}
-        options={[
-          { value: 'tasks', label: 'Tarefas' },
-          { value: 'habits', label: 'Hábitos' },
-          { value: 'projects', label: 'Projetos' },
-        ]}
-      />
-    </div>
-  );
+  return <div className="mobile-only tasks-projects-switch" style={{marginBottom:14}}>
+    <Segmented label="Ver" value={current} onChange={v=>v!==current&&goTo(v)} options={[{value:'tasks',label:'Tarefas'},{value:'habits',label:'Hábitos'},{value:'projects',label:'Projetos'}]}/>
+  </div>;
 }
 
 export function TasksScreen() {
-  const tasks = useStore((s) => s.tasks);
-  const projects = useStore((s) => s.projects);
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('open');
-  const [kind, setKind] = useState<Kind | ''>('');
-  const [priority, setPriority] = useState<Priority | 'none' | ''>('');
-  const [projectId, setProjectId] = useState('');
-  const [category, setCategory] = useState<Category | 'none' | ''>('');
-  const [showAllDone, setShowAllDone] = useState(false);
-  const today = todayISO();
-
-  const groups = useMemo(() => {
-    const needle = normalize(q.trim());
-    const match = (t: Task) =>
-      (!needle || normalize(`${t.title} ${t.notes ?? ''} ${t.subtasks.map((s) => s.title).join(' ')}`).includes(needle)) &&
-      (!kind || t.kind === kind) &&
-      (!priority || (priority === 'none' ? !t.priority : t.priority === priority)) &&
-      (!projectId || (projectId === 'none' ? !t.projectId : t.projectId === projectId)) &&
-      (!category || (category === 'none' ? !t.category : t.category === category));
-    const list = tasks.filter(match);
-    const week = addDays(today, 7);
-    const ended = (t: Task) => !!t.recurrence && !nextOccurrence(t.recurrence, today, t.skipDates);
-    const open = list.filter((t) => (t.status === 'active' || t.status === 'inbox') && !ended(t));
-
-    const g: Group[] = [];
-    if (status !== 'done') {
-      const once = open.filter((t) => t.status === 'active' && !t.recurrence);
-      g.push(
-        { key: 'inbox', title: 'Inbox', tasks: open.filter((t) => t.status === 'inbox'), hint: 'Capturas que ainda não têm lugar' },
-        { key: 'overdue', title: 'Atrasadas', tasks: once.filter((t) => t.kind !== 'event' && ((t.date && t.date < today) || (!t.date && t.due && t.due < today))) },
-        { key: 'today', title: 'Hoje', tasks: once.filter((t) => t.date === today) },
-        { key: 'week', title: 'Próximos 7 dias', tasks: once.filter((t) => t.date && t.date > today && t.date <= week) },
-        { key: 'later', title: 'Mais adiante', tasks: once.filter((t) => t.date && t.date > week) },
-        { key: 'someday', title: 'Quando der (sem data)', tasks: once.filter((t) => !t.date && !(t.due && t.due < today)) },
-        { key: 'past-events', title: 'Compromissos que já passaram', tasks: once.filter((t) => t.kind === 'event' && t.date && t.date < today), hint: 'Marque se aconteceram ou remarque' },
-        { key: 'recurring', title: 'Repetem', tasks: open.filter((t) => t.status === 'active' && t.recurrence) },
-      );
-    }
-    if (status !== 'open') {
-      const done = list
-        .filter((t) => t.status === 'done' || (t.status === 'active' && ended(t)))
-        .sort((a, b) => (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt));
-      g.push({ key: 'done', title: 'Concluídas e encerradas', tasks: done });
-      if (status === 'all') g.push({ key: 'archived', title: 'Arquivadas', tasks: list.filter((t) => t.status === 'archived') });
-    }
-    for (const x of g) if (x.key !== 'done') x.tasks.sort(byWhen);
-    return g.filter((x) => x.tasks.length);
-  }, [tasks, q, status, kind, priority, projectId, category, today]);
-
-  const total = groups.reduce((s, x) => s + x.tasks.length, 0);
-  const filtered = !!(q || kind || priority || projectId || category);
-
-  return (
-    <div className="screen">
-      <div className="topbar">
-        <h1 className="page-title">Tarefas</h1>
-        <TopActions>
-          <button className="btn btn-sm btn-soft" onClick={() => openSheet({ type: 'newTask', task: newTask({ title: '' }) })}>
-            <Icon name="plus" size={16} />
-            Nova
-          </button>
-        </TopActions>
-      </div>
-
-      <TasksProjectsSwitch current="tasks" />
-
-      <div className="search-bar" style={{ marginBottom: 12 }}>
-        <Icon name="search" size={18} className="faint" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrar por nome, nota ou passo…" aria-label="Filtrar tarefas" />
-        {q && (
-          <button className="icon-btn sm" onClick={() => setQ('')} aria-label="Limpar">
-            <Icon name="x" size={16} />
-          </button>
-        )}
-      </div>
-
-      <Segmented<StatusFilter>
-        label="Situação"
-        value={status}
-        onChange={setStatus}
-        options={[
-          { value: 'open', label: 'Abertas' },
-          { value: 'done', label: 'Concluídas' },
-          { value: 'all', label: 'Todas' },
-        ]}
-      />
-
-      <Disclosure icon="settings" title={`Mais filtros${(kind || priority || projectId || category) ? ' · aplicados' : ''}`}>
-      <div className="filters" style={{ marginTop: 10 }}>
-        <select className="input" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')} aria-label="Tipo">
-          <option value="">Todos os tipos</option>
-          <option value="task">Tarefas</option>
-          <option value="event">Compromissos</option>
-          <option value="habit">Hábitos</option>
-        </select>
-        <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as Priority | 'none' | '')} aria-label="Prioridade">
-          <option value="">Qualquer prioridade</option>
-          <option value="essential">Essencial</option>
-          <option value="important">Importante</option>
-          <option value="optional">Opcional</option>
-          <option value="none">Sem prioridade</option>
-        </select>
-        <select className="input" value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Projeto">
-          <option value="">Todos os projetos</option>
-          <option value="none">Sem projeto</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <select className="input" value={category} onChange={(e) => setCategory(e.target.value as Category | 'none' | '')} aria-label="Categoria">
-          <option value="">Todas as categorias</option>
-          {CATEGORIES.map((c) => (
-            <option key={c.id} value={c.id}>{c.label}</option>
-          ))}
-          <option value="none">Sem categoria</option>
-        </select>
-      </div>
-
-      </Disclosure>
-
-      <p className="xs faint" style={{ margin: '10px 2px 0' }} aria-live="polite">
-        {total} {total === 1 ? 'item' : 'itens'}
-        {filtered && (
-          <>
-            {' · '}
-            <button className="link-btn" onClick={() => { setQ(''); setKind(''); setPriority(''); setProjectId(''); setCategory(''); }}>limpar filtros</button>
-          </>
-        )}
-      </p>
-
-      {total === 0 ? (
-        <EmptyState
-          icon={<Icon name="list" size={28} />}
-          title={filtered ? 'Nada com esses filtros.' : status === 'done' ? 'Nenhuma tarefa concluída ainda.' : status === 'open' ? 'Nenhuma tarefa aberta.' : 'Nenhuma tarefa aqui.'}
-          text={filtered ? 'Ajuste os filtros para encontrar outros itens.' : status === 'done' ? 'As tarefas que você concluir aparecem aqui.' : 'Capture algo quando precisar liberar espaço na cabeça.'}
-          action={filtered
-            ? <button className="btn btn-soft" onClick={() => { setQ(''); setKind(''); setPriority(''); setProjectId(''); setCategory(''); }}>Limpar filtros</button>
-            : status !== 'done' && <button className="btn btn-primary" onClick={() => openSheet({ type: 'quickAdd' })}>Capturar uma tarefa</button>}
-        />
-      ) : (
-        groups.map((g) => {
-          const limit = g.key === 'done' && !showAllDone ? 30 : Infinity;
-          return (
-            <section key={g.key} className="section">
-              <SectionHead
-                title={`${g.title} · ${g.tasks.length}`}
-                action={g.hint && <span className="xs faint">{g.hint}</span>}
-              />
-              <div className="list">
-                {g.tasks.slice(0, limit).map((t) => {
-                  const occ = t.recurrence ? nextOccurrence(t.recurrence, today, t.skipDates) : undefined;
-                  return (
-                    <TaskCard
-                      key={t.id}
-                      task={t}
-                      date={occ}
-                      done={t.recurrence ? !!occ && !!t.doneDates?.includes(occ) : undefined}
-                      showDate
-                      exitOnDone={false}
-                    />
-                  );
-                })}
-              </div>
-              {g.tasks.length > limit && (
-                <button className="btn btn-sm btn-ghost" style={{ marginTop: 8 }} onClick={() => setShowAllDone(true)}>
-                  Mostrar mais {g.tasks.length - limit}
-                </button>
-              )}
-            </section>
-          );
-        })
-      )}
+  const tasks=useStore(s=>s.tasks),projects=useStore(s=>s.projects);
+  const [filters,setFilters]=useState(emptyCatalogFilters);
+  const [showFilters,setShowFilters]=useState(false);
+  const [limits,setLimits]=useState<Record<string,number>>({});
+  const input=useRef<HTMLInputElement>(null),filterToggle=useRef<HTMLButtonElement>(null);
+  const sheet=useUI(u=>u.sheet),previousSheet=useRef(sheet);
+  useEffect(()=>{
+    const closed=previousSheet.current&&!sheet;
+    previousSheet.current=sheet;
+    if(closed&&document.activeElement===document.body)input.current?.focus();
+  },[sheet]);
+  const panelId=useId();
+  const {today}=useClock();
+  const groups=useMemo(()=>taskCatalog(tasks,filters,today),[tasks,filters,today]);
+  const total=groups.reduce((n,g)=>n+g.rows.length,0);
+  const update=<K extends keyof CatalogFilters>(key:K,value:CatalogFilters[K])=>{setFilters(f=>({...f,[key]:value}));setLimits({});};
+  // Itens removidos/organizados durante a consulta não mantêm páginas inválidas.
+  useEffect(()=>{if(!tasks.length)setLimits({});},[tasks.length]);
+  const criteria: {key:keyof CatalogFilters;label:string;value:string}[]=[];
+  if(filters.undated)criteria.push({key:'undated',label:'Sem data',value:'Sem data'});
+  if(filters.kind)criteria.push({key:'kind',label:'Tipo',value:({task:'Tarefa',event:'Compromisso',habit:'Hábito'})[filters.kind]});
+  if(filters.priority)criteria.push({key:'priority',label:'Prioridade',value:filters.priority==='none'?'Sem prioridade':PRIORITY_META[filters.priority].label});
+  if(filters.projectId)criteria.push({key:'projectId',label:'Projeto',value:filters.projectId==='none'?'Sem projeto':projects.find(p=>p.id===filters.projectId)?.name??'Projeto indisponível'});
+  if(filters.category)criteria.push({key:'category',label:'Categoria',value:filters.category==='none'?'Sem categoria':CATEGORIES.find(c=>c.id===filters.category)!.label});
+  const clearFilters=()=>{setFilters(f=>({...emptyCatalogFilters(),q:f.q,status:f.status}));setLimits({});filterToggle.current?.focus();};
+  const clearSearch=()=>{update('q','');input.current?.focus();};
+  const removeCriterion=(key:keyof CatalogFilters)=>{setFilters(f=>({...f,[key]:key==='undated'?false:''}));setLimits({});filterToggle.current?.focus();};
+  const searching=!!filters.q.trim();
+  return <div className="screen tasks-screen">
+    <div className="topbar">
+      <h1 className="page-title">Tarefas</h1>
+      <TopActions hideSearch><button type="button" className="btn btn-sm btn-soft tasks-new" onClick={()=>openSheet({type:'newTask',task:newTask({title:''})})}><Icon name="plus" size={16}/>Nova tarefa</button></TopActions>
     </div>
-  );
+    <TasksProjectsSwitch current="tasks"/>
+    <div className="search-bar tasks-search">
+      <Icon name="search" size={18} className="faint"/>
+      <input ref={input} value={filters.q} onChange={e=>update('q',e.target.value)} placeholder="Buscar nas tarefas…" aria-label="Filtrar tarefas" autoComplete="off"/>
+      {filters.q&&<button type="button" className="icon-btn" aria-label="Limpar pesquisa" onClick={clearSearch}><Icon name="x" size={16}/></button>}
+    </div>
+    <Segmented label="Situação" value={filters.status} onChange={v=>update('status',v)} options={[{value:'open',label:'Abertas'},{value:'done',label:'Concluídas'},{value:'all',label:'Todas'}]}/>
+    <div className="tasks-results-bar">
+      <p className="xs muted" role="status">{total} {total===1?'resultado':'resultados'}{criteria.length>0?' · filtrados':''}</p>
+      <div className="tasks-list-tools">
+        <button type="button" className={`btn btn-sm btn-ghost${filters.undated?' tasks-tool-on':''}`} aria-pressed={filters.undated} onClick={()=>update('undated',!filters.undated)}>Sem data</button>
+        <button type="button" ref={filterToggle} className="btn btn-sm btn-ghost tasks-filter-toggle" aria-expanded={showFilters} aria-controls={panelId} onClick={()=>setShowFilters(v=>!v)}><Icon name="settings" size={15}/>Filtros{criteria.length>0&&<span className="tasks-filter-count">{criteria.length}</span>}</button>
+      </div>
+    </div>
+    {showFilters&&<div className="tasks-filter-panel" id={panelId}>
+      <div className="tasks-filter-fields">
+        <label>Prioridade<select className="input" aria-label="Prioridade" value={filters.priority} onChange={e=>update('priority',e.target.value as CatalogFilters['priority'])}>
+          <option value="">Todas</option>{Object.entries(PRIORITY_META).map(([id,p])=><option key={id} value={id}>{p.label}</option>)}<option value="none">Sem prioridade</option>
+        </select></label>
+        <label>Categoria<select className="input" aria-label="Categoria" value={filters.category} onChange={e=>update('category',e.target.value as CatalogFilters['category'])}>
+          <option value="">Todas</option>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}<option value="none">Sem categoria</option>
+        </select></label>
+        <label>Projeto<select className="input" aria-label="Projeto" value={filters.projectId} onChange={e=>update('projectId',e.target.value)}>
+          <option value="">Todos</option><option value="none">Sem projeto</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select></label>
+        <label>Tipo<select className="input" aria-label="Tipo" value={filters.kind} onChange={e=>update('kind',e.target.value as CatalogFilters['kind'])}>
+          <option value="">Todos</option><option value="task">Tarefas</option><option value="event">Compromissos</option><option value="habit">Hábitos</option>
+        </select></label>
+      </div>
+    </div>}
+    {criteria.length>0&&<div className="tasks-active-filters" aria-label="Filtros ativos">
+      {criteria.map(c=><button key={c.key} type="button" className="chip" aria-label={`Remover filtro: ${c.label}`} title={`${c.label}: ${c.value}`} onClick={()=>removeCriterion(c.key)}>{c.value}<Icon name="x" size={13}/></button>)}
+      <button type="button" className="btn btn-sm btn-ghost" onClick={clearFilters}>Limpar filtros</button>
+    </div>}
+    {total===0?<EmptyState icon={<Icon name={searching?'search':'list'} size={28}/>} title={searching||criteria.length?'Nenhum resultado.':filters.status==='done'?'Nenhuma tarefa concluída ainda.':filters.status==='open'?'Nenhuma tarefa aberta.':'Nenhuma tarefa aqui.'}
+      text={searching||criteria.length?'Tente outro termo ou ajuste os filtros.':filters.status==='done'?'As tarefas que você concluir aparecem aqui.':'Capture algo quando precisar liberar espaço na cabeça.'}
+      action={searching||criteria.length?<div className="tasks-empty-actions">{searching&&<button className="btn btn-soft" onClick={clearSearch}>Limpar pesquisa</button>}{criteria.length>0&&<button className="btn btn-ghost" onClick={clearFilters}>Limpar filtros</button>}</div>:filters.status!=='done'&&<button className="btn btn-primary" onClick={()=>openSheet({type:'quickAdd'})}>Capturar uma tarefa</button>}/>
+      :groups.map(g=>{const limit=limits[g.key]??40;return <section className="tasks-group" key={g.key} aria-label={g.title}>
+        <h2 className="section-title">{g.title}<span className="xs faint num">{g.rows.length}</span></h2>
+        <div className="list">{g.rows.slice(0,limit).map(row=><TaskCard key={row.task.id} task={row.task} date={row.date} catalog={{ended:row.ended}} showStart exitOnDone={false}/>)}</div>
+        {g.rows.length>limit&&<button type="button" className="btn btn-sm btn-ghost tasks-show-more" aria-label={`Mostrar mais ${Math.min(40,g.rows.length-limit)} de ${g.title}`} onClick={()=>setLimits(x=>({...x,[g.key]:limit+40}))}>Mostrar mais {Math.min(40,g.rows.length-limit)}</button>}
+      </section>;})}
+  </div>;
 }

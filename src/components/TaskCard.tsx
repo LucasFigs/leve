@@ -1,6 +1,6 @@
 import { ProjectIcon } from './ProjectIcon';
 import { useState } from 'react';
-import type { Task } from '../domain/types';
+import type { Project, Task } from '../domain/types';
 import { formatDay, formatDuration, todayISO } from '../domain/dates';
 import { recurrenceLabel } from '../domain/parser';
 import { CATEGORY_MAP } from '../domain/category';
@@ -28,9 +28,11 @@ interface Props {
   exitOnDone?: boolean;
   /** Ação contextual exclusiva das capturas elegíveis do Inbox. */
   onDeleteCapture?: () => void;
+  /** Apresentação exclusiva do acervo, sem mudar os demais consumidores. */
+  catalog?: { ended: boolean };
 }
 
-export function TaskCard({ task, date, done, showTime, showDate, showProject = true, showStart, compact = false, exitOnDone = true, onDeleteCapture }: Props) {
+export function TaskCard({ task, date, done, showTime, showDate, showProject = true, showStart, compact = false, exitOnDone = true, onDeleteCapture, catalog }: Props) {
   const project = useStore((s) => (task.projectId ? s.projects.find((p) => p.id === task.projectId) : undefined));
   const [leaving, setLeaving] = useState(false);
   const today = todayISO();
@@ -64,17 +66,19 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
     toast('Marcado como realizado', { label: 'Desfazer', run: () => actions.undo() });
   };
 
-  const label = `${task.title}${task.time ? `, às ${task.time}` : ''}`;
+  const actionTitle = `${task.title}${catalog&&(task.recurrence||task.seriesId)&&date?`, ${formatDay(date)}`:''}`;
+  const label = `${task.title}${catalog?`, ${task.status==='archived'?'arquivada':catalog.ended?'série encerrada':task.recurrence?'série recorrente':task.seriesId?'ocorrência alterada':task.status==='inbox'?'captura do Inbox':'atividade'}${date?`, ${formatDay(date)}`:''}`:''}${task.time ? `, às ${task.time}` : ''}`;
+  const readOnly = !!catalog && (task.status === 'archived' || catalog.ended);
 
   return (
-    <div className={`task${isHabit ? ' task-habit' : ''}${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`} style={isHabit ? habitStyle(task) : undefined}>
+    <div className={`task${catalog ? ' task-catalog' : ''}${isHabit ? ' task-habit' : ''}${isDone ? ' done' : ''}${missed ? ' missed' : ''}${leaving ? ' leaving' : ''}`} style={isHabit ? habitStyle(task) : undefined}>
       {showTime && <span className="task-time num">{task.time ?? '—'}</span>}
-      {isEvent ? (
+      {readOnly ? <span className="catalog-record-icon" aria-hidden="true"><Icon name={task.status==='archived'?'archive':'repeat'} size={20}/></span> : isEvent ? (
         <Checkbox
           checked={isDone && !missed}
           onToggle={toggleEvent}
           event
-          label={`${isDone && !missed ? 'Desmarcar' : 'Marcar que aconteceu'}: ${task.title}`}
+          label={`${isDone && !missed ? 'Desmarcar' : 'Marcar que aconteceu'}: ${actionTitle}`}
         />
       ) : (
         <Checkbox
@@ -82,12 +86,12 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
           onToggle={toggle}
           tone={task.priority}
           habit={task.kind === 'habit'}
-          label={`${isDone ? 'Reabrir' : 'Concluir'}: ${task.title}`}
+          label={`${isDone ? 'Reabrir' : 'Concluir'}: ${actionTitle}`}
         />
       )}
       <button className="task-main" onClick={() => openSheet({ type: 'task', id: task.id, date: occurrence })} aria-label={`Abrir ${label}`}>
         <div className="task-title">{task.title}</div>
-        <div className="task-meta">
+        {catalog ? <CatalogMetadata task={task} project={project} date={date} ended={catalog.ended} isDone={isDone}/> : <div className="task-meta">
           {isHabit && <HabitIdentity task={task} />}
           {isEvent && !compact && <span>Compromisso</span>}
           {isEvent && isDone && <span className={missed ? 'warn' : ''}>{missed ? 'Não aconteceu' : 'Aconteceu'}</span>}
@@ -129,16 +133,32 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
           {!isDone && task.priority && task.priority !== 'optional' && <PriorityBadge priority={task.priority} />}
           {overdue && !showDate && <span className="warn">Atrasada</span>}
           {!compact && !isDone && task.postponed >= 3 && <span>Adiada {task.postponed}×</span>}
-        </div>
+        </div>}
       </button>
       {onDeleteCapture && <button type="button" className="icon-btn inbox-trash" aria-label={`Excluir captura: ${task.title}`} onClick={e => { e.stopPropagation(); onDeleteCapture(); }}>
         <Icon name="trash" size={17} />
       </button>}
-      {showStart && !isDone && !isEvent && (
+      {showStart && !isDone && !isEvent && !readOnly && (
         <button className="icon-btn sm task-action" onClick={() => startTask(task.id, occurrence)} aria-label={`Começar ${task.title}`}>
           <Icon name="play" size={16} />
         </button>
       )}
     </div>
   );
+}
+
+function CatalogMetadata({task,project,date,ended,isDone}:{task:Task;project?:Project;date?:string;ended:boolean;isDone:boolean}) {
+  const scheduled=date??task.date;
+  const late=!isDone&&!task.recurrence&&((task.date&&task.date<todayISO())||(task.due&&task.due<todayISO()));
+  const category=task.category?CATEGORY_MAP[task.category]:undefined;
+  return <div className="task-meta catalog-meta">
+    {task.status==='archived'?<span><Icon name="archive" size={12}/>Arquivada</span>:ended?<span>Série encerrada</span>:task.status==='inbox'?<span><Icon name="inbox" size={12}/>Captura do Inbox</span>:<span className={late?'warn':''}><Icon name="calendar" size={12}/>{scheduled?formatDay(scheduled):'Sem data'}{task.time?` · ${task.time}`:''}</span>}
+    {late&&<span className="warn">{task.kind==='event'?'Compromisso passado':task.due&&task.due<todayISO()?'Prazo vencido':'Atrasada'}</span>}
+    {task.kind==='habit'?<HabitIdentity task={task}/>:task.kind==='event'&&!late&&<span>Compromisso</span>}
+    {task.kind==='event'&&isDone&&<span>{(task.recurrence?task.missedDates?.includes(date??''):task.missed)?'Não aconteceu':'Realizado'}</span>}
+    {task.recurrence&&!ended&&<span><Icon name="repeat" size={12}/>{recurrenceLabel(task.recurrence,{ends:false})}</span>}
+    {!task.recurrence&&task.seriesId&&<span><Icon name="repeat" size={12}/>Ocorrência alterada</span>}
+    {!isDone&&task.priority&&<PriorityBadge priority={task.priority}/>}
+    {project?<span><ProjectIcon project={project} size={12}/>{project.name}</span>:category&&<span><Icon name={category.icon} size={12}/>{category.label}</span>}
+  </div>;
 }

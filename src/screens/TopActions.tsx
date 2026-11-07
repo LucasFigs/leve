@@ -3,13 +3,13 @@ import { cloudEnabled } from '../store/sync';
 import { Icon } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
 
-export function TopActions({ children }: { children?: React.ReactNode }) {
+export function TopActions({ children, hideSearch = false }: { children?: React.ReactNode; hideSearch?: boolean }) {
   return (
     <div className="topbar-actions">
       {children}
-      <button className="icon-btn" onClick={() => openSheet({ type: 'search' })} aria-label="Buscar">
+      {!hideSearch && <button className="icon-btn" onClick={() => openSheet({ type: 'search' })} aria-label="Buscar">
         <Icon name="search" />
-      </button>
+      </button>}
       <button
         className="icon-btn mobile-only"
         onClick={() => (cloudEnabled ? openSheet({ type: 'account' }) : goTo('profile'))}
