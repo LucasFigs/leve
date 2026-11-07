@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { calendarBackend } from './googleCalendarBackend';
 import { connectGoogleCalendar, deleteGoogleEvent, disconnectGoogleCalendar, getGoogleCalendarState, initGoogleCalendarListener, resetGoogleCalendarSession, restoreGoogleCalendarConnection, setGoogleTargetCalendar, syncTaskToGoogle } from './googleCalendar';
-import { actions, emptyState, replaceState } from '../store/store';
+import { actions, emptyState, getState, replaceState } from '../store/store';
 import type { Task } from '../domain/types';
 vi.mock('./googleCalendarBackend', () => ({ calendarBackend: vi.fn() }));
 vi.mock('../store/persistence', async importOriginal => ({...await importOriginal<typeof import('../store/persistence')>(),storageIssue:()=>undefined}));
@@ -22,6 +22,28 @@ afterEach(() => { resetGoogleCalendarSession(); vi.useRealTimers(); vi.restoreAl
 async function connect() { await restoreGoogleCalendarConnection(); expect(getGoogleCalendarState().connected).toBe(true); }
 
 describe('isolamento do Google Agenda persistente', () => {
+  it('editar uma ocorrência atualiza a série e cria um evento próprio sem DELETE ou reutilização do ID',async()=>{
+    vi.useFakeTimers();await connect();
+    const series={...task,kind:'event' as const,date:undefined,time:'10:00',duration:60,googleCalendarId:'primary',recurrence:{freq:'weekly' as const,weekdays:[2],anchor:'2026-11-03'}};
+    replaceState({...emptyState(),tasks:[series]});
+    const unsubscribe=initGoogleCalendarListener();
+    const request=vi.fn(async(url:string,init?:RequestInit)=>Response.json({id:init?.method==='POST'?JSON.parse(init.body as string).id:decodeURIComponent(url.split('/').pop()!)}));
+    vi.stubGlobal('fetch',request);
+    try{
+      actions.saveSeries(series.id,{...series,time:'08:30',duration:30},'one','2026-11-10');
+      await vi.advanceTimersByTimeAsync(701);
+      await vi.waitFor(()=>expect(request.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1));
+      await vi.waitFor(()=>expect(request.mock.calls.some(([url,init])=>url.endsWith('/event-a')&&init?.method==='PATCH')).toBe(true));
+      expect(request.mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(false);
+      const seriesCall=request.mock.calls.find(([url,init])=>url.endsWith('/event-a')&&init?.method==='PATCH')!;
+      expect(seriesCall).toBeDefined();expect(JSON.parse(seriesCall[1]!.body as string).recurrence.join('\n')).toContain('EXDATE');
+      const created=JSON.parse(request.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+      expect(created.start.dateTime).toContain('2026-11-10T08:30:00');expect(created.end.dateTime).toContain('2026-11-10T09:00:00');
+      const exception=getState().tasks.find(t=>t.seriesId===series.id)!;
+      expect(created.id).not.toBe(series.googleEventId);expect(created.extendedProperties.private.leveTaskId).toBe(exception.id);
+      expect(getState().tasks.find(t=>t.id===series.id)?.googleEventId).toBe('event-a');
+    }finally{unsubscribe();}
+  });
   it.each([[204,true],[404,true],[410,true],[401,false],[403,false],[429,false],[503,false]] as const)('exclusão HTTP %s tem confirmação %s',async(status,confirmed)=>{
     await connect();vi.stubGlobal('fetch',vi.fn(async()=>new Response(null,{status})));
     expect(await deleteGoogleEvent('fixture-event')).toBe(confirmed);

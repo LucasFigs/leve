@@ -146,7 +146,8 @@ function detach(s: AppState, id: string, date: string, patch: Partial<Task> = {}
   const done = !!t.doneDates?.includes(date);
   const missed = !!t.missedDates?.includes(date);
   const now = Date.now();
-  const copy: Task = {
+  const existing = s.tasks.find(x => !x.recurrence && x.seriesId === id && x.seriesDate === date);
+  const copy: Task = existing ? { ...existing, ...patch, updatedAt: now } : {
     ...t,
     id: uid(),
     recurrence: undefined,
@@ -172,7 +173,7 @@ function detach(s: AppState, id: string, date: string, patch: Partial<Task> = {}
     doneDates: without(t.doneDates, date),
     missedDates: without(t.missedDates, date),
   }))(s);
-  return { ...series, tasks: [copy, ...series.tasks] };
+  return { ...series, tasks: existing ? series.tasks.map(x => x.id === existing.id ? copy : x) : [copy, ...series.tasks] };
 }
 
 /** Encerra a série no dia anterior a `date` e começa outra (com `draft`) a partir dali. */
@@ -324,8 +325,11 @@ export const actions = {
     set((s) => {
       if (scope === 'all') return patchTask(id, { ...draft, id })(s);
       if (scope === 'following') return splitSeries(s, id, date, draft);
-      const { title, notes, kind, priority, time, duration, due, projectId, subtasks, habitColor, habitIcon } = draft;
-      return detach(s, id, date, { title, notes, kind, priority, time, duration, due, projectId, subtasks, habitColor, habitIcon });
+      const source = s.tasks.find(t => t.id === id);
+      const { title, notes, kind, priority, time, duration, due, projectId, category, energy, dayPart, subtasks, habitColor, habitIcon } = draft;
+      // Uma data legada no registro da série não é a data da ocorrência aberta.
+      const targetDate = draft.date !== source?.date ? draft.date ?? date : date;
+      return detach(s, id, date, { title, notes, kind, priority, date: targetDate, time, duration, due, projectId, category, energy, dayPart, subtasks, habitColor, habitIcon });
     }, { undoable: true });
   },
 

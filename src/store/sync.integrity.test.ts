@@ -33,6 +33,34 @@ async function ready() {
   return {store,sync};
 }
 describe('saída sem perda de dados',()=>{
+  it('envia série e exceção e as restaura em outra sessão sem reintroduzir o horário original',async()=>{
+    const {store,sync}=await ready();
+    const series=store.newTask({id:'recurring-fixture',title:'Reunião semanal',kind:'event',status:'active',time:'10:00',duration:60,category:'trabalho',recurrence:{freq:'weekly',weekdays:[2],anchor:'2026-11-03'}});
+    store.actions.add(series);sync.syncNow();await vi.advanceTimersByTimeAsync(601);backend.upsert.mockClear();
+    store.actions.saveSeries(series.id,{...series,time:'08:30',duration:30,category:'saude'},'one','2026-11-10');
+    sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const rows=backend.upsert.mock.calls.flatMap(call=>call[0]).filter(row=>row.type==='task');
+    expect(rows).toHaveLength(2);
+    const exception=rows.find(row=>row.data.seriesId===series.id)!;
+    expect(exception.data).toMatchObject({time:'08:30',duration:30,category:'saude',seriesDate:'2026-11-10'});
+    expect(rows.find(row=>row.id===series.id)?.data.skipDates).toEqual(['2026-11-10']);
+    const {itemsForDate}=await import('../domain/selectors');
+    // Nova sessão, com armazenamento próprio e dados vindos apenas do servidor mockado.
+    vi.resetModules();localStorage.clear();backend.rows=[{...rows.find(row=>row.id===series.id),data:series}];
+    localStorage.setItem('leve.sync.v1',JSON.stringify({owner:'owner-a',dirty:[],deleted:[]}));
+    const nextStore=await import('./store');const nextSync=await import('./sync');
+    backend.authChange!('SIGNED_IN',{user:{id:'owner-a',email:'fixture@example.test',user_metadata:{},app_metadata:{}}});
+    await vi.advanceTimersByTimeAsync(1);
+    // A exceção chega antes da atualização de skipDates da série.
+    backend.realtime!({eventType:'INSERT',new:{...exception,user_id:'owner-a',origin:'device-b'}});
+    expect(nextStore.getState().tasks).toHaveLength(2);
+    expect(itemsForDate(nextStore.getState().tasks,'2026-11-10')).toMatchObject([{time:'08:30',duration:30}]);
+    backend.realtime!({eventType:'UPDATE',new:{...rows.find(row=>row.id===series.id),user_id:'owner-a',origin:'device-b'}});
+    backend.rows=JSON.parse(JSON.stringify(rows));nextSync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    expect(itemsForDate(nextStore.getState().tasks,'2026-11-10')).toMatchObject([{time:'08:30',duration:30}]);
+    expect(itemsForDate(nextStore.getState().tasks,'2026-11-17')).toMatchObject([{time:'10:00',duration:60}]);
+    expect(nextSync.localDataOwner()).toBe('owner-a');
+  });
   it('sincroniza expediente opcional como meta sem alterar tarefas e rejeita dias inválidos remotos',async()=>{
     const {store,sync}=await ready();
     const workSchedule={enabled:true,weekdays:[1,2,3,4,5],start:'09:00',end:'18:00'};

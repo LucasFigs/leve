@@ -13,10 +13,12 @@ export function durationOf(t: Task, fallback = 30): number {
 /** Tudo que acontece num dia: compromissos, tarefas planejadas e ocorrências recorrentes. */
 export function itemsForDate(tasks: Task[], date: string, fallback = 30): DayItem[] {
   const out: DayItem[] = [];
+  // A exceção pode chegar antes do skipDates da série durante a sincronização.
+  const replaced = new Set(tasks.filter(t => !t.recurrence && t.seriesId && t.seriesDate === date).map(t => t.seriesId));
   for (const t of tasks) {
     if (t.status === 'archived' || t.status === 'inbox') continue;
     if (t.recurrence) {
-      if (!occursOn(t.recurrence, date) || t.skipDates?.includes(date)) continue;
+      if (!occursOn(t.recurrence, date) || t.skipDates?.includes(date) || replaced.has(t.id)) continue;
       out.push({
         task: t, date, time: t.time, duration: durationOf(t, fallback),
         done: !!t.doneDates?.includes(date) || !!t.missedDates?.includes(date),

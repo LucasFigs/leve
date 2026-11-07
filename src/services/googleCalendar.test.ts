@@ -55,6 +55,17 @@ describe('Google Calendar Service', () => {
       expect(payload?.end.dateTime).toMatch(/^2026-10-17T11:00:00[+-]\d{2}:\d{2}$/);
     });
 
+    it('exclui a data original na série com o horário da série e fuso explícito',()=>{
+      const payload=taskToGoogleEventPayload({...baseTask,date:undefined,recurrence:{freq:'weekly',weekdays:[2],anchor:'2026-11-03'},skipDates:['2026-11-10','2026-11-17','2026-11-10']},'America/Sao_Paulo');
+      expect(payload.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=TU','EXDATE;TZID=America/Sao_Paulo:20261110T100000,20261117T100000']);
+    });
+
+    it('usa EXDATE de dia inteiro e retira a exclusão ao desfazer',()=>{
+      const series={...baseTask,date:undefined,time:undefined,recurrence:{freq:'weekly' as const,anchor:'2026-11-03',weekdays:[2]}};
+      expect(taskToGoogleEventPayload({...series,skipDates:['2026-11-10']},'America/Sao_Paulo').recurrence).toContain('EXDATE;VALUE=DATE:20261110');
+      expect(taskToGoogleEventPayload(series,'America/Sao_Paulo').recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=TU']);
+    });
+
     it('creates payload for all-day task with exclusive end date (next day)', () => {
       const allDayTask: Task = {
         ...baseTask,
