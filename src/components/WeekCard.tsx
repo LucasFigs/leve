@@ -42,7 +42,7 @@ export function WeekCard() {
   const best = data.counts.reduce((a, b) => (b.n > a.n ? b : a), data.counts[0]);
   const sel = data.counts.find((c) => c.date === picked);
   const diff = data.week - data.prev;
-  const trend = data.prev === 0 && data.week === 0 ? '' : diff > 0 ? `↑ ${diff} vs. semana anterior` : diff < 0 ? `↓ ${-diff} vs. semana anterior` : 'igual à semana anterior';
+  const trend = data.prev === 0 && data.week === 0 ? '' : diff > 0 ? `${diff} a mais vs. semana anterior` : diff < 0 ? `${-diff} a menos vs. semana anterior` : 'igual à semana anterior';
 
   return (
     <div className="card week-card">

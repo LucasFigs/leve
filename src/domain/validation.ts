@@ -35,7 +35,7 @@ export function isTask(v: unknown): v is Task {
 }
 
 export function isProject(v: unknown): v is Project {
-  return isObject(v) && text(v.id, 200) && !!v.id && text(v.name, 1000) && text(v.emoji, 100) && text(v.color, 100) && number(v.createdAt);
+  return isObject(v) && text(v.id, 200) && !!v.id && text(v.name, 1000) && text(v.emoji, 100) && optional(v.icon, x => text(x, 100)) && text(v.color, 100) && number(v.createdAt);
 }
 
 export function isSettings(v: unknown): v is Record<string, unknown> {

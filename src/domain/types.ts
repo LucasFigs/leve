@@ -88,6 +88,8 @@ export interface Project {
   id: string;
   name: string;
   emoji: string;
+  /** Identificador visual opcional. Emoji permanece para versões e backups legados. */
+  icon?: string;
   color: string;
   createdAt: number;
   archived?: boolean;

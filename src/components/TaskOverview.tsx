@@ -1,3 +1,4 @@
+import { ProjectIcon } from './ProjectIcon';
 import type { Project, Task } from '../domain/types';
 import { formatDay, formatDuration } from '../domain/dates';
 import { CATEGORIES } from '../domain/category';
@@ -42,8 +43,8 @@ export function TaskOverview({ task, project, today, occurrence, endTime, defaul
           <Icon name={archived ? 'archive' : missed ? 'x-circle' : 'check-circle'} size={13} />{statusLabel}
         </span>}
         {task.priority && <span className={`task-context-chip prio ${task.priority}`}><span className="prio-dot" aria-hidden="true" />{PRIORITY_META[task.priority].label}</span>}
-        {project && <span className="task-context-chip"><Icon name="folder" size={13} />{project.name}</span>}
-        {category && <span className="task-context-chip">{category.label}</span>}
+        {project && <span className="task-context-chip"><ProjectIcon project={project} size={13} />{project.name}</span>}
+        {category && <span className="task-context-chip"><Icon name={category.icon} size={13} />{category.label}</span>}
       </div>}
     </header>
 

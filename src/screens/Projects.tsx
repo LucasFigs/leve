@@ -1,3 +1,4 @@
+import { ProjectIcon } from '../components/ProjectIcon';
 import { useMemo, useState } from 'react';
 import type { Project } from '../domain/types';
 import { projectProgress } from '../domain/selectors';
@@ -22,7 +23,7 @@ function ProjectList() {
   const tasks = useStore((s) => s.tasks);
 
   return (
-    <div className="screen">
+    <div className="screen projects-screen">
       <div className="topbar">
         <h1 className="page-title">Projetos</h1>
         <TopActions>
@@ -36,7 +37,7 @@ function ProjectList() {
 
       {projects.length === 0 ? (
         <EmptyState
-          icon="📁"
+          icon={<Icon name="folder" size={28} />}
           title="Nenhum projeto ainda."
           text="Comece quando precisar organizar algo maior."
           action={
@@ -60,7 +61,7 @@ function ProjectList() {
 function ProjectCard({ project, progress, next }: { project: Project; progress: ReturnType<typeof projectProgress>; next?: string }) {
   return (
     <button className="project-card" onClick={() => setUI({ openProjectId: project.id })}>
-      <span className={`project-emoji tone-${project.color}`} aria-hidden="true">{project.emoji}</span>
+      <span className={`project-symbol tone-${project.color}`} aria-hidden="true"><ProjectIcon project={project} size={22} /></span>
       <span className="grow">
         <span className="row" style={{ justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 650 }} className="truncate">{project.name}</span>
@@ -88,7 +89,7 @@ function ProjectDetail({ project }: { project: Project }) {
   const progress = projectProgress(tasks, project.id);
 
   return (
-    <div className="screen">
+    <div className="screen projects-screen">
       <div className="topbar">
         <button className="btn btn-ghost" style={{ paddingLeft: 4 }} onClick={() => setUI({ openProjectId: undefined })}>
           <Icon name="chevron-left" size={18} />
@@ -102,8 +103,8 @@ function ProjectDetail({ project }: { project: Project }) {
       </div>
 
       <div className="row" style={{ gap: 14 }}>
-        <span className={`project-emoji tone-${project.color}`} style={{ width: 52, height: 52, fontSize: 26 }} aria-hidden="true">
-          {project.emoji}
+        <span className={`project-symbol tone-${project.color}`} style={{ width: 52, height: 52 }} aria-hidden="true">
+          <ProjectIcon project={project} size={26} />
         </span>
         <div className="grow">
           <h1 className="page-title">{project.name}</h1>
@@ -129,7 +130,7 @@ function ProjectDetail({ project }: { project: Project }) {
             ))}
           </div>
         ) : (
-          <EmptyState icon="🎯" title="Nada pendente." text="Adicione o próximo passo quando ele aparecer." />
+          <EmptyState icon={<Icon name="target" size={28} />} title="Nada pendente." text="Adicione o próximo passo quando ele aparecer." />
         )}
       </section>
 

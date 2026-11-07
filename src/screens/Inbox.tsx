@@ -90,7 +90,7 @@ function InboxContent() {
             </div>
           </>
         ) : (
-          <EmptyState icon="✨" title="Tudo limpo" text="Quando alguma coisa surgir na sua cabeça, jogue aqui." />
+          <EmptyState icon={<Icon name="inbox" size={28} />} title="Tudo limpo" text="Quando alguma coisa surgir na sua cabeça, jogue aqui." />
         )}
       </section>
 

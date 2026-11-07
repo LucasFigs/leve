@@ -1,3 +1,4 @@
+import { ProjectIcon } from '../components/ProjectIcon';
 import { useMemo, useState } from 'react';
 import { addDays, formatDuration, formatLongDate, greeting, minToTime, timeToMin } from '../domain/dates';
 import { recommendNow, PRIORITY_META } from '../domain/priority';
@@ -141,9 +142,9 @@ export function TodayScreen() {
             />
             {remaining === 0 ? (
               totalToday > 0 ? (
-                <EmptyState icon="✓" title="Itens de hoje concluídos." text="Você pode revisar outras pendências ou encerrar por aqui." />
+                <EmptyState icon={<Icon name="check-circle" size={28} />} title="Itens de hoje concluídos." text="Você pode revisar outras pendências ou encerrar por aqui." />
               ) : (
-                <EmptyState icon="☀️" title="Nada planejado para hoje." text="Capture uma tarefa acima ou revise suas pendências para escolher o próximo passo." />
+                <EmptyState icon={<Icon name="sun" size={28} />} title="Nada planejado para hoje." text="Capture uma tarefa acima ou revise suas pendências para escolher o próximo passo." />
               )
             ) : (
               <>
@@ -339,7 +340,7 @@ function NowCard() {
           {t.priority && t.priority !== 'optional' && <span className={`prio ${t.priority}`}>{PRIORITY_META[t.priority].label}</span>}
           {project && (
             <span>
-              {project.emoji} {project.name}
+              <ProjectIcon project={project} size={12} /> {project.name}
             </span>
           )}
         </div>

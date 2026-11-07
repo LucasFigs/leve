@@ -34,7 +34,7 @@ function byWhen(a: Task, b: Task) {
 /** Abas Tarefas/Hábitos/Projetos no celular (no computador elas ficam na barra lateral). */
 export function TasksProjectsSwitch({ current }: { current: 'tasks' | 'habits' | 'projects' }) {
   return (
-    <div className="mobile-only" style={{ marginBottom: 14 }}>
+    <div className="mobile-only tasks-projects-switch" style={{ marginBottom: 14 }}>
       <Segmented<'tasks' | 'habits' | 'projects'>
         label="Ver"
         value={current}
@@ -156,13 +156,13 @@ export function TasksScreen() {
           <option value="">Todos os projetos</option>
           <option value="none">Sem projeto</option>
           {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
+            <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
         <select className="input" value={category} onChange={(e) => setCategory(e.target.value as Category | 'none' | '')} aria-label="Categoria">
           <option value="">Todas as categorias</option>
           {CATEGORIES.map((c) => (
-            <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+            <option key={c.id} value={c.id}>{c.label}</option>
           ))}
           <option value="none">Sem categoria</option>
         </select>
@@ -182,7 +182,7 @@ export function TasksScreen() {
 
       {total === 0 ? (
         <EmptyState
-          icon="🗂️"
+          icon={<Icon name="list" size={28} />}
           title={filtered ? 'Nada com esses filtros.' : status === 'done' ? 'Nenhuma tarefa concluída ainda.' : status === 'open' ? 'Nenhuma tarefa aberta.' : 'Nenhuma tarefa aqui.'}
           text={filtered ? 'Ajuste os filtros para encontrar outros itens.' : status === 'done' ? 'As tarefas que você concluir aparecem aqui.' : 'Capture algo quando precisar liberar espaço na cabeça.'}
           action={filtered
