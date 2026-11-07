@@ -12,7 +12,7 @@ vi.mock('../store/sync',()=>({cloudEnabled:false,useCloud:(select:(s:unknown)=>u
 vi.mock('../services/googleCalendar',()=>({useGoogleCalendar:(select:(s:unknown)=>unknown)=>select({connected:false,autoSync:false})}));
 let host:HTMLDivElement,root:Root;
 const t=(id:string,extra={})=>newTask({id,title:id,status:'active',createdAt:1,updatedAt:1,...extra});
-function Host(){const sheet=useUI(u=>u.sheet),tab=useUI(u=>u.tab);return <>{tab==='projects'?<ProjectsScreen/>:tab==='habits'?<HabitsScreen/>:<TasksScreen/>}{sheet?.type==='task'&&<TaskSheet key={sheet.id} id={sheet.id} date={sheet.date}/>}</>;}
+function Host(){const sheet=useUI(u=>u.sheet),tab=useUI(u=>u.tab);return <>{tab==='projects'?<ProjectsScreen/>:tab==='habits'?<HabitsScreen/>:<TasksScreen/>}{sheet?.type==='task'&&<TaskSheet key={sheet.id} id={sheet.id} date={sheet.date} mode={sheet.mode}/>}</>;}
 function click(label:string){const el=[...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===label||b.getAttribute('aria-label')===label);if(!el)throw Error(label);act(()=>el.click());}
 function input(value:string){const el=host.querySelector<HTMLInputElement>('[aria-label="Filtrar tarefas"]')!;act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});}
 function select(label:string,value:string){const el=host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;act(()=>{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));});}
@@ -47,6 +47,9 @@ it('série com exceção não abre ocorrência original substituída e preserva 
 it('concluir hoje não conclui toda série; encerrada não oferece ação para uma data inventada',()=>{
  act(()=>replaceState({...getState(),tasks:[t('Diária',{recurrence:{freq:'daily',anchor:'2026-11-07'},doneDates:['2026-11-07']}),t('Encerrada',{recurrence:{freq:'daily',anchor:'2026-11-01',until:'2026-11-05'}})]}));
  act(()=>host.querySelector<HTMLButtonElement>('[aria-label^="Abrir Diária"]')!.click());expect(getUI().sheet).toMatchObject({date:'2026-11-08'});act(()=>closeAllSheets());click('Concluídas');expect(titles()).toEqual(['Encerrada']);expect(host.querySelector('[role="checkbox"]')).toBeNull();
+});
+it.each(['task','event'] as const)('série %s encerrada abre regras de edição também no acervo, sem ação inválida',kind=>{
+ act(()=>replaceState({...getState(),tasks:[t('Encerrada',{kind,recurrence:{freq:'daily',anchor:'2026-11-01',until:'2026-11-05'}})]}));click('Concluídas');act(()=>host.querySelector<HTMLButtonElement>('.task-main')!.click());expect(getUI().sheet).toMatchObject({mode:'edit'});expect(getUI().sheet).not.toHaveProperty('date');expect(host.querySelector('[role="dialog"]')!.textContent).not.toMatch(/Começar agora|Aconteceu|Não aconteceu/);
 });
 it('abre consulta, edita pelo fluxo existente e mantém início de foco disponível',()=>{
  act(()=>host.querySelector<HTMLButtonElement>('[aria-label^="Abrir Enviar relatório"]')!.click());expect(host.querySelector('.task-overview')).not.toBeNull();click('Editar');expect(host.querySelector('[aria-label="Categoria"]')).not.toBeNull();
