@@ -57,6 +57,7 @@ export function TaskOverview({ task, project, today, occurrence, endTime, defaul
         <span className="task-plan-duration num" aria-label={`Duração estimada: ${formatDuration(task.duration ?? defaultDuration)}`} title={task.duration ? 'Duração estimada' : 'Estimativa padrão do Leve'}><Icon name="clock" size={14} />{formatDuration(task.duration ?? defaultDuration)}</span>
       </div>
       {task.recurrence && <p className="task-plan-repeat"><Icon name="repeat" size={13} />{recurrenceLabel(task.recurrence)}</p>}
+      {!task.recurrence && task.seriesId && <p className="task-plan-repeat"><Icon name="repeat" size={13} />Alterada só nesta ocorrência</p>}
     </section>
     {task.due && <p className={`task-overview-deadline${deadlineLate ? ' warn-text' : ''}`}><Icon name="flag" size={14} /><span>Prazo final · {formatDay(task.due, today, { long: true })}</span></p>}
 

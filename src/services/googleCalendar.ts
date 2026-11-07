@@ -361,7 +361,15 @@ export function taskToGoogleEventPayload(task: Task, timeZone: string) {
 
   if (task.recurrence) {
     const rrule = recurrenceToRRule(task.recurrence);
-    if (rrule) payload.recurrence = [rrule];
+    if (rrule) {
+      payload.recurrence = [rrule];
+      if (task.skipDates?.length) {
+        const dates = [...new Set(task.skipDates)].sort().map(d => d.replace(/-/g, ''));
+        payload.recurrence.push(task.time
+          ? `EXDATE;TZID=${timeZone}:${dates.map(d => `${d}T${task.time!.replace(':', '')}00`).join(',')}`
+          : `EXDATE;VALUE=DATE:${dates.join(',')}`);
+      }
+    }
   }
 
   return payload;
@@ -573,7 +581,7 @@ export async function syncAllUpcomingTasks(interactive = false, quiet = false): 
 /* ------------------------------------------------------------------ */
 
 function taskFingerprint(t: Task): string {
-  return `${t.title}|${t.notes ?? ''}|${t.date ?? ''}|${t.time ?? ''}|${t.duration ?? ''}|${t.status}|${t.kind}|${JSON.stringify(t.recurrence ?? '')}`;
+  return `${t.title}|${t.notes ?? ''}|${t.date ?? ''}|${t.time ?? ''}|${t.duration ?? ''}|${t.status}|${t.kind}|${JSON.stringify(t.recurrence ?? '')}|${JSON.stringify(t.skipDates ?? [])}`;
 }
 
 let syncTimeout: ReturnType<typeof setTimeout> | undefined;

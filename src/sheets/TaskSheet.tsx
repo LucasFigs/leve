@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import type { Kind, Priority, Recurrence, Task } from '../domain/types';
 import { addDays, formatDay, formatDuration, minToTime, nowMin, timeToMin, todayISO } from '../domain/dates';
 import { PRIORITY_META } from '../domain/priority';
@@ -33,6 +33,7 @@ const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso',
  */
 export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: string; initial?: Task; mode?: 'edit' }) {
   const formId = useId();
+  const timeInput = useRef<HTMLInputElement>(null);
   const stored = useStore((s) => (id ? s.tasks.find((t) => t.id === id) : undefined));
   const projects = useStore((s) => s.projects);
   const defaultDuration = useStore((s) => s.settings.defaultDuration);
@@ -44,13 +45,14 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
   const [draft, setDraft] = useState(live);
   const [editMode, setEditMode] = useState(mode === 'edit');
   const [customDuration, setCustomDuration] = useState(false);
+  const [occurrenceDate, setOccurrenceDate] = useState<string>();
   const gcalConnected = useGoogleCalendar((s) => s.connected && s.autoSync);
   /** Inbox: escolheu explicitamente “Quando der” (sem data) */
   const [someday, setSomeday] = useState(false);
   /** Pergunta “só este / este e os seguintes / todos” de uma série */
   const [ask, setAsk] = useState<'save' | 'delete'>();
   const fieldsDirty = draft !== original || someday;
-  const dirty = fieldsDirty || !!newSub.trim();
+  const dirty = fieldsDirty || !!newSub.trim() || !!occurrenceDate;
   // Sem alterações pendentes, acompanha a versão salva (ex.: concluída, sincronizada)
   if (!isNew && !fieldsDirty && live && live !== original) {
     setOriginal(live);
@@ -62,7 +64,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
   const inbox = isNew || original.status === 'inbox';
   const editing = inbox || editMode;
   const today = todayISO();
-  const occurrence = date ?? task.date ?? today;
+  const occurrence = date ?? original.date ?? today;
   const isEvent = task.kind === 'event';
   const series = original.recurrence && occursOn(original.recurrence, occurrence) ? original.recurrence : undefined;
   const missed = task.recurrence ? !!task.missedDates?.includes(occurrence) : task.status === 'done' && !!task.missed;
@@ -80,8 +82,9 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
     ? 'Informe uma duração entre 1 e 10080 minutos.' : undefined;
   const error = !task.title.trim() ? `Dê um nome para ${isEvent ? 'o compromisso' : 'a tarefa'}.` : task.title.length > 1000 ? 'Use até 1000 caracteres no título.' : durationError ?? (task.kind === 'habit' && !task.recurrence && !task.seriesId ? 'Escolha uma repetição para acompanhar este hábito.' : ruleError);
   const confirmDiscard = () => {
-    if (isNew) return !(dirty || task.title.trim() || task.notes?.trim() || task.subtasks.length) || confirm('Descartar esta tarefa? Ela ainda não foi salva.');
-    return !dirty || confirm('Descartar as alterações que você não salvou?');
+    const unsaved = dirty || !!timeInput.current && (timeInput.current.value || undefined) !== task.time;
+    if (isNew) return !(unsaved || task.title.trim() || task.notes?.trim() || task.subtasks.length) || confirm('Descartar esta tarefa? Ela ainda não foi salva.');
+    return !unsaved || confirm('Descartar as alterações que você não salvou?');
   };
 
   /** Inbox: só sai de lá quando ganha um lugar (dia, repetição, projeto ou “Quando der”). */
@@ -97,7 +100,10 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
 
   const save = (scope?: SeriesScope) => {
     if (error) return;
-    const final: Task = { ...task, title: task.title.trim(), subtasks: newSub.trim() ? [...task.subtasks, { id: uid(), title: newSub.trim(), done: false }] : task.subtasks, status: inbox ? (placed ? 'active' : 'inbox') : task.status };
+    if (timeInput.current && !timeInput.current.reportValidity()) return;
+    // O controle nativo pode ter um valor visível ainda não entregue ao onChange.
+    const time = timeInput.current ? timeInput.current.value || undefined : task.time;
+    const final: Task = { ...task, time, ...(series && occurrenceDate ? { date: occurrenceDate } : {}), title: task.title.trim(), subtasks: newSub.trim() ? [...task.subtasks, { id: uid(), title: newSub.trim(), done: false }] : task.subtasks, status: inbox ? (placed ? 'active' : 'inbox') : task.status };
     if (isNew) {
       actions.add(final);
       closeSheet();
@@ -105,6 +111,9 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
       return;
     }
     if (series && !scope) {
+      // Congela o que foi confirmado antes de desmontar os inputs para escolher o alcance.
+      setDraft(final);
+      setNewSub('');
       setAsk('save');
       return;
     }
@@ -131,8 +140,10 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
     } else removeWithFeedback(task.id);
   };
 
-  const setRecurrence = (r?: Recurrence) =>
+  const setRecurrence = (r?: Recurrence) => {
+    setOccurrenceDate(undefined);
     upd({ recurrence: r, date: r ? undefined : task.recurrence ? (series ? occurrence : task.recurrence.anchor) : task.date });
+  };
 
   /** Hábito é, por natureza, algo que se repete: já começa como “todo dia”. */
   const setKind = (kind: Kind) => {
@@ -152,6 +163,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
   };
 
   const ruleChanged = JSON.stringify(original.recurrence) !== JSON.stringify(task.recurrence);
+  const occurrenceMoved = !!series && !!occurrenceDate && occurrenceDate !== occurrence;
   const occLabel = formatDay(occurrence, today, { long: true });
   const replan = () => openSheet({ type: 'replan', id: task.id, date: occurrence }, { stack: true });
 
@@ -179,7 +191,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
           {(del || !ruleChanged) && (
             <Option icon="calendar" title={isEvent ? 'Só este evento' : 'Só esta ocorrência'} sub={`${occLabel} — as outras datas continuam iguais`} onClick={() => run('one')} />
           )}
-          {!first && (
+          {!first && (del || !occurrenceMoved) && (
             <Option
               icon="calendar-arrow"
               title={isEvent ? 'Este e os seguintes' : 'Esta e as seguintes'}
@@ -187,11 +199,12 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
               onClick={() => run('following')}
             />
           )}
-          <Option icon="repeat" title={isEvent ? 'Todos os eventos' : 'Todas as ocorrências'} sub="A série inteira, inclusive as que já passaram" onClick={() => run('all')} />
+          {(del || !occurrenceMoved) && <Option icon="repeat" title={isEvent ? 'Todos os eventos' : 'Todas as ocorrências'} sub="A série inteira, inclusive as que já passaram" onClick={() => run('all')} />}
         </div>
         {!del && ruleChanged && (
           <p className="xs faint" style={{ marginTop: 8 }}>Como a repetição mudou, não dá para aplicar só nesta data.</p>
         )}
+        {!del && occurrenceMoved && <p className="xs faint" style={{ marginTop: 8 }}>A mudança de dia vale só para esta ocorrência. A repetição continua nas datas originais.</p>}
       </BottomSheet>
     );
   }
@@ -216,7 +229,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
           <button className="btn btn-secondary" onClick={() => {
             if (!confirmDiscard()) return;
             if (inbox || mode === 'edit') closeSheet();
-            else { setEditMode(false); setOriginal(live); setDraft(live); setSomeday(false); setNewSub(''); setCustomDuration(false); }
+            else { setEditMode(false); setOriginal(live); setDraft(live); setSomeday(false); setNewSub(''); setCustomDuration(false); setOccurrenceDate(undefined); }
           }}>
             Cancelar
           </button>
@@ -369,12 +382,16 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
 
         <section className="task-editor-section" aria-labelledby={`${formId}-plan`}>
           <h2 className="task-editor-heading" id={`${formId}-plan`}>Planejamento</h2>
-          {outsideWorkWarning(task, task.recurrence ? occurrence : task.date, settings) && <p className="small muted" role="note">Fora do expediente. Você pode manter este horário.</p>}
+          {outsideWorkWarning(task, task.recurrence ? occurrenceDate ?? occurrence : task.date, settings) && <p className="small muted" role="note">Fora do expediente. Você pode manter este horário.</p>}
           {!task.recurrence && <div className="chips task-date-shortcuts" role="group" aria-label="Atalhos de data">
             {quickDates.map(q => <button type="button" key={q.label} className={`chip${task.date === q.value ? ' on' : ''}`} aria-pressed={task.date === q.value} onClick={() => pickDate(q.value)}>{q.label}</button>)}
             <button type="button" className={`chip${inbox ? someday ? ' on' : '' : !task.date ? ' on' : ''}`} aria-pressed={inbox ? someday : !task.date} onClick={() => { if (inbox) { setSomeday(!someday); upd({ date: undefined, time: undefined }); } else pickDate(undefined); }}>Quando der</button>
           </div>}
           <div className="task-editor-grid">
+            {series && !ruleChanged && <label className="field">
+              <span className="task-field-label">Dia desta ocorrência</span>
+              <input type="date" className="input num" value={occurrenceDate ?? occurrence} onChange={e => setOccurrenceDate(e.target.value || undefined)} aria-label="Data desta ocorrência" />
+            </label>}
             {!task.recurrence && <label className="field">
               <span className="task-field-label">Dia planejado <span className="task-field-optional">opcional</span></span>
               <input type="date" className="input num" value={task.date ?? ''} onChange={e => pickDate(e.target.value || undefined)} aria-label="Data" />
@@ -382,7 +399,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
             <div className="field">
               <label className="task-field-label" htmlFor={`${formId}-time`}>Horário <span className="task-field-optional">opcional</span></label>
               <div className="task-editor-input-action">
-                <input id={`${formId}-time`} type="time" className="input num" value={task.time ?? ''} onChange={e => {
+                <input ref={timeInput} id={`${formId}-time`} type="time" className="input num" value={task.time ?? ''} onChange={e => {
                   const time = e.target.value || undefined;
                   if (time) setSomeday(false);
                   upd({ time, ...(!task.recurrence && time ? { date: task.date ?? today } : {}) });
@@ -415,7 +432,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
             </label>}
           </div>
           {(task.date || task.recurrence) && <p className={`xs ${overdue ? 'warn-text' : 'muted'}`} aria-live="polite">
-            {task.recurrence ? task.time ? `${task.time}–${endTime} nos dias em que repete` : 'Sem horário fixo nas repetições' : `${formatDay(task.date!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'}${overdue ? ' · data passada' : ''}`}
+            {occurrenceMoved ? `${formatDay(occurrenceDate!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'} · só esta ocorrência` : task.recurrence ? task.time ? `${task.time}–${endTime} nos dias em que repete` : 'Sem horário fixo nas repetições' : `${formatDay(task.date!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'}${overdue ? ' · data passada' : ''}`}
             {gcalConnected && ' · envio ao Google Agenda ativado'}
           </p>}
         </section>

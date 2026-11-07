@@ -91,10 +91,11 @@ function durationOf(t, fallback = 30) {
 }
 function itemsForDate(tasks, date, fallback = 30) {
   const out = [];
+  const replaced = new Set(tasks.filter((t) => !t.recurrence && t.seriesId && t.seriesDate === date).map((t) => t.seriesId));
   for (const t of tasks) {
     if (t.status === "archived" || t.status === "inbox") continue;
     if (t.recurrence) {
-      if (!occursOn(t.recurrence, date) || t.skipDates?.includes(date)) continue;
+      if (!occursOn(t.recurrence, date) || t.skipDates?.includes(date) || replaced.has(t.id)) continue;
       out.push({
         task: t,
         date,
