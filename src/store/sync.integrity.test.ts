@@ -33,6 +33,22 @@ async function ready() {
   return {store,sync};
 }
 describe('saída sem perda de dados',()=>{
+  it('sincroniza prioridade/categoria escolhidas e a remoção delas em nova sessão simulada',async()=>{
+    const {store,sync}=await ready();
+    const task=store.newTask({title:'Compromisso fictício',kind:'event',status:'active',date:'2026-11-10',time:'09:00',duration:30,priority:'essential',category:'trabalho'});
+    store.actions.add(task);sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const row=backend.upsert.mock.calls.flatMap(c=>c[0]).find(r=>r.id===task.id)!;
+    expect(row.data).toMatchObject({priority:'essential',category:'trabalho',time:'09:00'});
+    vi.resetModules();localStorage.clear();backend.rows=JSON.parse(JSON.stringify([row]));
+    localStorage.setItem('leve.sync.v1',JSON.stringify({owner:'owner-a',dirty:[],deleted:[]}));
+    const other=await import('./store');const otherSync=await import('./sync');
+    backend.authChange!('SIGNED_IN',{user:{id:'owner-a',email:'fixture@example.test',user_metadata:{},app_metadata:{}}});await vi.advanceTimersByTimeAsync(1);
+    expect(other.getState().tasks[0]).toMatchObject({priority:'essential',category:'trabalho',time:'09:00'});
+    backend.upsert.mockClear();other.actions.saveTask(task.id,{...other.getState().tasks[0],priority:undefined,category:undefined});
+    otherSync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const cleared=JSON.parse(JSON.stringify(backend.upsert.mock.calls.flatMap(c=>c[0]).find(r=>r.id===task.id)!.data));
+    expect(cleared).not.toHaveProperty('priority');expect(cleared).not.toHaveProperty('category');expect(cleared.time).toBe('09:00');
+  });
   it('envia série e exceção e as restaura em outra sessão sem reintroduzir o horário original',async()=>{
     const {store,sync}=await ready();
     const series=store.newTask({id:'recurring-fixture',title:'Reunião semanal',kind:'event',status:'active',time:'10:00',duration:60,category:'trabalho',recurrence:{freq:'weekly',weekdays:[2],anchor:'2026-11-03'}});
