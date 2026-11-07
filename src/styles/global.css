@@ -3631,7 +3631,7 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .task-field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
 .task-field-optional { font-size: var(--fs-xs); font-weight: 400; color: var(--text-3); margin-left: 4px; }
 .task-editor-section { display: grid; gap: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
-.task-editor-context { gap: 16px; }
+.task-editor-context { gap: 4px; padding-block: 8px; }
 .choice-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choice-field legend { margin-bottom: 8px; padding: 0; }
 .choice-options { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -3648,6 +3648,16 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .choice-input:checked + .choice-content .choice-check { display: block; color: var(--accent); }
 .choice-input:focus-visible + .choice-content { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice-input:disabled + .choice-content { opacity: .55; cursor: not-allowed; }
+.choice-field-compact legend { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; margin-bottom: 2px; }
+.choice-field-compact .choice-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr)); column-gap: 4px; row-gap: 0; }
+.choice-field-compact .choice-option { display: flex; align-items: center; min-height: 44px; }
+.choice-field-compact .choice-content { width: 100%; min-height: 32px; gap: 4px; padding: 4px 5px; border-radius: 999px; background: var(--surface-3); border-color: transparent; }
+.choice-field-compact .choice-mark { width: 14px; height: 14px; }
+.choice-field-compact .choice-check { width: 100%; height: 100%; }
+.choice-field-compact .choice-reset .choice-content { padding-inline: 6px; border-color: transparent; background: transparent; font-size: var(--fs-xs); }
+.choice-field-compact .choice-reset .choice-input:checked + .choice-content { border-color: transparent; background: transparent; }
+.task-priority-choice.choice-field-compact .choice-options .choice-content { font-size: .8125rem; padding-inline: 4px; }
+.task-priority-choice.choice-field-compact .choice-options .choice-mark { width: 10px; height: 10px; }
 @media (hover: hover) { .choice-option:hover .choice-input:not(:disabled) + .choice-content { border-color: var(--accent); } }
 .task-editor-heading { font-size: var(--fs-md); font-weight: 650; }
 .task-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; align-items: start; }

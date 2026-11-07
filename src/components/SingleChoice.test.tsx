@@ -18,8 +18,8 @@ it('usa radios nativos com nome exclusivo por grupo e sem exigir uma escolha',()
   act(()=>inputs[0].click());expect(inputs[0].checked).toBe(true);
   expect(inputs[2].matches(':disabled')).toBe(true);act(()=>inputs[2].click());expect(inputs[0].checked).toBe(true);
 });
-it('respeita o estado desabilitado do grupo sem emitir mudança',()=>{
-  const onChange=vi.fn();act(()=>root.render(<SingleChoice label="Prioridade" disabled options={options} onChange={onChange}/>));
+it.each([false,true])('respeita grupo desabilitado sem emitir mudança (compacto: %s)',compact=>{
+  const onChange=vi.fn();act(()=>root.render(<SingleChoice label="Prioridade" compact={compact} disabled options={options} onChange={onChange}/>));
   for(const input of host.querySelectorAll<HTMLInputElement>('input')){expect(input.matches(':disabled')).toBe(true);act(()=>input.click());}
   expect(onChange).not.toHaveBeenCalled();
 });
