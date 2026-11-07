@@ -76,7 +76,7 @@ it('mantém horário quando o controle nativo emite input/change junto com a dur
 
 it('preserva alterações de metadados na exceção', () => {
   act(() => host.querySelector<HTMLButtonElement>('.block')!.click()); click('Editar');
-  input('Categoria', 'saude', 'change');
+  act(() => host.querySelector<HTMLInputElement>('fieldset[aria-label="Categoria"] input[value="saude"]')!.click());
   click('Salvar alterações'); click('Só este evento');
   expect(itemsForDate(getState().tasks, '2026-11-10')[0].task.category).toBe('saude');
 });

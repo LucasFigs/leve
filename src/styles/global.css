@@ -3631,13 +3631,33 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .task-field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
 .task-field-optional { font-size: var(--fs-xs); font-weight: 400; color: var(--text-3); margin-left: 4px; }
 .task-editor-section { display: grid; gap: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+.task-editor-context { gap: 16px; }
+.choice-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.choice-field legend { margin-bottom: 8px; padding: 0; }
+.choice-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.task-priority-choice .choice-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
+.choice-option { position: relative; max-width: 100%; min-width: 0; cursor: pointer; }
+.choice-content { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--fs-sm); color: var(--text-2); }
+.choice-label { min-width: 0; overflow-wrap: anywhere; }
+.choice-mark { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; }
+.choice-glyph { display: inline-flex; align-items: center; justify-content: center; }
+.choice-radio { width: 10px; height: 10px; border: 1px solid currentColor; border-radius: 50%; }
+.choice-check { display: none; position: absolute; inset: 0; }
+.choice-input:checked + .choice-content { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.choice-input:checked + .choice-content .choice-glyph { visibility: hidden; }
+.choice-input:checked + .choice-content .choice-check { display: block; color: var(--accent); }
+.choice-input:focus-visible + .choice-content { outline: 2px solid var(--accent); outline-offset: 2px; }
+.choice-input:disabled + .choice-content { opacity: .55; cursor: not-allowed; }
+@media (hover: hover) { .choice-option:hover .choice-input:not(:disabled) + .choice-content { border-color: var(--accent); } }
 .task-editor-heading { font-size: var(--fs-md); font-weight: 650; }
 .task-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; align-items: start; }
 .task-editor .input { min-width: 0; width: 100%; min-height: 44px; padding: 10px 12px; }
 .task-editor select.input { padding-right: 28px; background-position: right 8px center; }
 .task-editor input[type='date'], .task-editor input[type='time'] { max-width: 100%; }
-.task-editor .seg { width: 100%; }
-.task-editor .seg > button { min-height: 40px; padding-inline: 8px; }
+.task-editor .seg { width: 100%; flex-wrap: wrap; }
+.task-editor .seg > button { min-height: 40px; padding-inline: 8px; flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.task-editor-sheet .sheet-foot .row { flex-wrap: wrap; }
+.task-editor-sheet .sheet-foot .btn { flex: 1 1 auto; min-width: 0; padding: 10px 14px; white-space: normal; overflow-wrap: anywhere; }
 .task-editor-input-action { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .task-editor-input-action > input { flex: 1; }
 .task-editor-input-action > button { flex-shrink: 0; }

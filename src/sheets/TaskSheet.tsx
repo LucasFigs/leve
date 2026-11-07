@@ -12,6 +12,7 @@ import { Option, Segmented } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { RecurrenceEditor } from '../components/RecurrenceEditor';
 import { SubtaskList } from '../components/SubtaskList';
+import { SingleChoice } from '../components/SingleChoice';
 import { AutoGrowTextarea } from '../components/AutoGrowTextarea';
 import { HabitAppearance } from '../components/HabitAppearance';
 import { TaskOverview } from '../components/TaskOverview';
@@ -342,11 +343,12 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
     <label className="task-field-label" htmlFor={`${formId}-repeat`}>Frequência</label>
     <RecurrenceEditor id={`${formId}-repeat`} value={task.recurrence} onChange={setRecurrence} defaultAnchor={series ? occurrence : task.date ?? today} />
   </div>;
-  const organizationSummary = [project?.name, task.due ? `prazo ${formatDay(task.due).toLowerCase()}` : undefined, task.category ? CATEGORIES.find(cat => cat.id === task.category)?.label : undefined].filter(Boolean).join(' · ');
+  const organizationSummary = [project?.name, task.due ? `prazo ${formatDay(task.due).toLowerCase()}` : undefined].filter(Boolean).join(' · ');
 
   return (
     <BottomSheet
       key="task"
+      className="task-editor-sheet"
       label={isNew ? `Criar ${KIND_LABEL[task.kind].toLowerCase()}` : `Editar ${task.title}`}
       onClose={closeSheet}
       canClose={confirmDiscard}
@@ -423,18 +425,22 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
                 {durationError && <span id={`${formId}-duration-error`} className="xs warn-text">{durationError}</span>}
               </label>}
             </div>
-            {!isEvent && <label className="field">
-              <span className="task-field-label">Prioridade <span className="task-field-optional">opcional</span></span>
-              <select className="input" aria-label="Prioridade" value={task.priority ?? ''} onChange={e => upd({ priority: (e.target.value || undefined) as Priority | undefined })}>
-                <option value="">Nenhuma</option>
-                {(['essential', 'important', 'optional'] as Priority[]).map(p => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
-              </select>
-            </label>}
           </div>
           {(task.date || task.recurrence) && <p className={`xs ${overdue ? 'warn-text' : 'muted'}`} aria-live="polite">
             {occurrenceMoved ? `${formatDay(occurrenceDate!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'} · só esta ocorrência` : task.recurrence ? task.time ? `${task.time}–${endTime} nos dias em que repete` : 'Sem horário fixo nas repetições' : `${formatDay(task.date!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'}${overdue ? ' · data passada' : ''}`}
             {gcalConnected && ' · envio ao Google Agenda ativado'}
           </p>}
+        </section>
+
+        <section className="task-editor-section task-editor-context" aria-label="Contexto opcional">
+          <SingleChoice<Priority> className="task-priority-choice" label="Prioridade" optional value={task.priority} onChange={priority => upd({ priority })} options={[
+            { value: '', label: 'Nenhuma' },
+            ...(['essential', 'important', 'optional'] as const).map(priority => ({ value: priority, label: PRIORITY_META[priority].label, icon: <span className={`prio ${priority}`}><span className="prio-dot" /></span> })),
+          ]} />
+          <SingleChoice<NonNullable<Task['category']>> label="Categoria" optional value={task.category} onChange={category => upd({ category })} options={[
+            { value: '', label: 'Sem categoria' },
+            ...CATEGORIES.map(category => ({ value: category.id, label: category.label, icon: <span>{category.icon}</span> })),
+          ]} />
         </section>
 
         {task.kind === 'habit' ? <section className="task-editor-section" aria-labelledby={`${formId}-habit`}>
@@ -467,18 +473,12 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
           </label>
         </Disclosure>
 
-        <Disclosure className="task-editor-disclosure" icon="folder" title={<span>Organização<span className="task-editor-summary">{organizationSummary || 'Projeto, categoria e prazo'}</span></span>}>
+        <Disclosure className="task-editor-disclosure" icon="folder" title={<span>Organização<span className="task-editor-summary">{organizationSummary || (task.kind === 'task' ? 'Projeto e prazo' : 'Projeto')}</span></span>}>
           <div className="task-editor-details">
             <label className="field" htmlFor={`${formId}-project`}><span className="task-field-label">Projeto</span>
               <select id={`${formId}-project`} className="input" aria-label="Projeto" value={task.projectId ?? ''} onChange={e => upd({ projectId: e.target.value || undefined })}>
                 <option value="">Sem projeto</option>
                 {projects.filter(p => !p.archived || p.id === task.projectId).map(p => <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
-              </select>
-            </label>
-            <label className="field"><span className="task-field-label">Categoria</span>
-              <select className="input" aria-label="Categoria" value={task.category ?? ''} onChange={e => upd({ category: (e.target.value || undefined) as Task['category'] })}>
-                <option value="">Sem categoria</option>
-                {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>)}
               </select>
             </label>
             {task.kind === 'task' && <div className="field">
