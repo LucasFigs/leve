@@ -17,6 +17,20 @@ export function removeWithFeedback(taskId: string) {
   toast('Excluída', { label: 'Desfazer', run: () => actions.undo() });
 }
 
+export function removeCapturesWithFeedback(ids: readonly string[], afterUndo?: () => void) {
+  const result = actions.removeMany(ids);
+  if (!result.count) {
+    toast('Nenhuma captura foi excluída. A lista pode ter mudado.');
+    return 0;
+  }
+  toast(result.count === 1 ? '1 captura excluída' : `${result.count} capturas excluídas`, { label: 'Desfazer', run: () => {
+    const count = result.undo();
+    toast(count ? count === 1 ? '1 captura restaurada' : `${count} capturas restauradas` : 'Não foi possível desfazer: a sessão ou os itens mudaram.');
+    if (count) afterUndo?.();
+  } });
+  return result.count;
+}
+
 export function archiveWithFeedback(taskId: string) {
   actions.archive(taskId);
   toast('Arquivada', { label: 'Desfazer', run: () => actions.undo() });

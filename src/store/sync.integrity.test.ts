@@ -3,14 +3,14 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const backend = vi.hoisted(() => ({
   authChange: undefined as undefined | ((event: string, session: unknown) => void),
   realtime: undefined as undefined | ((value: {eventType: string;new?: Record<string,unknown>;old?: Record<string,unknown>}) => void),
-  upsert: vi.fn(), signOut: vi.fn(), rows: [] as unknown[],
+  upsert: vi.fn(), deleteRows: vi.fn(), signOut: vi.fn(), rows: [] as unknown[],
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({
   auth: { onAuthStateChange: (fn: typeof backend.authChange) => { backend.authChange = fn; }, signOut: backend.signOut },
   from: () => ({
     select: () => ({eq: () => ({order: () => ({range: async () => ({data:backend.rows,error:null})})})}),
     upsert: backend.upsert,
-    delete: () => ({eq: () => ({in: async () => ({error:null})})}),
+    delete: () => ({eq: (_column:string,owner:string) => ({in: (column:string,ids:string[]) => backend.deleteRows(owner,column,ids)})}),
   }),
   channel: () => ({on(_event: string,_filter: unknown,fn: typeof backend.realtime) {backend.realtime=fn;return this;},subscribe() {return this;}}), removeChannel: vi.fn(),
 }) }));
@@ -20,6 +20,7 @@ beforeEach(() => {
   vi.resetModules(); vi.useFakeTimers(); localStorage.clear();
   vi.stubEnv('VITE_SUPABASE_URL','https://example.test'); vi.stubEnv('VITE_SUPABASE_ANON_KEY','fixture-only');
   backend.rows=[]; backend.upsert.mockReset().mockResolvedValue({error:null}); backend.signOut.mockReset().mockResolvedValue({error:null});
+  backend.deleteRows.mockReset().mockResolvedValue({error:null});
   vi.spyOn(window,'confirm').mockReturnValue(false);
 });
 afterEach(() => {vi.clearAllTimers();vi.useRealTimers();vi.unstubAllEnvs();vi.restoreAllMocks();});
@@ -32,7 +33,41 @@ async function ready() {
   await vi.advanceTimersByTimeAsync(1);
   return {store,sync};
 }
+function memoryBackend() {
+  backend.upsert.mockImplementation(async rows=>{
+    const byId=new Map((backend.rows as {id:string}[]).map(row=>[row.id,row]));for(const row of rows)byId.set(row.id,JSON.parse(JSON.stringify(row)));
+    backend.rows=[...byId.values()];return {error:null};
+  });
+  backend.deleteRows.mockImplementation(async(_owner,_column,ids:string[])=>{
+    backend.rows=(backend.rows as {id:string}[]).filter(row=>!ids.includes(row.id));return {error:null};
+  });
+}
 describe('saída sem perda de dados',()=>{
+  it('envia exclusão em lote pela conta atual e restaura os mesmos IDs por upsert após confirmação',async()=>{
+    const {store,sync}=await ready();
+    memoryBackend();
+    const captures=['a','b','c'].map(id=>store.newTask({id,title:`Captura ${id}`,status:'inbox'}));
+    for(const task of captures)store.actions.add(task);sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const result=store.actions.removeMany(['a','b','c']);sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    expect(backend.deleteRows).toHaveBeenCalledTimes(1);expect(backend.deleteRows.mock.calls[0].slice(0,2)).toEqual(['owner-a','id']);expect([...backend.deleteRows.mock.calls[0][2]].sort()).toEqual(['a','b','c']);
+    backend.upsert.mockClear();expect(result.undo()).toBe(3);sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const restored=backend.upsert.mock.calls.flatMap(c=>c[0]).filter(row=>row.type==='task');
+    expect(restored.map(row=>row.id).sort()).toEqual(['a','b','c']);for(const row of restored)expect(row.user_id).toBe('owner-a');
+    expect(store.getState().tasks).toHaveLength(3);
+  });
+  it('desfazer antes do envio cancela a exclusão pendente e expiração da sessão invalida o recibo',async()=>{
+    const {store,sync}=await ready();memoryBackend();store.actions.add(store.newTask({id:'a',title:'Captura fictícia',status:'inbox'}));sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const result=store.actions.removeMany(['a']);expect(result.undo()).toBe(1);sync.syncNow();await vi.advanceTimersByTimeAsync(601);expect(backend.deleteRows).not.toHaveBeenCalled();
+    const next=store.actions.removeMany(['a']);backend.authChange!('SIGNED_OUT',null);await vi.advanceTimersByTimeAsync(1);
+    expect(next.undo()).toBe(0);expect(store.getState().tasks).toHaveLength(0);
+  });
+  it('falha de exclusão remota preserva o journal e permite restaurar sem perder a captura',async()=>{
+    const {store,sync}=await ready();memoryBackend();store.actions.add(store.newTask({id:'a',title:'Captura fictícia',status:'inbox'}));sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    backend.deleteRows.mockResolvedValue({error:new Error('Falha de rede fictícia')});const result=store.actions.removeMany(['a']);sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    expect(JSON.parse(localStorage.getItem('leve.sync.v1')!).deleted).toContain('a');
+    expect(result.undo()).toBe(1);backend.deleteRows.mockResolvedValue({error:null});sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    expect(store.getState().tasks.map(t=>t.id)).toEqual(['a']);expect(JSON.parse(localStorage.getItem('leve.sync.v1')!).deleted).not.toContain('a');
+  });
   it('sincroniza prioridade/categoria escolhidas e a remoção delas em nova sessão simulada',async()=>{
     const {store,sync}=await ready();
     const task=store.newTask({title:'Compromisso fictício',kind:'event',status:'active',date:'2026-11-10',time:'09:00',duration:30,priority:'essential',category:'trabalho'});

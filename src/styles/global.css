@@ -733,6 +733,24 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 /* ---------- Task card ---------- */
 
+.inbox-screen .section-head { flex-wrap: wrap; gap: 8px; }
+.inbox-section-actions, .inbox-selection-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.inbox-section-actions .btn, .inbox-selection-actions .btn { min-height: 44px; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.inbox-selection-tools { display: grid; gap: 4px; padding: 8px 0; margin-bottom: 8px; border-block: 1px solid var(--border); }
+.inbox-capture-list .task { gap: 8px; }
+.inbox-trash { color: var(--text-3); }
+.inbox-selection-card { width: 100%; text-align: left; color: var(--text); }
+.inbox-selection-card .task-title { display: block; }
+.inbox-selection-card .check { pointer-events: none; border-radius: 6px; }
+.inbox-selection-card .check.on svg { color: var(--on-accent); }
+.inbox-selection-card.selected { background: var(--accent-soft); }
+.inbox-selection-card:disabled { opacity: .6; cursor: not-allowed; }
+.inbox-selection-card:focus-visible { outline-offset: -3px; }
+.inbox-delete-sheet .sheet-body p { overflow-wrap: anywhere; }
+.inbox-delete-sheet .sheet-foot { flex-wrap: wrap; }
+.inbox-delete-sheet .sheet-foot .btn { flex: 1 1 100px; min-width: min-content; max-width: 100%; white-space: normal; overflow-wrap: normal; }
+.inbox-confirm-delete { border: 1px solid currentColor; }
+
 .task {
   display: flex;
   align-items: flex-start;

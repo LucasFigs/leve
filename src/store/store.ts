@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Subtask, Task } from '../domain/types';
 import { addDays, formatDay, nowMin, todayISO } from '../domain/dates';
-import { durationOf, overdueTasks } from '../domain/selectors';
+import { durationOf, isInboxCapture, overdueTasks } from '../domain/selectors';
 import { nextFreeSlot, reflowDay, slotsByPart, type DayPlan, type WeekAssignment } from '../domain/planner';
 import { occurrencesBefore } from '../domain/recurrence';
 import type { Suggestion } from '../domain/organize';
@@ -44,10 +44,18 @@ export const emptyState = (): AppState => ({
 /* ------------------------------------------------------------------ */
 
 let state: AppState = hydrate();
-let undoStack: AppState[] = [];
+let undoStack: (AppState | (() => boolean))[] = [];
+let inboxSession = 0;
 const listeners = new Set<() => void>();
 let replacingState = false;
 export const isReplacingState = () => replacingState;
+
+/** Invalida operações temporárias sem persistir dados ou seleções. */
+export function invalidateInboxOperations() {
+  inboxSession++;
+  listeners.forEach(l => l());
+}
+export const useInboxSession = () => useSyncExternalStore(subscribe, () => inboxSession, () => inboxSession);
 
 function hydrate(): AppState {
   const loaded = localRepository.load();
@@ -80,7 +88,7 @@ export function getState() {
 
 /** Substitui o estado inteiro (dados vindos da nuvem, troca de conta). */
 export function replaceState(next: AppState, opts: { resetUndo?: boolean } = {}) {
-  if (opts.resetUndo) undoStack = [];
+  if (opts.resetUndo) { undoStack = []; inboxSession++; }
   state = next;
   replacingState = true;
   try { emit(); } finally { replacingState = false; }
@@ -398,6 +406,32 @@ export const actions = {
     set((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== id) }), { undoable: true });
   },
 
+  /** Um lote e um desfazer restrito aos IDs removidos, sem restaurar snapshots antigos. */
+  removeMany(ids: readonly string[]): { count: number; undo: () => number } {
+    const wanted = new Set(Array.isArray(ids) ? ids.filter(id => typeof id === 'string' && id.length > 0) : []);
+    const session = inboxSession;
+    let removed: Task[] = [];
+    set(s => {
+      removed = s.tasks.filter(t => wanted.has(t.id) && isInboxCapture(t));
+      if (!removed.length) return s;
+      const found = new Set(removed.map(t => t.id));
+      return { ...s, tasks: s.tasks.filter(t => !found.has(t.id)) };
+    });
+    let used = false;
+    const undo = () => {
+      if (used || session !== inboxSession || !removed.length) return 0;
+      used = true;
+      undoStack = undoStack.filter(entry => entry !== entryUndo);
+      const existing = new Set(state.tasks.map(t => t.id));
+      const restore = removed.filter(t => !existing.has(t.id));
+      if (restore.length) set(s => ({ ...s, tasks: [...s.tasks, ...restore] }));
+      return restore.length;
+    };
+    const entryUndo = () => undo() > 0;
+    if (removed.length) undoStack = [...undoStack.slice(-19), entryUndo];
+    return { count: removed.length, undo };
+  },
+
   archive(id: string) {
     set(patchTask(id, { status: 'archived' }), { undoable: true });
   },
@@ -656,6 +690,7 @@ export const actions = {
   reset() {
     localRepository.clear();
     undoStack = [];
+    inboxSession++;
     state = emptyState();
     emit();
   },
@@ -663,6 +698,7 @@ export const actions = {
   undo(): boolean {
     const prev = undoStack.pop();
     if (!prev) return false;
+    if (typeof prev === 'function') return prev();
     state = { ...prev, settings: state.settings, focus: state.focus };
     emit();
     return true;
