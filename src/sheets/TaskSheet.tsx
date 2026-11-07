@@ -433,11 +433,11 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
         </section>
 
         <section className="task-editor-section task-editor-context" aria-label="Contexto opcional">
-          <SingleChoice<Priority> className="task-priority-choice" label="Prioridade" optional value={task.priority} onChange={priority => upd({ priority })} options={[
+          <SingleChoice<Priority> compact className="task-priority-choice" label="Prioridade" optional value={task.priority} onChange={priority => upd({ priority })} options={[
             { value: '', label: 'Nenhuma' },
             ...(['essential', 'important', 'optional'] as const).map(priority => ({ value: priority, label: PRIORITY_META[priority].label, icon: <span className={`prio ${priority}`}><span className="prio-dot" /></span> })),
           ]} />
-          <SingleChoice<NonNullable<Task['category']>> label="Categoria" optional value={task.category} onChange={category => upd({ category })} options={[
+          <SingleChoice<NonNullable<Task['category']>> compact label="Categoria" optional value={task.category} onChange={category => upd({ category })} options={[
             { value: '', label: 'Sem categoria' },
             ...CATEGORIES.map(category => ({ value: category.id, label: category.label, icon: <span>{category.icon}</span> })),
           ]} />
