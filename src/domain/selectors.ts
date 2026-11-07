@@ -6,6 +6,9 @@ export { occursOn };
 
 export const isRecurring = (t: Task) => !!t.recurrence;
 
+/** Capturas simples: não inclui vínculos organizados ou exceções de séries legadas. */
+export const isInboxCapture = (t: Task) => t.status === 'inbox' && t.kind === 'task' && !t.recurrence && !t.seriesId && !t.projectId;
+
 export function durationOf(t: Task, fallback = 30): number {
   return t.duration ?? fallback;
 }

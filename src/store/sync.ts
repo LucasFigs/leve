@@ -12,7 +12,7 @@ import { createClient, type RealtimeChannel, type Session } from '@supabase/supa
 import { useSyncExternalStore } from 'react';
 import type { AppState, Project, Settings, Task } from '../domain/types';
 import { localRepository, storageIssue, reportStorageConflict, reportJournalFailure, journalSaved } from './persistence';
-import { emptyState, getState, isReplacingState, replaceState, subscribe, uid } from './store';
+import { emptyState, getState, invalidateInboxOperations, isReplacingState, replaceState, subscribe, uid } from './store';
 import { resetGoogleCalendarSession } from '../services/googleCalendar';
 import { isTask, isProject, isMeta } from '../domain/validation';
 
@@ -511,6 +511,7 @@ function start(session: Session) {
 }
 
 function stop() {
+  invalidateInboxOperations();
   syncVersion++;
   syncRequests.abort(); syncRequests = new AbortController();
   resetGoogleCalendarSession();

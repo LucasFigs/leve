@@ -25,9 +25,11 @@ interface Props {
   compact?: boolean;
   /** remove o item da lista com animação ao concluir */
   exitOnDone?: boolean;
+  /** Ação contextual exclusiva das capturas elegíveis do Inbox. */
+  onDeleteCapture?: () => void;
 }
 
-export function TaskCard({ task, date, done, showTime, showDate, showProject = true, showStart, compact = false, exitOnDone = true }: Props) {
+export function TaskCard({ task, date, done, showTime, showDate, showProject = true, showStart, compact = false, exitOnDone = true, onDeleteCapture }: Props) {
   const project = useStore((s) => (task.projectId ? s.projects.find((p) => p.id === task.projectId) : undefined));
   const [leaving, setLeaving] = useState(false);
   const today = todayISO();
@@ -128,6 +130,9 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
           {!compact && !isDone && task.postponed >= 3 && <span>Adiada {task.postponed}×</span>}
         </div>
       </button>
+      {onDeleteCapture && <button type="button" className="icon-btn inbox-trash" aria-label={`Excluir captura: ${task.title}`} onClick={e => { e.stopPropagation(); onDeleteCapture(); }}>
+        <Icon name="trash" size={17} />
+      </button>}
       {showStart && !isDone && !isEvent && (
         <button className="icon-btn sm task-action" onClick={() => startTask(task.id, occurrence)} aria-label={`Começar ${task.title}`}>
           <Icon name="play" size={16} />
