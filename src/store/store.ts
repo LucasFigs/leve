@@ -609,8 +609,8 @@ export const actions = {
   },
 
   /* ---------- Projetos ---------- */
-  addProject(name: string, emoji: string, color: string): Project {
-    const p: Project = { id: uid(), name: name.trim(), emoji, color, createdAt: Date.now() };
+  addProject(name: string, emoji: string, color: string, icon?: string): Project {
+    const p: Project = { id: uid(), name: name.trim(), emoji, color, createdAt: Date.now(), ...(icon ? { icon } : {}) };
     set((s) => ({ ...s, projects: [...s.projects, p] }));
     return p;
   },

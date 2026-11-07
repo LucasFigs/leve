@@ -1,3 +1,4 @@
+import { ProjectIcon } from './ProjectIcon';
 import { useState } from 'react';
 import type { Task } from '../domain/types';
 import { formatDay, formatDuration, todayISO } from '../domain/dates';
@@ -117,12 +118,12 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
           )}
           {!compact && task.category && !project && !task.priority && CATEGORY_MAP[task.category] && (
             <span>
-              {CATEGORY_MAP[task.category].icon} {CATEGORY_MAP[task.category].label}
+              <Icon name={CATEGORY_MAP[task.category].icon} size={12} /> {CATEGORY_MAP[task.category].label}
             </span>
           )}
           {!compact && showProject && project && (
             <span>
-              {project.emoji} {project.name}
+              <ProjectIcon project={project} size={12} /> {project.name}
             </span>
           )}
           {!isDone && task.priority && task.priority !== 'optional' && <PriorityBadge priority={task.priority} />}

@@ -81,7 +81,7 @@ export function PlanSheet({ date }: { date: string }) {
         }
       >
         <AvailabilityEditor />
-        <EmptyState icon="🌙" title="Seu período planejado terminou." text={`Seu horário vai até ${dayEnd}. Você pode ajustar o período acima ou deixar amanhã organizado.`} />
+        <EmptyState icon={<Icon name="moon" size={28} />} title="Seu período planejado terminou." text={`Seu horário vai até ${dayEnd}. Você pode ajustar o período acima ou deixar amanhã organizado.`} />
       </BottomSheet>
     );
   }
@@ -102,7 +102,7 @@ export function PlanSheet({ date }: { date: string }) {
       <p className="small muted" style={{ marginBottom: 12 }}>Estimativa com base nas tarefas e compromissos do Leve. Compromissos já existentes no Google Agenda não são importados. Sem duração informada, usamos {settings.defaultDuration} min.</p>
       <AvailabilityEditor />
       {nothing ? (
-        <EmptyState icon="🧘" title="Nada para organizar." text="Não há tarefas sem horário para encaixar neste dia." />
+        <EmptyState icon={<Icon name="check-circle" size={28} />} title="Nada para organizar." text="Não há tarefas sem horário para encaixar neste dia." />
       ) : (
         <>
           <p className="small muted" style={{ marginBottom: 16 }}>
@@ -206,7 +206,7 @@ export function ReviewSheet() {
         }
       >
         <div className="empty" style={{ paddingTop: 16 }}>
-          <div className="empty-icon">✓</div>
+          <div className="empty-icon" aria-hidden="true"><Icon name="check-circle" size={28} /></div>
           <div className="empty-title">Suas capturas estão organizadas.</div>
           <p>Quer que eu organize o restante da sua semana também?</p>
         </div>
@@ -228,7 +228,7 @@ export function ReviewSheet() {
       }
     >
       {sugs.length === 0 ? (
-        <EmptyState icon="✨" title="Tudo limpo" text="Não há capturas para organizar agora." />
+        <EmptyState icon={<Icon name="inbox" size={28} />} title="Tudo limpo" text="Não há capturas para organizar agora." />
       ) : (
         <>
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, gap: 12 }}>
@@ -341,7 +341,7 @@ export function WeekSheet() {
       }
     >
       {assignments.length === 0 ? (
-        <EmptyState icon="🗓️" title={unassigned ? 'Não encontrei espaço para distribuir' : 'Não há tarefas para distribuir'} text={unassigned ? 'As tarefas continuam sem data. Revise a disponibilidade ou a duração antes de tentar novamente. Nada foi movido.' : 'Itens com dia definido e tarefas “se der” não entram nesta distribuição.'} />
+        <EmptyState icon={<Icon name="calendar" size={28} />} title={unassigned ? 'Não encontrei espaço para distribuir' : 'Não há tarefas para distribuir'} text={unassigned ? 'As tarefas continuam sem data. Revise a disponibilidade ou a duração antes de tentar novamente. Nada foi movido.' : 'Itens com dia definido e tarefas “se der” não entram nesta distribuição.'} />
       ) : (
         <>
           <p className="small muted" style={{ marginBottom: 16 }}>

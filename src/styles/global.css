@@ -1840,7 +1840,7 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   transform: scale(0.99);
 }
 
-.project-emoji {
+.project-symbol {
   width: 44px;
   height: 44px;
   border-radius: 14px;
@@ -1850,6 +1850,20 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   flex-shrink: 0;
   background: var(--surface-3);
 }
+
+.project-icon-field { border: 0; padding: 0; margin: 0; min-width: 0; }
+.projects-screen .topbar { flex-wrap: wrap; }
+.projects-screen .page-title { overflow-wrap: anywhere; }
+.tasks-projects-switch .seg { flex-wrap: wrap; }
+.project-icon-grid { display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); max-width: 304px; gap: 8px; }
+@media (max-width: 360px) { .project-icon-grid { grid-template-columns: repeat(4, minmax(44px, 1fr)); } }
+.project-icon-option { position: relative; display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.project-icon-option.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.project-icon-selected { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+.project-symbol svg { color: var(--text-2); }
+.focus-phase-label { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.focus > .row, .focus-controls { flex-wrap: wrap; }
+.focus .btn { max-width: 100%; white-space: normal; }
 
 .tone-blue {
   background: var(--blue-soft);
@@ -1994,6 +2008,9 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 
 .focus-pomo-tabs {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
   gap: 4px;
   background: var(--surface-2);
   padding: 4px;
@@ -2003,6 +2020,11 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 }
 
 .focus-pomo-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   padding: 6px 14px;

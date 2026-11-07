@@ -1,3 +1,4 @@
+import { getProjectIcon } from '../domain/projectIcons';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { formatDay, todayISO } from '../domain/dates';
 import type { ChipType } from '../domain/parser';
@@ -95,7 +96,7 @@ export function QuickAdd({ defaults, autoFocus, placeholder = 'O que você preci
   if (defaults?.time && !parsed?.time) contextChips.push({ label: defaults.time, icon: 'clock' });
   if (defaults?.projectId) {
     const p = projects.find((x) => x.id === defaults.projectId);
-    if (p) contextChips.push({ label: `${p.emoji} ${p.name}`, icon: 'folder' });
+    if (p) contextChips.push({ label: p.name, icon: getProjectIcon(p) });
   }
 
   return (

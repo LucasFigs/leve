@@ -7,6 +7,8 @@ import { BottomSheet } from '../components/BottomSheet';
 import { QuickAdd } from '../components/QuickAdd';
 import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
+import { ProjectIcon } from '../components/ProjectIcon';
+import { getProjectIcon, PROJECT_ICONS, projectIconPatch, type ProjectIconName } from '../domain/projectIcons';
 
 export function QuickAddSheet({ defaults }: { defaults?: CaptureDefaults }) {
   const [draft, setDraft] = useState('');
@@ -21,20 +23,21 @@ export function QuickAddSheet({ defaults }: { defaults?: CaptureDefaults }) {
   );
 }
 
-const EMOJIS = ['📁', '💼', '✈️', '🏠', '💪', '📚', '💰', '🎯', '🎨', '🧠', '❤️', '🌱'];
 const COLORS = ['violet', 'blue', 'green', 'yellow', 'red', 'gray'];
 
 export function ProjectSheet({ id }: { id?: string }) {
   const existing = useStore((s) => (id ? s.projects.find((p) => p.id === id) : undefined));
   const [name, setName] = useState(existing?.name ?? '');
-  const [emoji, setEmoji] = useState(existing?.emoji ?? '📁');
+  const [chosenIcon, setChosenIcon] = useState<ProjectIconName>();
+  const icon = chosenIcon ?? (existing ? getProjectIcon(existing) : 'folder');
+  const visual = chosenIcon || !existing ? projectIconPatch(icon) : existing;
   const [color, setColor] = useState(existing?.color ?? 'violet');
 
   const save = () => {
     if (!name.trim()) return;
-    if (existing) actions.updateProject(existing.id, { name: name.trim(), emoji, color });
+    if (existing) actions.updateProject(existing.id, { name: name.trim(), color, ...(chosenIcon ? projectIconPatch(chosenIcon) : {}) });
     else {
-      const p = actions.addProject(name, emoji, color);
+      const p = actions.addProject(name, visual.emoji, color, visual.icon);
       goTo('projects');
       setUI({ openProjectId: p.id });
     }
@@ -45,7 +48,7 @@ export function ProjectSheet({ id }: { id?: string }) {
     <BottomSheet
       title={existing ? 'Editar projeto' : 'Novo projeto'}
       onClose={closeSheet}
-      canClose={() => (name === (existing?.name ?? '') && emoji === (existing?.emoji ?? '📁') && color === (existing?.color ?? 'violet')) || confirm('Descartar as alterações do projeto que você não salvou?')}
+      canClose={() => (name === (existing?.name ?? '') && icon === (existing ? getProjectIcon(existing) : 'folder') && color === (existing?.color ?? 'violet')) || confirm('Descartar as alterações do projeto que você não salvou?')}
       footer={
         <>
           {existing && (
@@ -69,19 +72,20 @@ export function ProjectSheet({ id }: { id?: string }) {
     >
       <form onSubmit={(e) => { e.preventDefault(); save(); }} className="stack" style={{ gap: 18 }}>
         <div className="row" style={{ gap: 12 }}>
-          <span className={`project-emoji tone-${color}`} aria-hidden="true">{emoji}</span>
+          <span className={`project-symbol tone-${color}`} aria-hidden="true"><ProjectIcon project={visual} size={22} /></span>
           <input className="input grow" autoFocus data-autofocus placeholder="Nome do projeto" value={name} onChange={(e) => setName(e.target.value)} aria-label="Nome do projeto" />
         </div>
-        <div className="field">
-          <span className="label">Ícone</span>
-          <div className="chips">
-            {EMOJIS.map((e) => (
-              <button type="button" key={e} className={`chip${emoji === e ? ' on' : ''}`} style={{ fontSize: 18, minWidth: 44, justifyContent: 'center' }} onClick={() => setEmoji(e)} aria-label={`Ícone ${e}`} aria-pressed={emoji === e}>
-                {e}
+        <fieldset className="field project-icon-field">
+          <legend className="label">Ícone</legend>
+          <div className="project-icon-grid">
+            {PROJECT_ICONS.map((item) => (
+              <button type="button" key={item.value} className={`project-icon-option${icon === item.value ? ' selected' : ''}`} onClick={() => setChosenIcon(item.value)} aria-label={`Ícone: ${item.label}`} title={item.label} aria-pressed={icon === item.value}>
+                <Icon name={item.value} size={20} />
+                {icon === item.value && <span className="project-icon-selected"><Icon name="check" size={10} stroke={3} /></span>}
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
         <div className="field">
           <span className="label">Cor</span>
           <div className="chips">
@@ -155,7 +159,7 @@ export function SearchSheet() {
               <div className="list">
                 {result.projects.map((p) => (
                   <button key={p.id} className="task" style={{ width: '100%' }} onClick={() => { goTo('projects'); setUI({ openProjectId: p.id }); }}>
-                    <span style={{ fontSize: 20 }}>{p.emoji}</span>
+                    <ProjectIcon project={p} />
                     <span className="task-main task-title">{p.name}</span>
                   </button>
                 ))}

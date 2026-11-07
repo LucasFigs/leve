@@ -1,18 +1,19 @@
 import type { Category } from './types';
+import type { IconName } from '../components/Icon';
 
 export interface CategoryMeta {
   id: Category;
   label: string;
-  icon: string;
+  icon: IconName;
 }
 
 export const CATEGORIES: CategoryMeta[] = [
-  { id: 'trabalho', label: 'Trabalho', icon: '💼' },
-  { id: 'pessoal', label: 'Pessoal', icon: '👤' },
-  { id: 'estudos', label: 'Estudos', icon: '📚' },
-  { id: 'saude', label: 'Saúde', icon: '🏥' },
-  { id: 'casa', label: 'Casa', icon: '🏠' },
-  { id: 'financas', label: 'Finanças', icon: '💰' },
+  { id: 'trabalho', label: 'Trabalho', icon: 'briefcase' },
+  { id: 'pessoal', label: 'Pessoal', icon: 'user' },
+  { id: 'estudos', label: 'Estudos', icon: 'book' },
+  { id: 'saude', label: 'Saúde', icon: 'heart-pulse' },
+  { id: 'casa', label: 'Casa', icon: 'home' },
+  { id: 'financas', label: 'Finanças', icon: 'wallet' },
 ];
 
 export const CATEGORY_MAP: Record<Category, CategoryMeta> = Object.fromEntries(

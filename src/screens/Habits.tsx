@@ -82,7 +82,7 @@ export function HabitsScreen() {
 
       {habits.length === 0 ? (
         <EmptyState
-          icon="🔁"
+          icon={<Icon name="repeat" size={28} />}
           title="Nenhum hábito ainda."
           text="Crie tarefas do tipo Hábito para acompanhá-las aqui."
           action={

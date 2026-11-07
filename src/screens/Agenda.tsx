@@ -134,7 +134,7 @@ function DayView({ date }: { date: string }) {
       )}
 
       {items.length === 0 && (
-        <EmptyState icon="🌤️" title="Nada registrado neste dia." text="Toque em um horário para adicionar algo. Confira também seus compromissos fora do Leve." />
+        <EmptyState icon={<Icon name="calendar" size={28} />} title="Nada registrado neste dia." text="Toque em um horário para adicionar algo. Confira também seus compromissos fora do Leve." />
       )}
 
       <div className="card" style={{ padding: '16px 8px 16px 0' }}>
@@ -255,7 +255,7 @@ function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, 
         </span>
         <span className="row" style={{ gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
           {items.length > 0 && (
-            <span className="xs faint">{pending > 0 ? `${pending} pendente${pending !== 1 ? 's' : ''}` : 'Tudo feito ✓'}</span>
+            <span className="xs faint">{pending > 0 ? `${pending} pendente${pending !== 1 ? 's' : ''}` : 'Tudo feito'}</span>
           )}
           <Icon name="chevron-down" size={16} className={`week-acc-chevron faint${isOpen ? ' rotated' : ''}`} />
         </span>
@@ -274,7 +274,7 @@ function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, 
               ))}
             </div>
           ) : (
-            <p className="small faint" style={{ padding: '4px 2px 8px' }}>Nada registrado neste dia 🌤️</p>
+            <p className="small faint" style={{ padding: '4px 2px 8px' }}>Nada registrado neste dia</p>
           )}
           </>}
         </div>

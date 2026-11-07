@@ -43,6 +43,18 @@ function memoryBackend() {
   });
 }
 describe('saída sem perda de dados',()=>{
+  it('sincroniza ícone semântico opcional de projeto com legado e conteúdo pessoal preservados',async()=>{
+    const {store,sync}=await ready();memoryBackend();
+    const project=store.actions.addProject('Viagem 🌊','✈️','blue','plane');sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const row=backend.upsert.mock.calls.flatMap(c=>c[0]).find(r=>r.id===project.id)!;
+    expect(row).toMatchObject({user_id:'owner-a',type:'project',data:{name:'Viagem 🌊',emoji:'✈️',icon:'plane'}});
+    vi.resetModules();localStorage.clear();backend.rows=[row];localStorage.setItem('leve.sync.v1',JSON.stringify({owner:'owner-a',dirty:[],deleted:[]}));
+    const next=await import('./store');await import('./sync');backend.authChange!('SIGNED_IN',{user:{id:'owner-a',user_metadata:{},app_metadata:{}}});await vi.advanceTimersByTimeAsync(1);
+    expect(next.getState().projects[0]).toEqual(project);
+    // Cliente antigo preserva campo extra, mas escolhe outro emoji conhecido.
+    backend.realtime!({eventType:'UPDATE',new:{...row,origin:'old-device',data:{...project,emoji:'💼'}}});
+    const {getProjectIcon}=await import('../domain/projectIcons');expect(getProjectIcon(next.getState().projects[0])).toBe('briefcase');expect(next.getState().projects[0].name).toBe('Viagem 🌊');
+  });
   it('envia exclusão em lote pela conta atual e restaura os mesmos IDs por upsert após confirmação',async()=>{
     const {store,sync}=await ready();
     memoryBackend();

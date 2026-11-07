@@ -1,5 +1,5 @@
 /** Conjunto de ícones em traço fino (24×24). */
-const PATHS: Record<string, string> = {
+const PATHS = {
   sun: 'M12 3v1.5M12 19.5V21M4.6 4.6l1.1 1.1M18.3 18.3l1.1 1.1M3 12h1.5M19.5 12H21M4.6 19.4l1.1-1.1M18.3 5.7l1.1-1.1M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z',
   calendar: 'M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
@@ -51,8 +51,15 @@ const PATHS: Record<string, string> = {
   heart: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
   droplet: 'M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-6-1.5-1.5-3-3.2-4-5-1 1.8-2.5 3.5-4 5-2 2.1-3 4-3 6a7 7 0 0 0 7 7Z',
   activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
-  book: 'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z',
+  book: 'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5ZM4 17h16M8 6h8',
   laptop: 'M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16',
+  home: 'M3 11 12 3l9 8M5 10v11h14V10M9 21v-7h6v7',
+  wallet: 'M20 8V5H5a2 2 0 0 0 0 4h15v11H5a2 2 0 0 1-2-2V7M20 12h-5v5h5M17 14.5h.01',
+  'heart-pulse': 'M2 12h5l2-4 4 8 2-4h7M4 9a5 5 0 0 1 8-5 5 5 0 0 1 8 5M5 15l7 6 7-6',
+  plane: 'M14 21v-7l7-4V8l-7 2V4a2 2 0 0 0-4 0v6L3 8v2l7 4v7l2-2 2 2Z',
+  dumbbell: 'M6 7 17 18M3 6l3-3 4 4-3 3-4-4ZM14 17l3-3 4 4-3 3-4-4ZM3 3l1.5 1.5M19.5 19.5 21 21',
+  palette: 'M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 0-4 2 2 0 0 1 0-4h3a5 5 0 0 0 5-5c0-3-4-5-9-5ZM7 8h.01M11 6h.01M16 7h.01M6 13h.01',
+  lightbulb: 'M9 18h6M9 21h6M8 14a7 7 0 1 1 8 0l-1 4H9l-1-4Z',
 };
 
 export type IconName = keyof typeof PATHS;
@@ -75,6 +82,7 @@ export function Icon({ name, size = 20, stroke = 1.8, className, fill }: {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      focusable="false"
       className={className}
     >
       <path d={PATHS[name]} />

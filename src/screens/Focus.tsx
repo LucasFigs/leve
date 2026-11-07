@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatDuration, pad } from '../domain/dates';
 import { actions, useStore } from '../store/store';
 import { openSheet, toast } from '../store/ui';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 import { Checkbox } from '../components/ui';
 import { completeWithFeedback } from '../components/feedback';
 import { useModalFocus } from '../hooks/modalFocus';
@@ -17,10 +17,10 @@ const fmt = (sec: number) => {
 
 type PomodoroPhase = 'pomodoro' | 'shortBreak' | 'longBreak';
 
-const PHASE_CONFIG: Record<PomodoroPhase, { label: string; icon: string; defaultMinutes: number }> = {
-  pomodoro: { label: 'Foco', icon: '🍅', defaultMinutes: 25 },
-  shortBreak: { label: 'Pausa', icon: '☕', defaultMinutes: 5 },
-  longBreak: { label: 'Pausa Longa', icon: '🌴', defaultMinutes: 15 },
+const PHASE_CONFIG: Record<PomodoroPhase, { label: string; icon: IconName; defaultMinutes: number }> = {
+  pomodoro: { label: 'Foco', icon: 'target', defaultMinutes: 25 },
+  shortBreak: { label: 'Pausa', icon: 'coffee', defaultMinutes: 5 },
+  longBreak: { label: 'Pausa Longa', icon: 'moon', defaultMinutes: 15 },
 };
 
 function playChime() {
@@ -107,9 +107,9 @@ export function FocusMode() {
     playChime();
     if (phase === 'pomodoro') {
       setCycle(c => c + 1);
-      toast('🍅 Pomodoro concluído! Hora de descansar 5 minutos.');
+      toast('Bloco de foco concluído. Hora de descansar 5 minutos.');
     } else {
-      toast('☕ Pausa concluída! Pronto para o próximo foco?');
+      toast('Pausa concluída! Pronto para o próximo foco?');
     }
   }
   }, [isFinished, phase]);
@@ -175,8 +175,9 @@ export function FocusMode() {
           <Icon name="x" size={18} />
           Sair
         </button>
-        <span className="eyebrow">
-          {!timed ? 'Em foco · no seu ritmo' : phase === 'pomodoro' ? `🍅 Pomodoro #${cycle}` : phase === 'shortBreak' ? '☕ Pausa curta' : '🌴 Pausa longa'}
+        <span className="eyebrow focus-phase-label">
+          {timed && <Icon name={PHASE_CONFIG[phase].icon} size={14} />}
+          {!timed ? 'Em foco · no seu ritmo' : phase === 'pomodoro' ? `Pomodoro #${cycle}` : phase === 'shortBreak' ? 'Pausa curta' : 'Pausa longa'}
         </span>
         <button
           className="btn btn-ghost btn-sm"
@@ -196,21 +197,24 @@ export function FocusMode() {
         <div className="focus-pomo-tabs" role="group" aria-label="Duração do bloco">
           <button
             className={`focus-pomo-tab${phase === 'pomodoro' ? ' active' : ''}`}
+            aria-pressed={timed && phase === 'pomodoro'}
             onClick={() => switchPhase('pomodoro')}
           >
-            🍅 Foco (25m)
+            <Icon name={PHASE_CONFIG.pomodoro.icon} size={14} /> Foco (25m)
           </button>
           <button
             className={`focus-pomo-tab${phase === 'shortBreak' ? ' active' : ''}`}
+            aria-pressed={timed && phase === 'shortBreak'}
             onClick={() => switchPhase('shortBreak')}
           >
-            ☕ Pausa (5m)
+            <Icon name={PHASE_CONFIG.shortBreak.icon} size={14} /> Pausa (5m)
           </button>
           <button
             className={`focus-pomo-tab${phase === 'longBreak' ? ' active' : ''}`}
+            aria-pressed={timed && phase === 'longBreak'}
             onClick={() => switchPhase('longBreak')}
           >
-            🌴 Longa (15m)
+            <Icon name={PHASE_CONFIG.longBreak.icon} size={14} /> Longa (15m)
           </button>
         </div>
         {timed && <button className="btn btn-ghost btn-sm" onClick={() => setTimed(false)}>Continuar sem contagem regressiva</button>}
@@ -250,7 +254,7 @@ export function FocusMode() {
         {isFinished ? (
           <div className="stack" style={{ alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <p style={{ fontWeight: 600 }}>
-              {phase === 'pomodoro' ? '🍅 Bloco de foco concluído! Descanse agora.' : '☕ Pausa encerrada! Pronto para focar?'}
+              {phase === 'pomodoro' ? 'Bloco de foco concluído! Descanse agora.' : 'Pausa encerrada! Pronto para focar?'}
             </p>
             <div className="row" style={{ gap: 8 }}>
               {phase === 'pomodoro' ? (

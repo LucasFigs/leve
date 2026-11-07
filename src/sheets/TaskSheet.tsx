@@ -439,7 +439,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
           ]} />
           <SingleChoice<NonNullable<Task['category']>> compact label="Categoria" optional value={task.category} onChange={category => upd({ category })} options={[
             { value: '', label: 'Sem categoria' },
-            ...CATEGORIES.map(category => ({ value: category.id, label: category.label, icon: <span>{category.icon}</span> })),
+            ...CATEGORIES.map(category => ({ value: category.id, label: category.label, icon: <Icon name={category.icon} size={14} /> })),
           ]} />
         </section>
 
@@ -478,7 +478,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
             <label className="field" htmlFor={`${formId}-project`}><span className="task-field-label">Projeto</span>
               <select id={`${formId}-project`} className="input" aria-label="Projeto" value={task.projectId ?? ''} onChange={e => upd({ projectId: e.target.value || undefined })}>
                 <option value="">Sem projeto</option>
-                {projects.filter(p => !p.archived || p.id === task.projectId).map(p => <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
+                {projects.filter(p => !p.archived || p.id === task.projectId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
             {task.kind === 'task' && <div className="field">
