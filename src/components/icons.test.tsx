@@ -64,7 +64,7 @@ it('categoria no card e detalhes usa o SVG com texto legível',()=>{
 });
 it('busca mostra projeto em SVG e selects nativos ficam só com texto e IDs',()=>{
  render(<SearchSheet/>);input('input[aria-label="Buscar"]','Viagem');expect(host.querySelector('.list .task svg path')).not.toBeNull();expect(host.textContent).toContain('Viagem 🌊');expect(host.textContent).not.toContain('✈');
- render(<TasksScreen/>);act(()=>host.querySelector<HTMLElement>('summary')!.click());const option=host.querySelector('select[aria-label="Projeto"] option[value="p"]')!;expect(option.textContent).toBe('Viagem 🌊');expect(option.querySelector('svg')).toBeNull();
+ render(<TasksScreen/>);act(()=>host.querySelector<HTMLButtonElement>('.tasks-filter-toggle')!.click());const option=host.querySelector('select[aria-label="Projeto"] option[value="p"]')!;expect(option.textContent).toBe('Viagem 🌊');expect(option.querySelector('svg')).toBeNull();
  expect(host.querySelector('select[aria-label="Categoria"] option[value="saude"]')!.textContent).toBe('Saúde');
 });
 it.each(['inbox','agenda','projects'] as const)('estado vazio %s mantém mensagem/ação com SVG',view=>{
