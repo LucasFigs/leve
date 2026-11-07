@@ -8,12 +8,12 @@ import {localRepository,reportStorageConflict} from '../store/persistence';
 import {getUI} from '../store/ui';
 
 const fixture=vi.hoisted(()=>({
-  cloud:{status:'synced',email:'fixture@example.test',user:{fullName:'Pessoa de teste',provider:'google'},lastSync:1,error:undefined as string|undefined},
+  cloud:{userId:'owner-a',status:'synced',email:'fixture@example.test',user:{fullName:'Pessoa de teste',provider:'google'},lastSync:1,error:undefined as string|undefined},
   google:{connected:false,email:'fixture@example.test',calendarId:'primary',autoSync:true,status:'idle',error:undefined as string|undefined,calendars:[{id:'primary',summary:'Teste'},{id:'other',summary:'Outra'}]},
   listeners:new Set<()=>void>(),permission:'default',connect:vi.fn(),disconnect:vi.fn(),sync:vi.fn(),target:vi.fn(),toggle:vi.fn(),signOut:vi.fn(),accountSync:vi.fn(),request:vi.fn(),enable:vi.fn(),disable:vi.fn(),updateUser:vi.fn(),
 }));
 vi.mock('../store/sync',()=>({cloudEnabled:true,useCloud:(select:(c:typeof fixture.cloud)=>unknown)=>useSyncExternalStore(fn=>{fixture.listeners.add(fn);return()=>{fixture.listeners.delete(fn);};},()=>select(fixture.cloud)),confirmSignOut:fixture.signOut,syncNow:fixture.accountSync,supabase:{auth:{updateUser:fixture.updateUser}}}));
-vi.mock('../services/googleCalendar',()=>({useGoogleCalendar:(select?:(c:typeof fixture.google)=>unknown)=>useSyncExternalStore(fn=>{fixture.listeners.add(fn);return()=>{fixture.listeners.delete(fn);};},()=>select?select(fixture.google):fixture.google),getGoogleCalendarState:()=>fixture.google,connectGoogleCalendar:fixture.connect,disconnectGoogleCalendar:fixture.disconnect,setGoogleTargetCalendar:fixture.target,toggleGoogleAutoSync:fixture.toggle,syncAllUpcomingTasks:fixture.sync}));
+vi.mock('../services/googleCalendar',()=>({useGoogleCalendar:(select?:(c:typeof fixture.google)=>unknown)=>useSyncExternalStore(fn=>{fixture.listeners.add(fn);return()=>{fixture.listeners.delete(fn);};},()=>select?select(fixture.google):fixture.google),getGoogleCalendarState:()=>fixture.google,connectGoogleCalendar:fixture.connect,disconnectGoogleCalendar:fixture.disconnect,setGoogleTargetCalendar:fixture.target,toggleGoogleAutoSync:fixture.toggle,restoreGoogleCalendarConnection:fixture.sync,syncAllUpcomingTasks:fixture.sync}));
 vi.mock('../services/reminders',()=>({reminderPermission:()=>fixture.permission,requestReminderPermission:fixture.request}));
 vi.mock('../services/push',()=>({pushConfigured:true,enablePush:fixture.enable,disablePush:fixture.disable}));
 let host:HTMLDivElement,root:Root;
@@ -37,11 +37,11 @@ const emit=()=>act(()=>fixture.listeners.forEach(fn=>fn()));
 
 it('identifica opções e valores sem expandir grupos e sem formulário permanente',()=>{
   expect(host.querySelectorAll('details')).toHaveLength(0);expect(host.querySelectorAll('input')).toHaveLength(0);
-  expect(host.querySelectorAll('.profile-setting-row')).toHaveLength(7);
-  expect(host.textContent).toContain('Não conectado');expect(host.textContent).toContain('Desativado');
+  expect(host.querySelectorAll('.profile-setting-row')).toHaveLength(6);
+  expect(host.textContent).not.toContain('Google Agenda');expect(host.textContent).toContain('Desativado');
 });
 it('conta, dados e Google não têm rodapé de retorno redundante',()=>{
-  for(const title of ['Conta e sincronização','Dados e privacidade','Google Agenda']){
+  fixture.google={...fixture.google,connected:true};emit();for(const title of ['Conta e sincronização','Dados e privacidade','Google Agenda']){
     open(title);expect(dialog().querySelector('.sheet-foot')).toBeNull();expect(dialog().querySelector('[aria-label="Fechar"]')).not.toBeNull();close();
   }
   open('Meu tempo');expect(dialog().querySelector('.sheet-foot')?.textContent).toContain('Salvar alterações');
@@ -81,23 +81,16 @@ it('muda tema imediatamente, preserva valor ao voltar e permite desfazer a escol
   open('Aparência');click('Escuro');expect(getState().settings.theme).toBe('dark');click('Automático');close();
   expect(getState().settings.theme).toBe('system');expect(host.textContent).toContain('Automático');
 });
-it('mantém detalhes técnicos Google só no editor, uma vez, e acompanha resolução do erro',()=>{
-  fixture.google={...fixture.google,status:'error',error:'Falha fictícia de autorização'};emit();
-  expect(host.textContent).toContain('Requer atenção');expect(host.textContent).not.toContain('Falha fictícia');
-  open('Google Agenda');expect(dialog().textContent!.split('Falha fictícia').length-1).toBe(1);
-  close();fixture.google={...fixture.google,status:'synced',connected:true,error:undefined};emit();open('Google Agenda');
-  expect(dialog().textContent).not.toContain('Falha fictícia');expect(dialog().textContent).toContain('Conectado');
+
+it('conta nova não exibe conexão Calendar nem erro técnico; login e sync Leve permanecem',()=>{
+ expect(host.textContent).not.toContain('Google Agenda');expect(host.textContent).not.toContain('Conectar');open('Conta e sincronização');expect(dialog().textContent).toContain('Tudo sincronizado');
 });
-it('preserva conectar, desconectar, destino e sincronização, sem toast de erro antigo',async()=>{
-  open('Google Agenda');click('Conectar');await act(async()=>{await Promise.resolve();});expect(fixture.connect).toHaveBeenCalledTimes(1);
-  close();fixture.google={...fixture.google,connected:true,status:'synced'};emit();open('Google Agenda');click('Sincronizar');await act(async()=>{await Promise.resolve();});expect(fixture.sync).toHaveBeenCalledWith(true,true);
-  act(()=>{const select=dialog().querySelector('select')!;select.value='other';select.dispatchEvent(new Event('change',{bubbles:true}));});expect(fixture.target).toHaveBeenCalledWith('other');
-  vi.mocked(window.confirm).mockReturnValue(true);click('Desconectar Google Agenda');await act(async()=>{await Promise.resolve();});expect(fixture.disconnect).toHaveBeenCalledTimes(1);
+it('conta antiga oferece apenas gerenciar vínculo, não conexão, destino ou sincronizar eventos',async()=>{
+ fixture.google={...fixture.google,connected:true,status:'idle',error:undefined};emit();open('Google Agenda');expect(dialog().textContent).toContain('permanecem no Google Agenda');expect(dialog().querySelector('select')).toBeNull();expect(dialog().querySelector('[role=switch]')).toBeNull();expect(dialog().textContent).not.toContain('Reconectar');
+ vi.mocked(window.confirm).mockReturnValue(true);click('Desconectar Google Agenda');await act(async()=>{await Promise.resolve();});expect(fixture.disconnect).toHaveBeenCalledTimes(1);expect(fixture.connect).not.toHaveBeenCalled();expect(fixture.target).not.toHaveBeenCalled();expect(fixture.toggle).not.toHaveBeenCalled();
 });
-it('Google com status de erro sem detalhe ainda oferece uma ação corretiva',()=>{
-  fixture.google={...fixture.google,connected:true,status:'error',error:undefined};emit();open('Google Agenda');
-  expect(dialog().querySelector('[role="alert"]')?.textContent).toContain('Não foi possível confirmar');
-  expect(dialog().textContent).toContain('Reconectar Google Agenda');
+it('erro de desconexão tem instrução manual e não vira sucesso nem reconexão',async()=>{
+ fixture.google={...fixture.google,connected:true,status:'error',error:'Não foi possível confirmar a revogação.'};fixture.disconnect.mockResolvedValue(false);emit();open('Google Agenda');expect(dialog().querySelector('[role=alert]')!.textContent).toContain('confirmar');expect(dialog().querySelector('a[href="https://myaccount.google.com/connections"]')).not.toBeNull();expect(dialog().textContent).not.toContain('Reconectar');
 });
 it('preferência de lembrete não é confundida com permissão ou garantia de entrega',async()=>{
   fixture.request.mockImplementation(async()=>{fixture.permission='granted';return true;});
@@ -142,4 +135,10 @@ it('rascunho da identidade exige confirmação e erro de conta permite tentar de
   const name=dialog().querySelector<HTMLInputElement>('input')!;change(name,'Nome fictício');click('Cancelar');expect(dialog()).not.toBeNull();
   fixture.updateUser.mockRejectedValue(new Error('offline'));click('Salvar alterações');await act(async()=>{await Promise.resolve();});
   expect(dialog().textContent).toContain('Suas alterações continuam aqui');expect(dialog().querySelector<HTMLInputElement>('input')!.value).toBe('Nome fictício');
+});
+it('troca de conta fecha gerenciamento e remove metadados da conta anterior',()=>{
+ fixture.google={...fixture.google,connected:true,email:'old-calendar@example.test'};emit();open('Google Agenda');expect(dialog().textContent).toContain('old-calendar@example.test');fixture.cloud={...fixture.cloud,userId:'owner-b',email:'new@example.test'};fixture.google={...fixture.google,connected:false,email:'',error:undefined};emit();expect(dialog()).toBeNull();expect(host.textContent).not.toContain('old-calendar@example.test');expect(host.textContent).not.toContain('Google Agenda');
+});
+it('IDs antigos continuam oferecendo gerenciamento mesmo offline',()=>{
+ const task={id:'legacy',title:'Antiga',kind:'event' as const,status:'active' as const,googleEventId:'fixture-event',subtasks:[],postponed:0,createdAt:1,updatedAt:1};act(()=>replaceState({...getState(),tasks:[task]}));fixture.google={...fixture.google,connected:false,status:'error',error:'Não foi possível consultar o vínculo antigo.'};emit();open('Google Agenda');expect(dialog().querySelector('[role=alert]')!.textContent).toContain('consultar');expect(dialog().textContent).not.toContain('Reconectar');
 });

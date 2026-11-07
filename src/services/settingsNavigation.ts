@@ -7,10 +7,17 @@ export function rememberCalendarSettingsReturn() {
 export function clearCalendarSettingsReturn(){try{sessionStorage.removeItem(KEY);}catch{/* storage bloqueado */}}
 export function resumeCalendarSettings():boolean {
   try {
+    // Descartar somente resíduos Calendar; não tocar no fragmento de login Supabase.
+    const oldQuery=new URLSearchParams(location.search), oldHash=new URLSearchParams(location.hash.slice(1));
+    const calendarReturn=oldQuery.has('gcal')||oldHash.has('gcal_code');
+    if(calendarReturn){
+      oldQuery.delete('gcal');oldHash.delete('gcal_code');oldHash.delete('gcal_state');
+      history.replaceState(null,'',location.pathname+(oldQuery.size?`?${oldQuery}`:'')+(oldHash.size?`#${oldHash}`:''));
+      try{localStorage.removeItem('leve.gcal.pending.v1');}catch{/* storage bloqueado */}
+    }
     const expires=Number(sessionStorage.getItem(KEY));
     if(!expires||expires<Date.now()){clearCalendarSettingsReturn();return false;}
-    const query=new URLSearchParams(location.search), hash=new URLSearchParams(location.hash.slice(1));
-    if(!query.has('gcal')&&!hash.has('gcal_code'))return false;
+    if(!calendarReturn)return false;
     clearCalendarSettingsReturn();resumed=true;return true;
   }catch{return false;}
 }

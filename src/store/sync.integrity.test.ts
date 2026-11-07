@@ -3,10 +3,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const backend = vi.hoisted(() => ({
   authChange: undefined as undefined | ((event: string, session: unknown) => void),
   realtime: undefined as undefined | ((value: {eventType: string;new?: Record<string,unknown>;old?: Record<string,unknown>}) => void),
-  upsert: vi.fn(), deleteRows: vi.fn(), signOut: vi.fn(), rows: [] as unknown[],
+  upsert: vi.fn(), deleteRows: vi.fn(), signOut: vi.fn(), signInWithOAuth:vi.fn(), rows: [] as unknown[],
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({
-  auth: { onAuthStateChange: (fn: typeof backend.authChange) => { backend.authChange = fn; }, signOut: backend.signOut },
+  auth: { onAuthStateChange: (fn: typeof backend.authChange) => { backend.authChange = fn; }, signOut: backend.signOut,signInWithOAuth:backend.signInWithOAuth },
   from: () => ({
     select: () => ({eq: () => ({order: () => ({range: async () => ({data:backend.rows,error:null})})})}),
     upsert: backend.upsert,
@@ -232,4 +232,19 @@ describe('saída sem perda de dados',()=>{
     expect(store.getState().tasks).toHaveLength(1);
     expect(localStorage.getItem('leve.sync.v1')).toContain('owner-a');
   });
+});
+it('fila Calendar inerte não bloqueia logout e é recuperável somente na conta original',async()=>{
+ const {store,sync}=await ready();store.actions.queueGoogleDeletion('legacy-event','legacy-calendar');expect(sync.hasPending()).toBe(false);expect(await sync.signOut()).toBe(true);expect(backend.signOut).toHaveBeenCalled();
+ const {localRepository}=await import('./persistence');expect(localRepository.retiredGoogleDeletions('owner-a')).toEqual([{eventId:'legacy-event',calendarId:'legacy-calendar'}]);expect(localRepository.retiredGoogleDeletions('owner-b')).toEqual([]);
+ backend.authChange!('SIGNED_IN',{user:{id:'owner-b',email:'b@example.test',user_metadata:{},app_metadata:{}}});await vi.advanceTimersByTimeAsync(1);expect(store.getState().googleDeletions??[]).toEqual([]);
+ backend.authChange!('SIGNED_IN',{user:{id:'owner-a',email:'a@example.test',user_metadata:{},app_metadata:{}}});await vi.advanceTimersByTimeAsync(1);expect(store.getState().googleDeletions).toEqual([{eventId:'legacy-event',calendarId:'legacy-calendar'}]);
+});
+it('fila Calendar não mascara escrita Supabase real pendente em falha de rede',async()=>{
+ const {store,sync}=await ready();store.actions.queueGoogleDeletion('legacy-event','legacy-calendar');backend.upsert.mockResolvedValue({error:{message:'offline'}});store.actions.capture('Preservar pendência real');expect(sync.hasPending()).toBe(true);expect(await sync.signOut()).toBe(false);expect(store.getState().tasks).toHaveLength(1);
+});
+it('login Google continua somente de identidade e permite selecionar conta',async()=>{
+ const {sync}=await ready();backend.signInWithOAuth.mockResolvedValue({error:null});await sync.signInWithGoogle();expect(backend.signInWithOAuth).toHaveBeenCalledWith({provider:'google',options:{scopes:'openid email profile',redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}});
+});
+it('falha ao preservar fila legada impede perda no logout e não encerra sessão remotamente',async()=>{
+ const {store,sync}=await ready();store.actions.queueGoogleDeletion('legacy-event','legacy-calendar');const original=Storage.prototype.setItem;vi.spyOn(Storage.prototype,'setItem').mockImplementation(function(this:Storage,key:string,value:string){if(key.startsWith('leve.gcal.retired-outbox'))throw Error('storage full');return original.call(this,key,value);});expect(await sync.signOut()).toBe(false);expect(backend.signOut).not.toHaveBeenCalled();expect(store.getState().googleDeletions).toEqual([{eventId:'legacy-event',calendarId:'legacy-calendar'}]);
 });

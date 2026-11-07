@@ -487,6 +487,9 @@ function userInfo(session: Session): CloudUser {
 
 function start(session: Session) {
   const id = session.user.id;
+  if (journal.owner && journal.owner !== id && !localRepository.preserveRetiredGoogleDeletions(journal.owner, getState().googleDeletions ?? [])) {
+    stop(); setCloud({auth:'out',email:undefined,user:undefined,status:'error',error:'Não foi possível preservar os dados locais da conta anterior.'}); return;
+  }
   if (journal.owner && journal.owner !== id && (hasPending() || storageIssue())) {
     stop(); reportStorageConflict(null);
     setCloud({ auth: 'out', email: undefined, user: undefined, status: 'error', error: 'Há dados pendentes de outra conta neste aparelho. Entre na conta original para recuperá-los.' });
@@ -502,6 +505,13 @@ function start(session: Session) {
     writeJournal({ dirty: [], deleted: [] });
     replaceState(emptyState(), { resetUndo: true });
     restoreKnown();
+  }
+  const archivedGoogle = localRepository.retiredGoogleDeletions(id);
+  if (storageIssue()) { setCloud({status:'error',error:'Os dados locais precisam de recuperação antes de continuar.'}); return; }
+  if (archivedGoogle.length) {
+    const current = getState();
+    const entries = new Map([...(current.googleDeletions ?? []), ...archivedGoogle].map(entry => [JSON.stringify([entry.calendarId, entry.eventId]), entry]));
+    replaceState({...current, googleDeletions:[...entries.values()]});
   }
   // Sem dados prontos neste aparelho: segura a tela até baixar da nuvem
   const ready = journal.owner === id && getState().settings.onboarded;
@@ -535,7 +545,8 @@ export function syncNow() {
 export function hasPending() {
   if (!journal.owner) return !!userId && (getState().tasks.length > 0 || getState().projects.length > 0 || getState().settings.onboarded);
   const { upserts, deletes } = diff(getState());
-  return upserts.length > 0 || deletes.length > 0 || !!getState().googleDeletions?.length;
+  // A outbox Google é um legado preservado, não uma operação executável no MVP.
+  return upserts.length > 0 || deletes.length > 0;
 }
 
 /** Usuário pode usar o app sem login quando está offline e já tem dados aqui. */
@@ -572,6 +583,7 @@ async function finishSignOut(discardPending: boolean): Promise<boolean> {
   if (!supabase) return false;
   const version = syncVersion;
   const owner = userId;
+  if (owner && !localRepository.preserveRetiredGoogleDeletions(owner, getState().googleDeletions ?? [])) return false;
   if (!discardPending) { try { await bounded(enqueue(push)); } catch { return false; } }
   if (version !== syncVersion || owner !== userId) return false;
   if (!discardPending && (hasPending() || storageIssue())) {

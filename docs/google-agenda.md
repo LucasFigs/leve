@@ -1,50 +1,41 @@
-# Google Agenda persistente
+# Encerramento do Google Agenda no MVP
 
-O vínculo pertence à conta do Leve. Após a primeira autorização offline, ele é restaurado ao autenticar e reabrir o app. O calendário escolhido e a preferência de sincronização automática também ficam no servidor. A integração continua enviando alterações do Leve ao Google; não importa compromissos externos para o planejador.
+A integração sai do MVP por custo e complexidade de OAuth, manutenção e suporte diante do benefício limitado: enviava eventos, sem importar disponibilidade externa. Isso não decorre de vulnerabilidade confirmada. A Agenda do Leve, tarefas, projetos, planejamento, lembretes, login Google (`openid email profile`) e sincronização Supabase permanecem.
 
-## Estado da ativação — 05/11/2026
+Este documento descreve o código e o procedimento a autorizar. Merge, build e testes locais **não comprovam publicação nem revogação real**. Não executar scripts administrativos nesta etapa.
 
-Backend publicado no Supabase e URI de retorno confirmada pelo responsável no Google Cloud. Permissões verificadas no ambiente remoto: RLS habilitada nas duas tabelas, sem acesso CRUD de `anon`/`authenticated` e com acesso de `service_role`. Os testes HTTP reais confirmaram rejeição de origem externa (403), ausência de sessão (401), sessão inválida (401) e retorno seguro para callback inválido (303).
+## Comportamento nesta versão
 
-O frontend atualizado ainda precisa ser publicado na Vercel. A primeira autorização Google pelo novo fluxo e o teste de fechar/reabrir o PWA no celular continuam pendentes; os testes acima não validam o consentimento Google real.
+- Novas conexões, conclusão OAuth, emissão/renovação de access tokens e preferências Calendar são rejeitadas pelo handler com 410 após origem e autenticação; o callback público responde 410 sem transportar código ou trocar token.
+- O cliente não observa mudanças do store, não lista calendários, não processa filas e não executa POST/PATCH/DELETE de eventos. Entradas legadas de sincronização retornam sem rede. A consulta de vínculo só usa `status`, sem renovação.
+- Conta sem vínculo não vê Calendar como recurso ativo. Conta com vínculo ou identificadores antigos encontra o gerenciamento em Configurações. Dados e privacidade oferece também o acesso às permissões da Conta Google, inclusive quando não é possível consultar o servidor.
+- Desconectar tenta revogar o refresh token da conta autenticada antes de remover seu vínculo e estados OAuth pendentes. Só declara revogação confirmada com resposta positiva do Google. Se a tentativa falhar, a remoção do vínculo e a revogação não confirmada são informadas separadamente, com instrução manual. Sem credencial armazenada, não se afirma revogação externa.
+- Nenhum evento externo é removido. Eventos já enviados devem ser administrados no Google; não acompanharão futuras alterações no Leve após a ativação do encerramento.
 
-## Proteções
+## Compatibilidade dos dados
 
-### Disponibilidade durante os testes OAuth
+`googleEventId`, `googleCalendarId` e `googleDeletions` continuam válidos. Não há migração ou remoção retroativa. Conversores puros são preservados, mas não enviam eventos. Backups e recuperação mantêm os campos antigos.
 
-O projeto Google está em modo de teste, conforme informado pelo responsável. O login do Leve solicita somente `openid email profile`; a autorização do calendário é iniciada separadamente no Perfil. Solicitações apenas de identidade têm exceção à lista de usuários de teste. Já o calendário permanece limitado aos e-mails autorizados e seu refresh token expira após sete dias nesse modo, mesmo quando armazenado com segurança no servidor.
+A outbox Calendar deixa de contar em `hasPending()`; alterações reais Supabase continuam protegidas. Antes de logout/troca de conta, a fila é preservada em `leve.gcal.retired-outbox.v1.<owner codificado>`, sem tokens. Ao entrar, somente a conta correspondente recupera essa fila no estado, tornando-a novamente exportável. Ela permanece inerte e não é apagada automaticamente. Falha ao preservar armazenamento interrompe a saída para evitar perda. O arquivo não é sincronizado com outros aparelhos; limpar dados do navegador pode apagá-lo. Acesso ao mesmo perfil do navegador continua sujeito aos limites de proteção local descritos na política.
 
-Antes da divulgação, validar o login com uma conta fora da lista de testes. Se houver bloqueio, conferir os escopos da URL de autorização e se o público do projeto é Externo. Não acrescentar permissões de calendário ao login. Não é necessário publicar o calendário para testar o login básico.
+## Plano operacional — autorização separada
 
-A integração pública do calendário depende da verificação dos escopos solicitados. Após aprovação e mudança para produção, atualizar o aviso de integração em testes no Perfil. Referência: [regras de público e modo de teste do Google](https://support.google.com/cloud/answer/15549945?hl=en).
+1. Registrar revisão atual de frontend/handler, inventário de clientes legados e backup seguro das tabelas/configurações, sem copiar credenciais para logs. Usar homologação com contas fictícias primeiro.
+2. Publicar **primeiro** `supabase/functions/google-calendar/handler.ts`, suas dependências `crypto.ts` e o entrypoint `index.ts`, mantendo autenticação, origem e configuração originais. Sem reaplicar SQL ou gerar novas chaves. Não remover provedor Google, client ID/secret ou redirects de identidade no Supabase/Google.
+3. Com sessão fictícia válida e origem autorizada, verificar 410 para `begin`, `complete`, `token`, `preferences` e ações desconhecidas; callback deve responder 410 sem Location/código. Conferir 403 para origem indevida e 401 para sessão ausente/inválida nas operações privadas.
+4. Confirmar `status` mínimo sem segredos e sem chamada ao endpoint de token. Testar desconexão com vínculo fictício, revogação positiva e falha simulada; confirmar isolamento por conta e mensagens precisas.
+5. Verificar ausência de chamadas a `/calendar/v3/.../events` ao criar/editar/concluir/reagendar/excluir tarefas e ao restaurar estado/fila, tanto no novo cliente quanto em um cliente legado que solicita novo token. Preservar os eventos fictícios externos durante os testes.
+6. **Limite importante:** um PWA antigo já possui código de envio direto ao Google e pode possuir access token ainda válido em memória. O handler novo impede novos tokens, mas não cancela os já emitidos ou operações já em voo. Aguardar a validade máxima dos tokens previamente emitidos (normalmente até uma hora, confirmar configuração), acrescida da janela de requests em andamento, ou obter revogação explícita autorizada. Durante essa janela não declarar encerramento efetivo nem ausência garantida de gravações externas. Fechar o app novo não interrompe uma aba antiga já aberta.
+7. Depois da proteção backend e da janela anterior, publicar frontend e políticas/textos da mesma revisão. Orientar atualização/reabertura do PWA e testar os dois clientes. Não depender exclusivamente de limpeza do cache: o service worker e abas antigas exigem verificação própria.
+8. Homologar login Google, recuperação de sessão, duas contas, logout com fila legada e com escrita Supabase real pendente, criação/edição de ocorrência, Agenda interna, disponibilidade, notificações, offline e reabertura em Android/iOS. Testes emulados não substituem aparelhos reais.
+9. Registrar revisão exata publicada e evidências sem dados pessoais. Monitorar chamadas rejeitadas e falhas de desconexão, sem registrar tokens, códigos OAuth ou conteúdo de tarefas.
 
-- Authorization Code com acesso offline, PKCE S256, estado de uso único e expiração de dez minutos, com prova adicional do navegador iniciador.
-- O callback público apenas devolve o código no fragmento da URL ao app. A troca exige JWT validado no Auth do Supabase, origem exata, usuário, estado e prova correspondentes. Um `user_id` enviado pelo cliente não define a identidade.
-- A prova é guardada temporariamente no navegador para sobreviver ao redirecionamento; não é um token Google. Código e prova são removidos na conclusão; provas expiradas são descartadas ao restaurar.
-- Refresh token cifrado com AES-256-GCM, IV aleatório e usuário como dado autenticado. A chave fica no ambiente da Edge Function, separada do banco. Não é criptografia ponta a ponta: administradores com acesso ao servidor e à chave podem decifrar.
-- Tabelas com RLS e sem privilégios para `anon`/`authenticated`, mesmo para o próprio dono. Somente `service_role` acessa pela função; sem Realtime.
-- Access token somente em memória do cliente. Respostas `no-store`; refresh token e segredos não são enviados ao navegador nem registrados pela aplicação.
-- Logout cancela operações e limpa memória, preservando o vínculo. Desconectar remove o vínculo e solicita revogação; uma falha externa é informada. Excluir a conta elimina as credenciais por chave estrangeira.
+As respostas de status/desconexão desta revisão incluem `retired: true`, sem segredos. Isso permite distinguir a versão de encerramento de um backend antigo. O cliente só declara revogação confirmada com `disconnected: true`, `revoked: true` e esse marcador; respostas antigas/ambíguas mantêm orientação manual.
 
-## Configuração
+O bloqueio cobre os endpoints do Leve, não permissões globais na Conta Google. Se existirem versões históricas que autorizavam Calendar diretamente no navegador ou outros clientes OAuth, inventariá-los em homologação e definir sua retirada com autorização separada, preservando o provedor e os escopos de identidade. Não declarar bloqueio universal apenas com o deploy deste handler.
 
-1. Habilitar Calendar API no Google Cloud. No cliente OAuth Web do Leve, manter os redirects do login e adicionar `https://SEU-PROJETO.supabase.co/functions/v1/google-calendar/callback`, sem barra final.
-2. Conferir `.env.local`: `VITE_SUPABASE_URL`, `SUPABASE_ACCESS_TOKEN`, `APP_URL` (origem HTTPS exata), `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`. O ID público, se preenchido, deve corresponder ao ID do servidor.
-3. Executar `npm run setup:google` para conferir e empacotar sem alterações remotas.
-4. Executar `npm run setup:google -- --apply` para criar as tabelas, gerar/preservar `GOOGLE_TOKEN_ENCRYPTION_KEY`, instalar os segredos e publicar a função. Guardar a chave em armazenamento seguro. Em instalação existente, usar a chave original e `--existing-key-confirmed`. Nunca gerar nova chave para vínculos existentes sem migração.
-5. Publicar o frontend na Vercel. Nenhum segredo novo vai para variáveis `VITE_*` ou para a Vercel.
-6. Conectar uma vez pelo Perfil para obter autorização offline. A autorização anterior, somente em memória, não pode ser convertida em refresh token.
+## Rollback e limpeza posterior
 
-A função usa `verify_jwt: false` no gateway para receber o callback público. Todos os POSTs verificam JWT em `/auth/v1/user` e origem dentro do handler. Não remover essas verificações internas.
+Manter o handler de encerramento em qualquer rollback de frontend. **Não restaurar o handler anterior**, que reativaria autorização e emissão de tokens. Se o gerenciamento falhar, corrigir apenas status/desconexão e manter o caminho manual da Conta Google. Não limpar armazenamento, trocar a chave de cifragem ou reaplicar setup para tentar resolver.
 
-## Limites e validação
-
-A primeira autorização pode passar pelo navegador do sistema. Após concluir, reabrir o PWA na mesma conta Leve restaura o vínculo salvo. Se o retorno não compartilhar o armazenamento da origem iniciadora, a conexão falha de forma segura: iniciar e concluir no mesmo contexto. Validar Android e iOS reais.
-
-Revogação, expiração e políticas da organização podem exigir nova autorização. Em aplicativos externos com consentimento em status **Teste**, o Google expira refresh tokens de Calendar após sete dias; publicar/verificar o OAuth é distinto do deploy na Vercel.
-
-A renovação não envia alterações com o PWA encerrado: não há worker Google nesta mudança. A sincronização automática funciona com o app aberto; o botão Sincronizar permite atualização manual. Não há importação bidirecional. Consultar estado/erro e último envio, além do indicador de conexão.
-
-Testes simulados cobrem servidor/cliente, renovação, isolamento, PKCE, expiração, replay, prova, criptografia e revogação. O runner SQL testa o esquema real num PostgreSQL descartável, incluindo bloqueio de acesso cliente e exclusão em cascata. Ainda é necessário validar consentimento real, Edge Function publicada e reabertura do PWA.
-
-Referências: [OAuth para servidores](https://developers.google.com/identity/protocols/oauth2/web-server), [expiração de refresh tokens](https://developers.google.com/identity/protocols/oauth2#expiration), [configuração do cliente](https://developers.google.com/workspace/calendar/api/quickstart/js).
+Somente uma etapa posterior, autorizada e com política de retenção, pode remover tabelas, estados pendentes, credenciais Calendar e arquivos locais. Critérios: backend de encerramento confirmado, janela de tokens antigos encerrada, versões legadas avaliadas, usuários informados, caminho de revogação/resolução de falhas definido, backups/recuperação verificados e dependências de autenticação separadas. Não remover credenciais compartilhadas com o login. Não fazer exclusão em massa nem revogação forçada como efeito deste PR.

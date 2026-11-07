@@ -238,7 +238,7 @@ function DayPulse({ doneToday, totalToday }: { doneToday: number; totalToday: nu
     </span>}>
       <div className="day-summary-details">
         <p className="small muted">{doneToday} de {totalToday} tarefas concluídas.</p>
-        <p className="xs muted">*Estimativa somente dos itens do Leve, no período {settings.dayStart}–{settings.dayEnd}. Compromissos existentes no Google Agenda não são importados.</p>
+        <p className="xs muted">*Estimativa dos itens planejados no Leve, no período {settings.dayStart}–{settings.dayEnd}.</p>
         {settings.workSchedule?.enabled && <p className="xs muted">O total reúne os períodos pessoal e profissional, sem somar sobreposições. Cada tarefa precisa caber na sua janela; Trabalho respeita o expediente.</p>}
         <button className="btn btn-sm btn-soft" onClick={() => openSheet({ type: 'plan', date: cap.status === 'ended' && cap.left > 0 ? addDays(today, 1) : today })}>
           {cap.status === 'ended' && cap.left > 0 ? 'Planejar amanhã' : 'Ajustar disponibilidade e plano'}

@@ -17,11 +17,11 @@ Assistente pessoal de tarefas, compromissos e hábitos, desenvolvido com React e
 - Planeja o dia e a semana considerando horários, duração e disponibilidade.
 - Acompanha recorrências, prioridades e execução com modo foco/Pomodoro.
 - Funciona no navegador e pode ser instalado como PWA.
-- Oferece sincronização entre dispositivos via Supabase, envio para Google Agenda e lembretes push quando configurados.
+- Oferece sincronização entre dispositivos via Supabase e lembretes push quando configurados.
 
-O assistente usa regras e heurísticas locais. Não depende de uma API de IA generativa. A integração com Google Agenda envia alterações do Leve para o calendário; não importa automaticamente alterações feitas no Google.
+O assistente usa regras e heurísticas locais. Não depende de uma API de IA generativa. A Agenda própria organiza os compromissos registrados no Leve.
 
-O Google Agenda está em testes e disponível apenas para contas autorizadas; nesse modo, a autorização pode expirar após sete dias. O login Google solicita apenas dados básicos de identidade, separadamente do calendário. A conexão com a agenda é opcional para usar o Leve.
+A integração Google Agenda foi retirada do MVP. O login Google continua independente, solicitando apenas identidade. Vínculos antigos têm um caminho de desconexão; eventos enviados anteriormente permanecem no Google. Veja o [plano de transição](docs/google-agenda.md).
 
 ## Tecnologias e decisões
 
@@ -32,7 +32,7 @@ O Google Agenda está em testes e disponível apenas para contas autorizadas; ne
 | Regras do produto | Módulos de domínio independentes da interface |
 | Persistência | Armazenamento no navegador, com uso offline |
 | Nuvem opcional | Supabase Auth, Postgres com RLS e Realtime |
-| Integrações | Google Calendar API e Web Push |
+| Integrações | Web Push; encerramento de vínculos Calendar legados |
 | Qualidade | Vitest, testes SQL em PostgreSQL isolado e GitHub Actions |
 
 Leia a [arquitetura](docs/arquitetura.md) para entender o fluxo entre essas partes.
@@ -60,7 +60,7 @@ Copie `.env.example` para `.env.local` e preencha somente as integrações que p
 | --- | --- |
 | `VITE_SUPABASE_URL` | URL do projeto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Chave anon/publishable; acesso protegido pelas políticas do banco |
-| `VITE_GOOGLE_CLIENT_ID` | Cliente OAuth para Google Agenda |
+| `VITE_GOOGLE_CLIENT_ID` | Legado Calendar; não habilita novas conexões no MVP |
 | `VITE_VAPID_PUBLIC_KEY` | Chave pública das notificações push |
 
 Variáveis `VITE_*` entram no frontend. Os demais segredos do template são usados pelos scripts/servidor e não devem ser importados para a Vercel nem publicados.
@@ -73,7 +73,7 @@ Em um projeto próprio, configure `SUPABASE_ACCESS_TOKEN` e `APP_URL` e execute 
 
 ### Google Agenda e push
 
-O Google Agenda pode ser conectado no Perfil. Com o backend da integração configurado, o vínculo é restaurado ao reabrir o app: o refresh token fica cifrado no servidor e o access token permanece somente em memória. Veja [configuração e limites](docs/google-agenda.md).
+Google Agenda não oferece novas conexões ou sincronização nesta versão. O backend deve ser atualizado antes do frontend para bloquear clientes antigos; veja o [encerramento e plano operacional](docs/google-agenda.md). O login Google não é removido.
 
 Para push, `npm run setup:push` gera as chaves necessárias, aplica tabelas, publica a função e agenda o processamento no projeto Supabase. Mantenha a chave privada e o segredo do cron fora do frontend. Depois configure apenas `VITE_VAPID_PUBLIC_KEY` na Vercel e ative os lembretes no aparelho.
 

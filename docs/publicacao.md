@@ -4,7 +4,7 @@
 
 A revisão inclui uma lista diária mais enxuta, consulta de tarefas separada da edição e acompanhamento de hábitos por calendário e histórico visual. A comparação semanal foi preservada; uma demonstração sem cadastro ficou para uma próxima etapa.
 
-O backend da conexão persistente com Google Agenda foi publicado e teve controles de acesso verificados, conforme [registro da integração](google-agenda.md). Isso não substitui a validação do consentimento Google e da reabertura do PWA no celular. A versão hospedada deve ser conferida separadamente dos testes locais; um commit ou build aprovado não comprova o deploy.
+A descontinuação do Google Agenda exige publicar primeiro o handler de encerramento e validar o bloqueio de clientes antigos; depois publicar o frontend. Este documento descreve o procedimento, sem confirmar alteração do ambiente hospedado. Ver [plano operacional](google-agenda.md).
 
 ## Repositório
 
@@ -29,6 +29,6 @@ Antes do commit, revise o diff e a lista de arquivos. `.env.local`, backups, o c
 2. Se houver mudanças de infraestrutura ainda não aplicadas, valide os SQLs em teste antes de aplicá-las ao projeto alvo. Os scripts `setup:supabase`, `setup:push` e `setup:google -- --apply` alteram o ambiente remoto: revise o destino e os efeitos antes de executá-los. Uma atualização apenas de interface não exige reaplicar esses scripts.
 3. Configure na Vercel somente as variáveis públicas necessárias de `.env.example`. Não importe o `.env.local` inteiro.
 4. Faça o deploy da revisão validada, confirme o Node configurado e teste os fluxos no domínio público. O build do frontend não aplica SQLs nem publica a função Supabase.
-5. Confira cabeçalhos, erros CSP, login, recuperação, troca de conta, Google Agenda, push e reabertura offline. Verifique os logs sem copiar conteúdo de usuários para issues.
+5. Confira cabeçalhos, erros CSP, login, recuperação, troca de conta, bloqueio Calendar, desconexão legada, push e reabertura offline. Verifique os logs sem copiar conteúdo de usuários para issues.
 
 Mantenha a revisão anterior disponível para rollback do frontend. Mudanças no banco e em credenciais exigem procedimentos próprios; voltar o deploy Vercel não as desfaz.

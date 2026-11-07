@@ -22,7 +22,6 @@ import { outsideWorkWarning } from '../domain/context';
 import { Disclosure } from '../components/Disclosure';
 import { archiveWithFeedback, completeWithFeedback, removeWithFeedback } from '../components/feedback';
 import { startTask } from '../components/focusFlow';
-import { useGoogleCalendar } from '../services/googleCalendar';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 150, 180, 240];
 const KIND_LABEL: Record<Kind, string> = { task: 'Tarefa', event: 'Compromisso', habit: 'Hábito' };
@@ -47,7 +46,6 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
   const [editMode, setEditMode] = useState(mode === 'edit');
   const [customDuration, setCustomDuration] = useState(false);
   const [occurrenceDate, setOccurrenceDate] = useState<string>();
-  const gcalConnected = useGoogleCalendar((s) => s.connected && s.autoSync);
   /** Inbox: escolheu explicitamente “Quando der” (sem data) */
   const [someday, setSomeday] = useState(false);
   /** Pergunta “só este / este e os seguintes / todos” de uma série */
@@ -428,7 +426,6 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
           </div>
           {(task.date || task.recurrence) && <p className={`xs ${overdue ? 'warn-text' : 'muted'}`} aria-live="polite">
             {occurrenceMoved ? `${formatDay(occurrenceDate!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'} · só esta ocorrência` : task.recurrence ? task.time ? `${task.time}–${endTime} nos dias em que repete` : 'Sem horário fixo nas repetições' : `${formatDay(task.date!, today, { long: true })}${task.time ? ` · ${task.time}–${endTime}` : ' · sem horário fixo'}${overdue ? ' · data passada' : ''}`}
-            {gcalConnected && ' · envio ao Google Agenda ativado'}
           </p>}
         </section>
 

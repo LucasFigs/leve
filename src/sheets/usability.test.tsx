@@ -48,7 +48,7 @@ describe('proteção de rascunhos e recuperação de resultados', () => {
     expect(summary.querySelector('summary')?.textContent).not.toContain('Google Agenda');
     expect(summary.querySelector('.pulse-ring')?.getAttribute('aria-label')).toBe('0 de 0 tarefas concluídas hoje');
     expect(summary.querySelectorAll('button')).toHaveLength(1);
-    expect(summary.textContent).toContain('Google Agenda não são importados');
+    expect(summary.textContent).toContain('Estimativa dos itens planejados no Leve');
   });
   it('atualiza a rosquinha conforme as tarefas do dia são concluídas', () => {
     const tasks = [newTask({ title: 'Enviar relatório', status: 'active', date: todayISO() }), newTask({ title: 'Revisar dados', status: 'active', date: todayISO() })];

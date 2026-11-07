@@ -26,7 +26,7 @@ import { ProjectSheet, QuickAddSheet, SearchSheet } from './sheets/OtherSheets';
 import { AccountMenuSheet } from './sheets/AccountMenu';
 import { startReminders } from './services/reminders';
 import { refreshPush } from './services/push';
-import { initGoogleCalendarListener, restoreGoogleCalendarConnection } from './services/googleCalendar';
+import { resetGoogleCalendarSession, restoreGoogleCalendarConnection } from './services/googleCalendar';
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'today', label: 'Hoje', icon: 'sun' },
@@ -122,14 +122,14 @@ function Application() {
   useShortcuts();
   useEffect(() => {if(resumeCalendarSettings())goTo('profile');},[]);
   useEffect(() => startReminders(), []);
-  useEffect(() => initGoogleCalendarListener(), []);
+
   const onboarded = useStore((s) => s.settings.onboarded);
   const tasks = useStore((s) => s.tasks);
   const tab = useUI((u) => u.tab);
   const sheet = useUI((u) => u.sheet);
   const inboxCount = useMemo(() => inboxTasks(tasks).length, [tasks]);
   const auth = useCloud((c) => c.auth);
-  const accountEmail = useCloud((c) => c.email);
+
   const accountId = useCloud((c) => c.userId);
   const recovery = useCloud((c) => c.recovery);
   const syncStatus = useCloud((c) => c.status);
@@ -147,10 +147,8 @@ function Application() {
     const restore = () => { if (navigator.onLine) void restoreGoogleCalendarConnection(); };
     restore();
     window.addEventListener('online', restore);
-    const visible = () => { if (document.visibilityState === 'visible') restore(); };
-    document.addEventListener('visibilitychange', visible);
-    return () => { window.removeEventListener('online', restore); document.removeEventListener('visibilitychange', visible); };
-  }, [cloudReady, accountEmail]);
+    return () => { window.removeEventListener('online', restore); resetGoogleCalendarSession(); };
+  }, [cloudReady, accountId]);
 
   if (cloudEnabled) {
     if (auth === 'loading') return <Splash text="" />;
