@@ -235,7 +235,7 @@ export function BottomSheet({ title, onClose, children, footer, full, headerExtr
           >
             {title && <div className="sheet-title">{title}</div>}
             {headerExtra}
-            <button className="icon-btn sm" onClick={close} aria-label="Fechar">
+            <button className="icon-btn sm sheet-close" onClick={close} aria-label="Fechar">
               <Icon name="x" size={18} />
             </button>
           </div>

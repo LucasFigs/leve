@@ -145,7 +145,7 @@ function AccountSection({onEdit}: {onEdit:()=>void}) {
           </span>
           <Icon name="edit" size={18} className="faint" />
         </button>
-        <div className="settings-row">
+        <div className="settings-row settings-sync-row">
           <span className="row grow" style={{ gap: 12 }}>
             <Icon name="cloud" size={20} className="faint" />
             <span className="grow">
@@ -368,7 +368,7 @@ function GoogleCalendarSection() {
           </div>
         ) : (
           <>
-            <div className="settings-row">
+            <div className="settings-row settings-sync-row">
               <span className="row grow" style={{ gap: 12 }}>
                 <GoogleLogo size={22} />
                 <span className="grow">

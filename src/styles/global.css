@@ -1318,6 +1318,12 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
   flex: 1;
 }
 
+/* No celular, o fechamento continua pelo gesto no puxador/cabecalho. */
+.sheet-close { display: none; }
+@media (min-width: 1024px) {
+  .sheet-close { display: inline-flex; }
+}
+
 .sheet-body {
   padding: 4px 20px 20px;
   overflow-y: auto;
@@ -3706,6 +3712,17 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 .settings-sheet .settings-row { padding: 12px 0; width: 100%; min-height: 56px; text-align: left; }
 .settings-sheet .settings-row > span { min-width: 0; overflow-wrap: anywhere; }
 .settings-sheet .settings-row .input { max-width: 100%; }
+.settings-sheet .list > .settings-row { padding: 16px; }
+.settings-sheet .settings-row .row.grow { min-width: 0; }
+.settings-sheet .settings-row .row.grow > .grow { min-width: 0; overflow-wrap: anywhere; }
+.settings-sheet .settings-row > svg,
+.settings-sheet .settings-row .row > svg,
+.settings-sheet .settings-row .row > img,
+.settings-sheet .settings-row .avatar { flex-shrink: 0; }
+.settings-sheet .settings-row .row > img { object-fit: cover; }
+.settings-sheet .settings-sync-row { flex-wrap: wrap; }
+.settings-sheet .settings-sync-row > .row { flex: 1 1 180px; }
+.settings-sheet .settings-sync-row > .btn { flex-shrink: 0; margin-left: auto; }
 .settings-sheet .chips { gap: 8px; }
 .settings-sheet .chip, .settings-sheet .seg button { min-height: 44px; min-width: 44px; }
 .settings-sheet .seg { display: flex; flex-wrap: wrap; }
