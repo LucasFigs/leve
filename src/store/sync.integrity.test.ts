@@ -43,6 +43,21 @@ function memoryBackend() {
   });
 }
 describe('saída sem perda de dados',()=>{
+  it('preserva prazo reagendado e conclusão de exceção de hábito após reload e sync simulado',async()=>{
+    const {store,sync}=await ready();memoryBackend();
+    const {todayISO,addDays}=await import('../domain/dates');const today=todayISO(),past=addDays(today,-1),due=addDays(today,3);
+    store.actions.add(store.newTask({id:'point',title:'Atividade fictícia',status:'active',date:past,time:'08:30',due}));
+    store.actions.add(store.newTask({id:'habit',title:'Prática fictícia',kind:'habit',status:'active',recurrence:{freq:'daily',anchor:past},skipDates:[past]}));
+    store.actions.add(store.newTask({id:'exception',title:'Prática em outro horário',kind:'habit',status:'active',seriesId:'habit',seriesDate:past,date:past,time:'21:30',duration:30}));
+    expect(store.actions.resolveOverdue('point','today')).toBe(true);
+    store.actions.complete('exception',past);sync.syncNow();await vi.advanceTimersByTimeAsync(601);
+    const saved=JSON.parse(localStorage.getItem('leve.state.v1')!);expect(saved.tasks.find((t:{id:string})=>t.id==='point')).toMatchObject({date:today,due});
+    const rows=JSON.parse(JSON.stringify(backend.rows));vi.resetModules();localStorage.clear();backend.rows=rows;localStorage.setItem('leve.sync.v1',JSON.stringify({owner:'owner-a',dirty:[],deleted:[]}));
+    const other=await import('./store');await import('./sync');backend.authChange!('SIGNED_IN',{user:{id:'owner-a',user_metadata:{},app_metadata:{}}});await vi.advanceTimersByTimeAsync(1);
+    expect(other.getState().tasks).toHaveLength(3);expect(other.getState().tasks.find(t=>t.id==='point')).toMatchObject({date:today,due});
+    expect(other.getState().tasks.find(t=>t.id==='exception')).toMatchObject({status:'done',seriesId:'habit',seriesDate:past,time:'21:30',duration:30});
+    const {habitHistory}=await import('../domain/habitHistory');expect(habitHistory(other.getState().tasks.find(t=>t.id==='habit')!,other.getState().tasks).doneDates).toContain(past);
+  });
   it('sincroniza ícone semântico opcional de projeto com legado e conteúdo pessoal preservados',async()=>{
     const {store,sync}=await ready();memoryBackend();
     const project=store.actions.addProject('Viagem 🌊','✈️','blue','plane');sync.syncNow();await vi.advanceTimersByTimeAsync(601);

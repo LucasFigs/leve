@@ -437,6 +437,14 @@ export const actions = {
   },
 
   /** Replanejamento de uma tarefa não concluída. */
+  resolveOverdue(id: string, mode: 'today' | 'undated'): boolean {
+    const t = findTask(id);
+    if (!t || t.seriesId || !overdueTasks([t], todayISO()).length) return false;
+    set(patchTask(id, {date: mode === 'today' ? todayISO() : undefined, time: undefined}), {undoable:true});
+    return true;
+  },
+
+  /** Replanejamento de uma tarefa não concluída. */
   postpone(id: string, mode: 'later' | 'tomorrow' | 'unschedule' | 'custom', custom?: { date?: string; time?: string }, occurrence = todayISO()): string {
     const t = findTask(id);
     if (!t) return '';
