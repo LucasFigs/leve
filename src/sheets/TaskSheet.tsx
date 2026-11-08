@@ -372,7 +372,7 @@ export function TaskSheet({ id, date, initial, mode }: { id?: string; date?: str
             aria-label="Título"
             aria-required="true"
           />
-          <Segmented<Kind> label="Tipo" value={task.kind} onChange={setKind} options={[
+          <Segmented<Kind> variant="underline" label="Tipo" value={task.kind} onChange={setKind} options={[
             { value: 'task', label: 'Tarefa' }, { value: 'event', label: 'Compromisso' }, { value: 'habit', label: 'Hábito' },
           ]} />
           <p className="xs muted">{isEvent ? 'Um compromisso tem dia e pode ter horário definido.' : task.kind === 'habit' ? 'Uma ação que se repete e você acompanha ao longo dos dias.' : 'Uma ação para concluir. Pode planejar agora ou organizar depois.'}</p>

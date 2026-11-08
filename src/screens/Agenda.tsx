@@ -42,6 +42,7 @@ export function AgendaScreen() {
         </div>
 
         <Segmented<AgendaView>
+          variant="underline"
           label="Visualização"
           value={view}
           onChange={setView}
@@ -134,7 +135,7 @@ function DayView({ date }: { date: string }) {
       )}
 
       {items.length === 0 && (
-        <EmptyState icon={<Icon name="calendar" size={28} />} title="Nada registrado neste dia." text="Toque em um horário para adicionar algo. Confira também seus compromissos fora do Leve." />
+        <EmptyState icon={<Icon name="calendar" size={28} />} title="Nada registrado neste dia." text="Toque em um horário para adicionar algo." />
       )}
 
       <div className="card" style={{ padding: '16px 8px 16px 0' }}>
