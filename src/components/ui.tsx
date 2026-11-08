@@ -35,14 +35,15 @@ export function EmptyState({ icon, title, text, action }: { icon: ReactNode; tit
   );
 }
 
-export function Segmented<T extends string>({ value, options, onChange, label }: {
+export function Segmented<T extends string>({ value, options, onChange, label, variant }: {
   value: T;
   options: { value: T; label: ReactNode }[];
   onChange: (v: T) => void;
   label: string;
+  variant?: 'underline';
 }) {
   return (
-    <div className="seg" role="group" aria-label={label}>
+    <div className={variant === 'underline' ? 'underline-options' : 'seg'} role="group" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>
           {o.label}

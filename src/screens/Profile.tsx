@@ -19,7 +19,7 @@ import {disconnectGoogleCalendar, restoreGoogleCalendarConnection, useGoogleCale
 
 type SettingsPage = 'identity'|'time'|'work'|'appearance'|'reminders'|'google'|'account'|'data'|'install';
 const THEME_LABEL = {system:'Automático',light:'Claro',dark:'Escuro'};
-const PAGE_LABEL: Record<SettingsPage,string> = {identity:'Meu perfil',time:'Meu tempo',work:'Horário de trabalho',appearance:'Aparência',reminders:'Lembretes',google:'Google Agenda',account:'Conta e sincronização',data:'Dados e privacidade',install:'Usar como app'};
+const PAGE_LABEL: Record<SettingsPage,string> = {identity:'Meu perfil',time:'Meu tempo',work:'Horário de trabalho',appearance:'Aparência',reminders:'Lembretes',google:'Acessos autorizados',account:'Conta e sincronização',data:'Dados e privacidade',install:'Usar como app'};
 export function workSummary(work: Settings['workSchedule']) {
   if(!work?.enabled)return 'Desativado';
   const days=work.weekdays;
@@ -48,7 +48,6 @@ export function ProfileScreen() {
   useEffect(()=>{if(consumeCalendarSettingsReturn())setPage('google');},[]);
   useEffect(()=>{const refresh=()=>setPermission(reminderPermission());window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);},[]);
   const close=()=>{setPage(undefined);setPermission(reminderPermission());queueMicrotask(()=>{if(trigger.current?.isConnected)trigger.current.focus({preventScroll:true});});};
-  const legacy=useStore(s=>s.tasks.some(t=>!!t.googleEventId||!!t.googleCalendarId)||!!s.googleDeletions?.length);
   return <div className="screen profile-settings">
     <div className="topbar"><div className="row"><button className="icon-btn mobile-only" aria-label="Voltar" onClick={()=>goTo('today')}><Icon name="chevron-left"/></button><h1 className="page-title">Configurações</h1></div></div>
     <button className="profile-identity" onClick={e=>open('identity',e.currentTarget)} aria-label="Editar perfil">
@@ -73,7 +72,7 @@ export function ProfileScreen() {
       {page==='appearance'&&<><p className="small muted">Escolha como o Leve aparece. A mudança é aplicada na hora.</p><Segmented<Settings['theme']> label="Tema" value={settings.theme} onChange={theme=>{actions.updateSettings({theme});toast(`Tema: ${THEME_LABEL[theme]}`);}} options={[{value:'system',label:'Automático'},{value:'light',label:'Claro'},{value:'dark',label:'Escuro'}]}/></>}
       {page==='google'&&<><button className="btn btn-sm btn-ghost" onClick={()=>{setPage('data');queueMicrotask(()=>document.querySelector<HTMLButtonElement>('.settings-data [data-legacy-connections]')?.focus());}}><Icon name="chevron-left" size={16}/>Dados e privacidade</button><GoogleCalendarSection/></>}
       {page==='account'&&(cloudEnabled?<AccountSection onEdit={()=>setPage('identity')}/>:<p className="small muted">Este ambiente salva os dados somente neste aparelho. Não há uma conta conectada para sincronizar.</p>)}
-      {page==='data'&&<DataSettings onClose={close} legacyConnections={gcal.connected||!!gcal.needsRevocation||legacy} onLegacy={()=>setPage('google')}/>}
+      {page==='data'&&<DataSettings onClose={close} legacyConnections={gcal.connected||!!gcal.needsRevocation} onLegacy={()=>setPage('google')}/>}
       {page==='install'&&<InstallSection/>}
     </BottomSheet>}
   </div>;
@@ -84,7 +83,7 @@ function DataSettings({onClose,legacyConnections,onLegacy}:{onClose:()=>void;leg
   return <div className="settings-data">
     {issue&&<div role="note"><p>Há dados locais que precisam de atenção. Use o aviso de recuperação para exportar as versões antes de fechar o app.</p><button className="btn btn-soft" onClick={onClose}>Ver opções de recuperação</button></div>}
     <div className="list">
-      {legacyConnections&&<button className="settings-row" data-legacy-connections onClick={onLegacy}><span>Conexões antigas</span><Icon name="chevron-right" size={18}/></button>}
+      {legacyConnections&&<button className="settings-row" data-legacy-connections onClick={onLegacy}><span>Acessos autorizados</span><Icon name="chevron-right" size={18}/></button>}
       {count>0&&<button className="settings-row" onClick={()=>{if(confirm(`Remover os ${count} itens de exemplo? Seus itens continuam intactos.`)){actions.removeDemo();toast('Exemplos removidos',{label:'Desfazer',run:()=>actions.undo()});}}}><span>Remover dados de exemplo</span><Icon name="trash" size={18}/></button>}
       <button className="settings-row" onClick={()=>{actions.updateSettings({onboarded:false});onClose();}}><span>Ver introdução novamente</span><Icon name="chevron-right" size={18}/></button>
       <a className="settings-row" href="/privacidade.html" target="_blank" rel="noopener">Política de privacidade<Icon name="arrow-right" size={18}/></a>
@@ -297,14 +296,14 @@ function InstallSection() {
 function GoogleCalendarSection() {
  const gcal=useGoogleCalendar();
  const [confirmed,setConfirmed]=useState(false);
- const disconnect=async()=>{if(!confirm('Desconectar Google Agenda? Os eventos já enviados permanecerão no Google.'))return;setConfirmed(await disconnectGoogleCalendar());};
+ const disconnect=async()=>{if(!confirm('Revogar a autorização do Google Agenda? Atividades do Leve e eventos já enviados não serão apagados.'))return;setConfirmed(await disconnectGoogleCalendar());};
  return <div>
-  <p className="small muted">A integração com Google Agenda não faz mais parte desta versão do Leve. Seus compromissos continuam disponíveis aqui. Os eventos enviados anteriormente permanecem no Google Agenda, mas não serão mais atualizados.</p>
-  <p className="small muted" style={{marginTop:12}}>Você pode administrar esses eventos diretamente no Google Agenda. Entrar com Google e sincronizar seus dados entre aparelhos Leve continuam disponíveis.</p>
+  <p className="small muted">Revise a autorização externa associada à sua conta. Revogá-la não apaga atividades do Leve nem eventos já enviados.</p>
+  <p className="small muted" style={{marginTop:12}}>O login e a sincronização dos seus dados no Leve continuam disponíveis.</p>
   {gcal.email&&<p className="small" style={{marginTop:16,overflowWrap:'anywhere'}}>{gcal.email}</p>}
   {confirmed?<p role="status" className="small">Desconexão e revogação confirmadas.</p>:<div className="stack" style={{marginTop:16}}>
-   {gcal.connected&&<button className="btn btn-secondary" disabled={gcal.status==='syncing'} onClick={disconnect}>{gcal.status==='syncing'?'Desconectando…':'Desconectar Google Agenda'}</button>}
-   <button className="btn btn-ghost" disabled={gcal.status==='syncing'} onClick={()=>void restoreGoogleCalendarConnection()}>Verificar vínculo antigo</button>
+   {gcal.connected&&<button className="btn btn-secondary" disabled={gcal.status==='syncing'} onClick={disconnect}>{gcal.status==='syncing'?'Revogando…':'Revogar acesso'}</button>}
+   <button className="btn btn-ghost" disabled={gcal.status==='syncing'} onClick={()=>void restoreGoogleCalendarConnection()}>Verificar autorização</button>
   </div>}
   {gcal.error&&<p role="alert" className="small warn-text" style={{marginTop:12}}>{gcal.error}</p>}
   <p className="small" style={{marginTop:16}}><a href="https://myaccount.google.com/connections" target="_blank" rel="noopener noreferrer">Gerenciar acesso na Conta Google</a></p>
