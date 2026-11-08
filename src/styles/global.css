@@ -223,9 +223,7 @@ p {
 
 /* Subheader sticky dentro da agenda-body (visão dia) */
 .agenda-day-head {
-  position: sticky;
-  top: 0;
-  z-index: 4; /* maior que o .now-line (z-index 3) para que a linha vermelha passe por baixo */
+  position: relative;
   background: var(--bg);
   display: flex;
   justify-content: space-between;
@@ -267,7 +265,32 @@ p {
   display: flex;
   gap: 4px;
   margin-left: auto;
+  flex-shrink: 0;
 }
+
+/* Só a barra de ações acompanha o scroll da página. A Agenda tem corpo próprio. */
+.screen:not(.agenda-screen) > .topbar {
+  position: sticky;
+  top: var(--safe-t);
+  z-index: 10;
+  background: var(--bg);
+  padding: 6px var(--gutter);
+  margin-inline: calc(-1 * var(--gutter));
+  flex-wrap: nowrap;
+}
+.screen:not(.agenda-screen) > .topbar::before {
+  content: ''; position: absolute; bottom: 100%; left: 0; right: 0;
+  height: calc(var(--safe-t) + 1px); background: var(--bg); pointer-events: none;
+}
+.screen .topbar .topbar-actions { flex-wrap: nowrap; }
+.topbar .icon-btn { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+.topbar > .page-title, .topbar > .row { min-width: 0; }
+.topbar .page-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.main :is(button, input, textarea, select, [tabindex], section, header) { scroll-margin-top: calc(var(--safe-t) + 88px); }
+.agenda-body :is(button, input, textarea, select, [tabindex], section, header) { scroll-margin-top: 8px; }
+.agenda-header { background: var(--bg); }
+.agenda-header > .topbar { padding-block: 6px; }
+.agenda-body { min-height: 0; scroll-padding-top: 8px; }
 
 .page-title {
   font-size: var(--fs-xl);

@@ -80,6 +80,7 @@ export function TodayScreen() {
   return (
     <div className="screen">
       <div className="topbar">
+        <span className="section-title">Hoje</span>
         <TopActions />
       </div>
 

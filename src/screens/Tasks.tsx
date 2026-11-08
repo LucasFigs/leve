@@ -7,7 +7,7 @@ import { goTo, openSheet, useUI } from '../store/ui';
 import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
 import { EmptyState } from '../components/ui';
-import { TopActions } from './TopActions';
+import { HeaderCreate, TopActions } from './TopActions';
 import { useClock } from '../hooks/hooks';
 import { emptyCatalogFilters, taskCatalog, type CatalogFilters } from './taskCatalog';
 
@@ -50,7 +50,7 @@ export function TasksScreen() {
   return <div className="screen tasks-screen">
     <div className="topbar">
       <h1 className="page-title">Tarefas</h1>
-      <TopActions hideSearch><button type="button" className="btn btn-sm btn-soft tasks-new" onClick={()=>openSheet({type:'newTask',task:newTask({title:''})})}><Icon name="plus" size={16}/>Nova tarefa</button></TopActions>
+      <TopActions hideSearch><HeaderCreate label="Nova tarefa" onClick={()=>openSheet({type:'newTask',task:newTask({title:''})})}/></TopActions>
     </div>
     <TasksProjectsSwitch current="tasks"/>
     <div className="search-bar tasks-search">
