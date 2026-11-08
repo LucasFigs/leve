@@ -1,45 +1,78 @@
-﻿# Leve
+# Leve
 
-> Tire tudo da cabeça. Organize o que importa e encontre um próximo passo possível para o seu dia.
+**Destrave sua vida, um próximo passo de cada vez.**
 
-Assistente pessoal de tarefas, compromissos e hábitos, desenvolvido com React e TypeScript. O Leve reúne captura em português, planejamento por disponibilidade, recorrências e modo foco em uma PWA com persistência local e sincronização opcional.
+Tire tudo da cabeça. Organize o que importa e encontre um próximo passo possível para o seu dia.
 
-**Estado:** projeto pessoal em desenvolvimento, com testes automatizados e revisão contínua da experiência. Consulte o [guia de publicação](docs/publicacao.md) para validar a versão hospedada antes da divulgação.
+O Leve é um app de organização pessoal para quem concilia tarefas, compromissos, hábitos e projetos e precisa de clareza para começar. Ele conecta suas pendências a um plano para o dia e acompanha a execução, com espaço para ajustar a rota quando a rotina muda.
 
-[Acessar o Leve](https://leve-flame.vercel.app) · [Arquitetura](docs/arquitetura.md) · [Segurança](docs/seguranca.md)
+[**Experimentar o Leve**](https://leve-flame.vercel.app) · [**Explorar o código**](https://github.com/LucasFigs/leve)
 
-## O que o Leve faz
+*Projeto pessoal em desenvolvimento. A versão hospedada e os serviços opcionais ainda exigem validação contínua; não há garantia de homologação completa para todos os dispositivos.*
 
-- Captura tarefas em linguagem natural em português, como `Enviar relatório amanhã às 14h`.
-- Organiza tarefas, compromissos, projetos e hábitos em um só lugar.
-- Mantém a lista do dia enxuta, com detalhes e passos disponíveis ao abrir cada tarefa.
-- Acompanha hábitos em um calendário de realizações, com histórico em quadradinhos, cores e ícones personalizáveis.
-- Planeja o dia e a semana considerando horários, duração e disponibilidade.
-- Acompanha recorrências, prioridades e execução com modo foco/Pomodoro.
-- Funciona no navegador e pode ser instalado como PWA.
-- Oferece sincronização entre dispositivos via Supabase e lembretes push quando configurados.
+## Conheça o Leve
 
-O assistente usa regras e heurísticas locais. Não depende de uma API de IA generativa. A Agenda própria organiza os compromissos registrados no Leve.
+Pensado para o uso cotidiano no celular, o Leve é uma aplicação web responsiva: pode ser instalado como PWA em navegadores compatíveis ou acessado pelo computador.
 
-A integração Google Agenda foi retirada do MVP. O login Google continua independente, solicitando apenas identidade. Vínculos antigos têm um caminho de desconexão; eventos enviados anteriormente permanecem no Google. Veja o [plano de transição](docs/google-agenda.md).
+![Leve no computador com navegação lateral, próxima ação e Agenda do dia; ao lado, a tela Hoje na proporção de smartphone.](docs/assets/readme/leve-mobile-web.webp)
 
-## Tecnologias e decisões
+As imagens mostram o aplicativo real com uma rotina e um histórico inteiramente fictícios.
 
-| Área | Implementação |
-| --- | --- |
-| Interface | React 18 e TypeScript |
-| Build e desenvolvimento | Vite |
-| Regras do produto | Módulos de domínio independentes da interface |
-| Persistência | Armazenamento no navegador, com uso offline |
-| Nuvem opcional | Supabase Auth, Postgres com RLS e Realtime |
-| Integrações | Web Push; encerramento de vínculos Calendar legados |
-| Qualidade | Vitest, testes SQL em PostgreSQL isolado e GitHub Actions |
+## Da pendência à ação
 
-Leia a [arquitetura](docs/arquitetura.md) para entender o fluxo entre essas partes.
+**Capturar → Organizar → Planejar → Começar → Ajustar.**
 
-## Executar localmente
+1. **Capturar:** registre o que está na cabeça sem precisar decidir tudo naquele momento.
+2. **Organizar:** escolha prioridades, categorias e projetos para dar um lugar às pendências.
+3. **Planejar:** distribua atividades considerando horários, duração estimada e disponibilidade configurada.
+4. **Começar:** veja uma próxima ação, entenda a recomendação e entre em modo Foco.
+5. **Ajustar:** reagende ou reorganize o plano quando o dia tomar outro rumo.
 
-Use Node.js **22.12 ou superior**, compatível com as dependências, e npm.
+![Tela Hoje com a ação Preparar relatório, o próximo passo e a estimativa do dia; Agenda em modo Semana com tarefas e compromissos planejados.](docs/assets/readme/planejar-comecar.webp)
+
+## Funcionalidades que fazem diferença
+
+### Menos esforço para registrar e encontrar
+
+Escreva uma frase como **“Enviar relatório amanhã às 14h”**. A captura reconhece informações em português e mostra sugestões de dia e horário que você pode revisar. O Inbox guarda o que ainda precisa ser organizado; prioridades, categorias, busca e filtros ajudam a encontrar tarefas abertas, planejadas e concluídas.
+
+![Inbox interpretando Enviar relatório amanhã às 14h e guardando três capturas; catálogo de Tarefas com prioridades, categorias e filtros.](docs/assets/readme/capturar-organizar.webp)
+
+### Um plano que considera o seu tempo
+
+A tela **Hoje** reúne a próxima ação e o resumo do dia. O planejamento considera as durações estimadas e os períodos disponíveis; a **Agenda**, em dia, semana ou mês, ajuda a enxergar a distribuição das atividades.
+
+As estimativas usam **os itens registrados no Leve e a disponibilidade configurada**. Compromissos externos não são importados. Se os planos mudarem, você pode reagendar tarefas e escolher o alcance das alterações em atividades recorrentes: uma ocorrência, as seguintes ou a série inteira.
+
+### Continuidade para o que importa
+
+No **modo Foco**, acompanhe a tarefa e seus passos, com Pomodoro opcional. Em **Hábitos**, registre realizações e visualize o histórico ao longo dos dias, com cores e ícones personalizáveis. Em **Projetos**, reúna as atividades de um objetivo, como organizar uma viagem, e acompanhe as pendências e o progresso das tarefas pontuais.
+
+![Modo Foco no passo Reunir os dados principais, com Pomodoro e checklist; tela Hábitos com históricos fictícios de autocuidado e leitura.](docs/assets/readme/foco-habitos.webp)
+
+## Um exemplo no dia a dia
+
+Imagine precisar entregar um relatório, marcar uma consulta, organizar uma viagem e manter um hábito de leitura. Você pode guardar a consulta no Inbox, reunir as etapas da viagem em um projeto e planejar um período para o relatório. Na hora de agir, o próximo passo pode ser apenas **reunir os dados principais**. Se surgir um imprevisto, ajuste o plano e continue de onde for possível.
+
+O propósito é diminuir a sobrecarga da organização e ajudar a transformar intenção em ação.
+
+## No celular e no computador
+
+O Leve funciona no navegador e pode ser instalado como PWA, conforme o suporte do aparelho. Após carregar os arquivos necessários, o armazenamento local permite reabrir e trabalhar offline, sujeito à disponibilidade e ao espaço do navegador. Preserve uma cópia de recuperação quando houver aviso de falha; limpar os dados do site pode apagar registros locais.
+
+A **sincronização entre dispositivos** é opcional e depende de conta, Supabase configurado e conexão para confirmar os envios. **Lembretes push** também exigem infraestrutura configurada, permissão e suporte do navegador/dispositivo. A entrega de notificações e a recuperação de sessão precisam ser validadas no ambiente utilizado.
+
+## Para desenvolver
+
+### Tecnologias e organização
+
+React 18, TypeScript e Vite compõem a interface. As regras de captura, planejamento, recorrência e recomendação ficam em módulos de domínio executados no navegador. O assistente usa **regras e heurísticas locais**, sem API de IA generativa.
+
+O app utiliza persistência local, PWA e, quando configurado, Supabase Auth, Postgres com RLS e Realtime. A validação inclui Vitest, testes SQL em PostgreSQL isolado e GitHub Actions. Consulte a [arquitetura](docs/arquitetura.md) para conhecer os módulos e os limites da sincronização.
+
+### Executar localmente
+
+Use **Node.js 22.12 ou superior** e npm. O campo `engines` também aceita a linha 20 a partir de 20.19.
 
 ```bash
 git clone https://github.com/LucasFigs/leve.git
@@ -48,79 +81,40 @@ npm ci
 npm run dev
 ```
 
-Abra o endereço informado pelo Vite. Sem configurar o Supabase, o aplicativo funciona localmente e salva os dados no navegador. Nenhuma credencial é necessária para esse modo.
+Abra o endereço informado pelo Vite. **Sem configurar Supabase, o app funciona localmente e salva no navegador, sem credenciais.** Esse modo não inclui sincronização entre dispositivos nem push de servidor. O servidor de desenvolvimento escuta apenas no computador local; para teste intencional na rede doméstica, use `npm run dev -- --host 0.0.0.0` e encerre-o ao terminar.
 
-O servidor de desenvolvimento escuta apenas no computador local. Para um teste intencional na rede doméstica, use `npm run dev -- --host 0.0.0.0` e encerre o servidor ao terminar.
+### Verificações locais
 
-## Configuração opcional
-
-Copie `.env.example` para `.env.local` e preencha somente as integrações que pretende usar. Não versione o arquivo preenchido.
-
-| Variável pública | Uso |
-| --- | --- |
-| `VITE_SUPABASE_URL` | URL do projeto Supabase |
-| `VITE_SUPABASE_ANON_KEY` | Chave anon/publishable; acesso protegido pelas políticas do banco |
-| `VITE_GOOGLE_CLIENT_ID` | Legado Calendar; não habilita novas conexões no MVP |
-| `VITE_VAPID_PUBLIC_KEY` | Chave pública das notificações push |
-
-Variáveis `VITE_*` entram no frontend. Os demais segredos do template são usados pelos scripts/servidor e não devem ser importados para a Vercel nem publicados.
-
-### Supabase
-
-Em um projeto próprio, configure `SUPABASE_ACCESS_TOKEN` e `APP_URL` e execute `npm run setup:supabase`. O script aplica o schema e políticas RLS e ajusta autenticação, URLs de retorno, confirmação de e-mail e política de senha. Para habilitar login Google, preencha também `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` e configure o cliente no Google Cloud.
-
-**Esse comando altera o projeto remoto configurado.** Em um ambiente existente, faça backup e revise os dados antes de executar. Um deploy do frontend não aplica essas alterações.
-
-### Google Agenda e push
-
-Google Agenda não oferece novas conexões ou sincronização nesta versão. O backend deve ser atualizado antes do frontend para bloquear clientes antigos; veja o [encerramento e plano operacional](docs/google-agenda.md). O login Google não é removido.
-
-Para push, `npm run setup:push` gera as chaves necessárias, aplica tabelas, publica a função e agenda o processamento no projeto Supabase. Mantenha a chave privada e o segredo do cron fora do frontend. Depois configure apenas `VITE_VAPID_PUBLIC_KEY` na Vercel e ative os lembretes no aparelho.
-
-Notificações dependem das permissões e do suporte do navegador/dispositivo. Use `npm run setup:push -- --bundle` para gerar somente o pacote local da função, sem publicar ou alterar o Supabase.
-
-## Comandos
-
-| Comando | Resultado |
-| --- | --- |
-| `npm run dev` | Servidor local |
-| `npm test` | Testes de domínio, integrações e regressões de segurança |
-| `npm run build` | Verificação TypeScript e build em `dist/` |
-| `npm run preview` | Prévia local do build |
-| `npm run test:database` | Testes SQL em container temporário; Windows/PowerShell e Docker |
-| `npm audit` | Consulta de vulnerabilidades conhecidas nas dependências |
-| `npm run check:secrets -- --dist --history` | Verificação de padrões de segredos, bundle e histórico Git |
-| `npm run setup:push -- --bundle` | Regeneração local do worker |
-
-O runner SQL usa PostgreSQL 16 com papéis e `auth.uid()` de teste. Ele verifica políticas, permissões, validações e quotas; não testa os serviços Auth/Realtime, cron nem a entrega real de push.
-
-## Estrutura
-
-```text
-src/
-  domain/       Regras de negócio e validação
-  services/     Assistente local e integrações
-  store/        Estado, persistência e sincronização
-  screens/      Telas do produto
-  components/   Componentes reutilizáveis
-  sheets/       Painéis de visualização e edição
-supabase/
-  functions/    Integração Google Agenda e worker de lembretes
-  tests/        Isolamento e validação SQL
-scripts/        Preparação e verificação
-public/         PWA e páginas institucionais
-docs/           Arquitetura, segurança e publicação
+```bash
+npm test
+npm run build
+npm audit
+npm run check:secrets -- --dist --history
 ```
 
-## Segurança e contribuição
+`npm run preview` abre a prévia local do build. Para verificações sem carregar `.env*`, defina `LEVE_ISOLATED_CHECKS=1` antes de testar ou compilar; o build isolado não deve substituir o build configurado de produção. No PowerShell, use `$env:LEVE_ISOLATED_CHECKS='1'`; se necessário, chame `npm.cmd`.
 
-- [Controles e limitações](docs/seguranca.md)
-- [Relatar uma vulnerabilidade](SECURITY.md)
-- [Contribuir e validar mudanças](CONTRIBUTING.md)
-- [Preparar o repositório e publicar](docs/publicacao.md)
+Com PowerShell e Docker disponíveis, `npm run test:database` executa as verificações em PostgreSQL 16 descartável. Elas cobrem políticas, validações e quotas, mas não substituem testes reais de Auth, Realtime, cron ou entrega de push. `npm run setup:push -- --bundle` gera apenas o pacote local do worker, sem publicar.
+
+### Configuração opcional e segurança
+
+Para um ambiente próprio com serviços externos, use `.env.example` como referência e preencha somente o necessário em `.env.local`, que não deve ser versionado. As variáveis públicas de frontend são `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e, para push, `VITE_VAPID_PUBLIC_KEY`. `VITE_GOOGLE_CLIENT_ID` permanece como campo legado; não habilita Calendar nesta versão.
+
+**Variáveis `VITE_*` entram no bundle.** Tokens administrativos, client secrets, chave privada VAPID e segredo do cron pertencem ao servidor/scripts. Não importe o `.env.local` inteiro para a Vercel. Chaves públicas não substituem autorização no banco.
+
+Os scripts `setup:supabase`, `setup:push` e `setup:google -- --apply` alteram serviços remotos; **não são parte da execução local comum**. Não reaplique configurações em um ambiente existente sem revisar destino, efeitos e backup. O deploy Vercel não aplica SQL nem publica funções Supabase.
+
+Para configurar e validar infraestrutura, consulte o [guia de publicação](docs/publicacao.md), os [controles e limites de segurança](docs/seguranca.md) e o [checklist de validação](docs/checklist-publicacao.md). A antiga integração Google Agenda está em encerramento; o [plano técnico de transição](docs/google-agenda.md) preserva o login Google de identidade e detalha a ativação do backend e os cuidados com clientes antigos.
+
+Testes e verificações de dependências não garantem ausência de vulnerabilidades. Confirme os controles e as versões efetivamente publicados antes de disponibilizar uma instância a outras pessoas.
+
+### Contribuir e acompanhar
+
+- [Como contribuir e validar mudanças](CONTRIBUTING.md)
+- [Relatar uma vulnerabilidade de forma privada](SECURITY.md)
+- [Arquitetura e responsabilidades dos módulos](docs/arquitetura.md)
+- [Jornada essencial do produto](docs/jornada-essencial.md)
 - [Melhorias de experiência](docs/melhorias-experiencia.md)
 - [Auditoria de integridade e confiabilidade](docs/auditoria-evolucao.md)
-- [Jornada essencial](docs/jornada-essencial.md)
-- [Checklist de validação e rollout](docs/checklist-publicacao.md)
 
-Este projeto evolui com testes e revisão. Nenhuma dessas verificações garante ausência de vulnerabilidades. Use dados fictícios nas demonstrações e confirme que o ambiente hospedado recebeu as mudanças antes de divulgar uma nova revisão.
+O Leve segue em evolução, com o objetivo de tornar mais simples encontrar e dar o próximo passo.
