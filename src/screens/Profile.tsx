@@ -61,7 +61,6 @@ export function ProfileScreen() {
       <SettingsRow title="Lembretes" icon="bell" value={remindersSummary(settings.reminders,permission)} onClick={el=>open('reminders',el)}/>
     </div></section>
     <section className="profile-settings-group" aria-labelledby="profile-connections"><h2 id="profile-connections">Conexões e dados</h2><div className="profile-settings-list">
-      {(gcal.connected||gcal.needsRevocation||legacy)&&<SettingsRow title="Google Agenda" icon="calendar" value="Integração descontinuada · gerenciar acesso" onClick={el=>open('google',el)}/>}
       <SettingsRow title="Conta e sincronização" icon="cloud" value={cloudEnabled?`${STATUS_LABEL[status]}${email?` · ${email}`:''}`:'Dados neste aparelho · sem nuvem'} attention={status==='error'} onClick={el=>open('account',el)}/>
       <SettingsRow title="Dados e privacidade" icon="folder" value={issue?'Recuperação de dados requer atenção':'Gerenciamento, privacidade e termos'} attention={!!issue} onClick={el=>open('data',el)}/>
     </div></section>
@@ -72,19 +71,20 @@ export function ProfileScreen() {
     {page==='reminders'&&<ReminderSettingsSheet onClose={close}/>}
     {page&&['appearance','google','account','data','install'].includes(page)&&<BottomSheet key={page} className="settings-sheet" title={PAGE_LABEL[page]} onClose={close}>
       {page==='appearance'&&<><p className="small muted">Escolha como o Leve aparece. A mudança é aplicada na hora.</p><Segmented<Settings['theme']> label="Tema" value={settings.theme} onChange={theme=>{actions.updateSettings({theme});toast(`Tema: ${THEME_LABEL[theme]}`);}} options={[{value:'system',label:'Automático'},{value:'light',label:'Claro'},{value:'dark',label:'Escuro'}]}/></>}
-      {page==='google'&&<GoogleCalendarSection/>}
+      {page==='google'&&<><button className="btn btn-sm btn-ghost" onClick={()=>{setPage('data');queueMicrotask(()=>document.querySelector<HTMLButtonElement>('.settings-data [data-legacy-connections]')?.focus());}}><Icon name="chevron-left" size={16}/>Dados e privacidade</button><GoogleCalendarSection/></>}
       {page==='account'&&(cloudEnabled?<AccountSection onEdit={()=>setPage('identity')}/>:<p className="small muted">Este ambiente salva os dados somente neste aparelho. Não há uma conta conectada para sincronizar.</p>)}
-      {page==='data'&&<DataSettings onClose={close}/>}
+      {page==='data'&&<DataSettings onClose={close} legacyConnections={gcal.connected||!!gcal.needsRevocation||legacy} onLegacy={()=>setPage('google')}/>}
       {page==='install'&&<InstallSection/>}
     </BottomSheet>}
   </div>;
 }
-function DataSettings({onClose}:{onClose:()=>void}) {
+function DataSettings({onClose,legacyConnections,onLegacy}:{onClose:()=>void;legacyConnections:boolean;onLegacy:()=>void}) {
   const count=useStore(s=>s.tasks.filter(t=>t.id.startsWith('demo-')).length+s.projects.filter(p=>p.id.startsWith('demo-')).length);
   const issue=useStorageIssue();
   return <div className="settings-data">
     {issue&&<div role="note"><p>Há dados locais que precisam de atenção. Use o aviso de recuperação para exportar as versões antes de fechar o app.</p><button className="btn btn-soft" onClick={onClose}>Ver opções de recuperação</button></div>}
     <div className="list">
+      {legacyConnections&&<button className="settings-row" data-legacy-connections onClick={onLegacy}><span>Conexões antigas</span><Icon name="chevron-right" size={18}/></button>}
       {count>0&&<button className="settings-row" onClick={()=>{if(confirm(`Remover os ${count} itens de exemplo? Seus itens continuam intactos.`)){actions.removeDemo();toast('Exemplos removidos',{label:'Desfazer',run:()=>actions.undo()});}}}><span>Remover dados de exemplo</span><Icon name="trash" size={18}/></button>}
       <button className="settings-row" onClick={()=>{actions.updateSettings({onboarded:false});onClose();}}><span>Ver introdução novamente</span><Icon name="chevron-right" size={18}/></button>
       <a className="settings-row" href="/privacidade.html" target="_blank" rel="noopener">Política de privacidade<Icon name="arrow-right" size={18}/></a>

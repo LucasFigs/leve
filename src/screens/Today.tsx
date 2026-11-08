@@ -249,8 +249,14 @@ function DayPulse({ doneToday, totalToday }: { doneToday: number; totalToday: nu
 }
 /** Atrasadas: uma linha com ação rápida; a lista abre só se você quiser. */
 function OverdueCard() {
-  const { overdue } = useTodayContext();
+  const { overdue, today } = useTodayContext();
   const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState<string>();
+  const resolve = (id: string, mode: 'today' | 'undated') => {
+    if (!actions.resolveOverdue(id, mode)) return;
+    setMenu(undefined);
+    toast(mode === 'today' ? 'Planejada para hoje · prazo preservado' : 'Dia planejado retirado · prazo preservado', {label:'Desfazer',run:()=>actions.undo()});
+  };
   return (
     <div className="nudge" role="note">
       <span className="nudge-icon yellow">
@@ -272,7 +278,18 @@ function OverdueCard() {
         {open && (
           <div className="list" style={{ marginTop: 10 }}>
             {overdue.map((t) => (
-              <TaskCard key={t.id} task={t} showDate showStart compact />
+              <div key={t.id} className="overdue-item">
+                <TaskCard task={t} showDate compact exitOnDone={false}/>
+                {!t.seriesId && <div className="overdue-actions">
+                  <button className="btn btn-sm btn-soft" onClick={()=>resolve(t.id,'today')} aria-label={`Para hoje: ${t.title}`}>Para hoje</button>
+                  <button className="icon-btn sm" aria-label={`Mais opções: ${t.title}`} aria-expanded={menu===t.id} onClick={()=>setMenu(menu===t.id?undefined:t.id)}><Icon name="more" size={18}/></button>
+                  {menu===t.id&&<div className="overdue-options" role="group" aria-label={`Resolver ${t.title}`} onKeyDown={e=>{if(e.key==='Escape'){setMenu(undefined);e.currentTarget.parentElement?.querySelector<HTMLButtonElement>('[aria-expanded]')?.focus();}}}>
+                    <button className="btn btn-sm btn-ghost" onClick={()=>openSheet({type:'replan',id:t.id,date:t.date??today})}>Reagendar</button>
+                    <button className="btn btn-sm btn-ghost" onClick={()=>resolve(t.id,'undated')}>Retirar dia planejado</button>
+                    <button className="btn btn-sm btn-ghost" onClick={()=>openSheet({type:'task',id:t.id})}>Abrir detalhes</button>
+                  </div>}
+                </div>}
+              </div>
             ))}
           </div>
         )}

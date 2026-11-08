@@ -8,8 +8,9 @@
  */
 import { useMemo, useRef, useEffect, useState } from 'react';
 import type { Task } from "../domain/types";
+import { habitEntryForDate, habitHistory, habitRoot } from '../domain/habitHistory';
 import { todayISO } from "../domain/dates";
-import { nextOccurrence, occursOn } from "../domain/recurrence";
+import { occursOn } from "../domain/recurrence";
 import { actions, newTask, useStore } from "../store/store";
 import { openSheet, toast } from "../store/ui";
 import { Icon } from "../components/Icon";
@@ -39,9 +40,7 @@ export function HabitsScreen() {
         (t) =>
           t.kind === "habit" &&
           t.status !== "archived" &&
-          t.status !== "done" &&
-          t.recurrence &&
-          nextOccurrence(t.recurrence, today, t.skipDates),
+          habitRoot(t, tasks).id === t.id,
       )
       .sort((a, b) => {
         // Não concluídos hoje primeiro, depois por título
@@ -95,7 +94,7 @@ export function HabitsScreen() {
       ) : (
         <div className="habit-list">
           {habits.map((task) => (
-            <HabitCard key={task.id} task={task} today={today} />
+            <HabitCard key={task.id} task={task} today={today} tasks={tasks} />
           ))}
         </div>
       )}
@@ -110,22 +109,27 @@ export function HabitsScreen() {
 function HabitCard({
   task,
   today,
+  tasks,
 }: {
   task: Task;
   today: string;
+  tasks: Task[];
 }) {
+  const history = useMemo(() => habitHistory(task, tasks), [task, tasks]);
+  const entry = habitEntryForDate(task, tasks, today);
   const theme = useMemo(() => getHabitTheme(task), [task]);
   const icon = useMemo(() => getHabitIcon(task), [task]);
-  const streak = useMemo(() => getHabitStreak(task, today), [task, today]);
+  const streak = useMemo(() => getHabitStreak(history, today), [history, today]);
   const target = useMemo(() => getHabitTargetLabel(task), [task]);
-  const isDoneToday = task.doneDates?.includes(today) ?? false;
+  const isDoneToday = history.doneDates?.includes(today) ?? false;
 
   const toggle = () => {
+    if (!entry) return;
     if (isDoneToday) {
-      actions.reopen(task.id, today);
+      actions.reopen(entry.id, today);
       toast("Desmarcado", { label: "Desfazer", run: () => actions.undo() });
     } else {
-      completeWithFeedback(task.id, today);
+      completeWithFeedback(entry.id, today);
     }
   };
 
@@ -160,6 +164,7 @@ function HabitCard({
         </button>
         <button
           className={`habit-check-btn${isDoneToday ? " done" : ""}`}
+          disabled={!entry}
           onClick={toggle}
           aria-label={
             isDoneToday
@@ -182,7 +187,7 @@ function HabitCard({
         onClick={() => openSheet({ type: "habitCalendar", id: task.id })}
         aria-label={`Abrir calendário de ${task.title}`}
       >
-        <HabitGrid task={task} today={today} />
+        <HabitGrid task={history} today={today} />
       </button>
 
       {/* Footer stats */}

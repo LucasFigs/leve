@@ -29,7 +29,7 @@ beforeEach(()=>{
 });
 afterEach(()=>{act(()=>root.unmount());host.remove();localRepository.clear();vi.clearAllTimers();vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks();});
 const dialog=()=>host.querySelector<HTMLElement>('[role="dialog"]')!;
-function open(label:string){act(()=>{const b=Array.from(host.querySelectorAll<HTMLButtonElement>('.profile-setting-row')).find(e=>e.querySelector('.profile-setting-title')?.textContent===label)!;b.focus();b.click();});}
+function open(label:string){if(label==='Google Agenda'){open('Dados e privacidade');act(()=>host.querySelector<HTMLButtonElement>('[data-legacy-connections]')!.click());return;}act(()=>{const b=Array.from(host.querySelectorAll<HTMLButtonElement>('.profile-setting-row')).find(e=>e.querySelector('.profile-setting-title')?.textContent===label)!;b.focus();b.click();});}
 function click(label:string){act(()=>Array.from((dialog()??host).querySelectorAll<HTMLButtonElement>('button')).find(e=>e.textContent===label)!.click());}
 function change(el:HTMLInputElement,value:string){act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});}
 function close(){act(()=>{dialog().querySelector<HTMLButtonElement>('[aria-label="Fechar"]')!.click();vi.advanceTimersByTime(201);});}
@@ -142,3 +142,9 @@ it('troca de conta fecha gerenciamento e remove metadados da conta anterior',()=
 it('IDs antigos continuam oferecendo gerenciamento mesmo offline',()=>{
  const task={id:'legacy',title:'Antiga',kind:'event' as const,status:'active' as const,googleEventId:'fixture-event',subtasks:[],postponed:0,createdAt:1,updatedAt:1};act(()=>replaceState({...getState(),tasks:[task]}));fixture.google={...fixture.google,connected:false,status:'error',error:'Não foi possível consultar o vínculo antigo.'};emit();open('Google Agenda');expect(dialog().querySelector('[role=alert]')!.textContent).toContain('consultar');expect(dialog().textContent).not.toContain('Reconectar');
 });
+it('vínculo antigo só aparece dentro de Dados e privacidade e permite voltar com foco',async()=>{
+ fixture.google={...fixture.google,connected:true};emit();expect(host.querySelector('.profile-settings-group')?.textContent).not.toContain('Google Agenda');
+ expect([...host.querySelectorAll('.profile-setting-title')].map(e=>e.textContent)).not.toContain('Google Agenda');
+ open('Dados e privacidade');expect(dialog().textContent).toContain('Conexões antigas');act(()=>host.querySelector<HTMLButtonElement>('[data-legacy-connections]')!.click());expect(dialog().textContent).toContain('Desconectar Google Agenda');click('Dados e privacidade');await act(async()=>{await Promise.resolve();});expect(document.activeElement).toBe(host.querySelector('[data-legacy-connections]'));
+});
+it('conta sem vínculo não oferece Conexões antigas',()=>{open('Dados e privacidade');expect(host.querySelector('[data-legacy-connections]')).toBeNull();});

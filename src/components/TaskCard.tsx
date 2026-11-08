@@ -40,7 +40,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
   const isDone = done ?? (task.recurrence ? !!task.doneDates?.includes(occurrence) || !!task.missedDates?.includes(occurrence) : task.status === 'done');
   const isEvent = task.kind === 'event';
   const isHabit = task.kind === 'habit';
-  const overdue = !isDone && !task.recurrence && ((task.date && task.date < today) || (task.due && task.due < today));
+  const overdue = !isHabit && !isDone && !task.recurrence && ((task.date && task.date < today) || (task.due && task.due < today));
   const subDone = task.subtasks.filter((s) => s.done).length;
   const missed = task.recurrence ? !!task.missedDates?.includes(occurrence) : task.status === 'done' && !!task.missed;
 
@@ -154,7 +154,7 @@ export function TaskCard({ task, date, done, showTime, showDate, showProject = t
 
 function CatalogMetadata({task,project,date,ended,isDone}:{task:Task;project?:Project;date?:string;ended:boolean;isDone:boolean}) {
   const scheduled=date??task.date;
-  const late=!isDone&&!task.recurrence&&((task.date&&task.date<todayISO())||(task.due&&task.due<todayISO()));
+  const late=task.kind!=='habit'&&!isDone&&!task.recurrence&&((task.date&&task.date<todayISO())||(task.due&&task.due<todayISO()));
   const category=task.category?CATEGORY_MAP[task.category]:undefined;
   return <div className="task-meta catalog-meta">
     {task.status==='archived'?<span><Icon name="archive" size={12}/>Arquivada</span>:ended?<span>Série encerrada</span>:task.status==='inbox'?<span><Icon name="inbox" size={12}/>Captura do Inbox</span>:<span className={late?'warn':''}><Icon name="calendar" size={12}/>{scheduled?formatDay(scheduled):'Sem data'}{task.time?` · ${task.time}`:''}</span>}

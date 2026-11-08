@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { todayISO } from '../domain/dates';
+import { habitEntryForDate, habitHistory } from '../domain/habitHistory';
 import {
   buildHabitGrid,
   buildMonthCalendar,
@@ -32,7 +33,9 @@ const MONTH_NAMES = [
 ];
 
 export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) {
-  const task = useStore((s) => s.tasks.find((t) => t.id === id));
+  const tasks = useStore(s => s.tasks);
+  const selected = tasks.find(t => t.id === id);
+  const task = useMemo(() => selected ? habitHistory(selected, tasks) : undefined, [selected, tasks]);
   const today = todayISO();
 
   const todayDate = useMemo(() => new Date(today + 'T12:00:00'), [today]);
@@ -53,10 +56,12 @@ export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) 
 
   const toggleDay = (dateStr: string, isFuture: boolean) => {
     if (isFuture) return;
+    const entry = habitEntryForDate(task, tasks, dateStr);
+    if (!entry) return;
     if (doneDates.has(dateStr)) {
-      actions.reopen(task.id, dateStr);
+      actions.reopen(entry.id, dateStr);
     } else {
-      actions.complete(task.id, dateStr);
+      actions.complete(entry.id, dateStr);
     }
   };
 
@@ -93,7 +98,7 @@ export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) 
         <div className="row" style={{ gap: 6 }}>
           <button
             className="icon-btn sm"
-            onClick={() => openSheet({ type: 'task', id: task.id, date: date ?? today, mode: 'edit' }, { stack: true })}
+            onClick={() => openSheet({ type: 'task', id, date: date ?? selected?.date ?? today, mode: 'edit' }, { stack: true })}
             aria-label="Editar hábito"
             title="Editar hábito"
           >
@@ -102,9 +107,9 @@ export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) 
           <button
             className="icon-btn sm btn-danger"
             onClick={() => {
-              if (confirm(`Excluir o hábito “${task.title}” e todo o seu histórico?`)) {
+              if (confirm(selected?.seriesId ? `Excluir a ocorrência modificada “${selected.title}”?` : `Excluir o hábito “${task.title}” e todo o seu histórico?`)) {
                 closeSheet();
-                removeWithFeedback(task.id);
+                removeWithFeedback(id);
               }
             }}
             aria-label="Excluir hábito"
@@ -167,7 +172,7 @@ export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) 
               <div key={wi} className="habit-cal-row">
                 {week.map((day) => {
                   const isDone = doneDates.has(day.date);
-                  const isClickable = !day.isFuture;
+                  const isClickable = !day.isFuture && !!habitEntryForDate(task, tasks, day.date);
 
                   let cellClass = 'habit-cal-cell';
                   if (!day.isCurrentMonth) cellClass += ' habit-cal-other-month';
@@ -237,7 +242,7 @@ export function HabitCalendarSheet({ id, date }: { id: string; date?: string }) 
           </div>
         </div>
 
-        <p className="habit-cal-hint">Toque em qualquer dia para marcar ou desmarcar como feito</p>
+        <p className="habit-cal-hint">Toque em um dia programado para marcar ou desmarcar como feito.{!task.recurrence && ' Este hábito não tem frequência definida. Use Editar hábito para revisar.'}</p>
       </div>
     </BottomSheet>
   );

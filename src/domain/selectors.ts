@@ -47,7 +47,7 @@ export function sortItems(items: DayItem[]): DayItem[] {
 export function overdueTasks(tasks: Task[], today: string): Task[] {
   return tasks.filter(
     (t) =>
-      t.status === 'active' && !t.recurrence && t.kind !== 'event' &&
+      t.status === 'active' && !t.recurrence && t.kind === 'task' &&
       ((t.date && t.date < today) || (!t.date && t.due && t.due < today)),
   );
 }
