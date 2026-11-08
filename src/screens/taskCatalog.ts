@@ -54,7 +54,7 @@ export function taskCatalog(tasks: Task[], filters: CatalogFilters, today: strin
     else if (closed) key='done';
     else if (task.status==='inbox') key='inbox';
     else if (task.recurrence) key='recurring';
-    else if (task.date && task.date<today || task.due && task.due<today) key='attention';
+    else if (task.kind !== 'habit' && (task.date && task.date<today || task.due && task.due<today)) key='attention';
     else key=task.date?'planned':'undated';
     byKey[key].rows.push({task,date,ended});
   }
