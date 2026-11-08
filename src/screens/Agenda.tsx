@@ -6,7 +6,7 @@ import { itemsForDate } from '../domain/selectors';
 import type { DayItem } from '../domain/types';
 import { useClock, useDay } from '../hooks/hooks';
 import { useStore } from '../store/store';
-import { openSheet, setUI, useUI, type AgendaView } from '../store/ui';
+import { getUI, openSheet, setUI, useUI, type AgendaView } from '../store/ui';
 import { DayTimeline } from '../components/DayTimeline';
 import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
@@ -41,6 +41,9 @@ export function AgendaScreen() {
           <TopActions />
         </div>
 
+      </div>
+      <div className="agenda-body">
+
         <Segmented<AgendaView>
           variant="underline"
           label="Visualização"
@@ -70,12 +73,8 @@ export function AgendaScreen() {
           )}
         </div>
 
-        {/* Strip de dias fixo somente na visão semana */}
+        {/* Controles secundários rolam com a visão selecionada. */}
         {view === 'week' && <WeekStrip date={date} />}
-      </div>
-
-      {/* ── Área scrollável ── */}
-      <div className="agenda-body">
         {view === 'day' && <DayView date={date} />}
         {view === 'week' && <WeekAccordions date={date} />}
         {view === 'month' && <MonthView date={date} onPick={(x) => { setDate(x); setView('day'); }} />}
@@ -195,6 +194,7 @@ function WeekAccordions({ date }: { date: string }) {
 
   // Ao mudar de semana, abre hoje (se estiver na semana) ou fecha tudo
   useEffect(() => {
+    if (getUI().agendaProfileRestore) { setUI({agendaProfileRestore:false}); return; }
     const todayInWeek = days.some((d) => d.date === today);
     setUI({ agendaOpenDay: todayInWeek ? today : (days[0]?.date ?? null) });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,11 +221,12 @@ function WeekAccordionDay({ d, items, today, isOpen, setOpenDay }: { d: string, 
   const bodyId = useId();
 
   useEffect(() => {
-    if (isOpen && ref.current) {
+    if (isOpen && ref.current && !getUI().agendaProfileRestore) {
       // Pequeno atraso para a animação começar e o scroll calcular a posição certa
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

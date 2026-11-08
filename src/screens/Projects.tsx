@@ -8,7 +8,7 @@ import { QuickAdd } from '../components/QuickAdd';
 import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
 import { EmptyState, ProgressBar } from '../components/ui';
-import { TopActions } from './TopActions';
+import { HeaderCreate, TopActions } from './TopActions';
 import { TasksProjectsSwitch } from './Tasks';
 import { projectOverview } from './projectOverview';
 import type { CatalogRow } from './taskCatalog';
@@ -36,7 +36,7 @@ function ProjectList() {
   return <div className="screen projects-screen">
     <div className="topbar">
       <h1 className="page-title" tabIndex={-1}>Projetos</h1>
-      <TopActions><button className="btn btn-sm btn-soft" onClick={()=>openSheet({type:'project'})} aria-label="Novo projeto"><Icon name="plus" size={16}/>Novo projeto</button></TopActions>
+      <TopActions><HeaderCreate label="Novo projeto" onClick={()=>openSheet({type:'project'})}/></TopActions>
     </div>
     <TasksProjectsSwitch current="projects"/>
     {!cards.length ? <EmptyState icon={<Icon name="folder" size={28}/>} title="Nenhum projeto ainda." text="Reúna os próximos passos de um objetivo." action={<button className="btn btn-primary" onClick={()=>openSheet({type:'project'})}><Icon name="plus" size={18}/>Novo projeto</button>}/>
@@ -69,7 +69,7 @@ function ProjectDetail({project}:{project:Project}) {
   return <div className="screen projects-screen project-detail">
     <div className="topbar">
       <button className="btn btn-ghost" onClick={()=>setUI({openProjectId:undefined})}><Icon name="chevron-left" size={18}/>Projetos</button>
-      <button className="btn btn-sm btn-soft" onClick={()=>openSheet({type:'project',id:project.id})} aria-label="Editar projeto"><Icon name="edit" size={16}/>Editar</button>
+      <TopActions hideSearch><button className="icon-btn" onClick={()=>openSheet({type:'project',id:project.id})} aria-label="Editar projeto" title="Editar projeto"><Icon name="edit" size={20}/></button></TopActions>
     </div>
     <header className="project-heading">
       <span className={`project-symbol tone-${project.color}`} aria-hidden="true"><ProjectIcon project={project} size={24}/></span>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { formatDuration, WEEKDAYS_SHORT } from '../domain/dates';
 import type { Settings } from '../domain/types';
 import { actions, useStore } from '../store/store';
-import { goTo, toast } from '../store/ui';
+import { returnFromProfile, toast } from '../store/ui';
 import { cloudEnabled, confirmSignOut, supabase, syncNow, useCloud, type SyncStatus } from '../store/sync';
 import { useInstall } from '../hooks/install';
 import { SettingsSheet as BottomSheet } from '../components/SettingsSheet';
@@ -49,7 +49,7 @@ export function ProfileScreen() {
   useEffect(()=>{const refresh=()=>setPermission(reminderPermission());window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);},[]);
   const close=()=>{setPage(undefined);setPermission(reminderPermission());queueMicrotask(()=>{if(trigger.current?.isConnected)trigger.current.focus({preventScroll:true});});};
   return <div className="screen profile-settings">
-    <div className="topbar"><div className="row"><button className="icon-btn mobile-only" aria-label="Voltar" onClick={()=>goTo('today')}><Icon name="chevron-left"/></button><h1 className="page-title">Configurações</h1></div></div>
+    <div className="topbar"><div className="row"><button className="icon-btn" aria-label="Voltar" onClick={returnFromProfile}><Icon name="chevron-left"/></button><h1 className="page-title">Configurações</h1></div></div>
     <button className="profile-identity" onClick={e=>open('identity',e.currentTarget)} aria-label="Editar perfil">
       <UserAvatar size={46}/><span className="profile-setting-copy"><strong>{settings.name||user?.fullName||'Seu perfil'}</strong><span className="profile-setting-value">Editar seus dados</span></span><Icon name="edit" size={18}/>
     </button>

@@ -38,7 +38,10 @@ export interface UIState {
   agendaDate?: string;
   /** dia aberto no accordion da visão semana (exclusivo — só um por vez) */
   agendaOpenDay?: string | null;
+  agendaProfileRestore?: boolean;
   toasts: Toast[];
+  /** Retorno contextual da foto de perfil; não é persistido. */
+  profileReturn?: {tab:Tab;openProjectId?:string;agendaDate?:string;agendaView:AgendaView;agendaOpenDay?:string|null;scrollY:number;agendaScrollTop:number};
 }
 
 let ui: UIState = { tab: 'today', sheetStack: [], agendaView: 'day', toasts: [] };
@@ -82,6 +85,8 @@ export function closeAllSheets() {
 export function goTo(tab: Tab) {
   setUI({
     tab,
+    profileReturn: tab === 'profile' ? ui.profileReturn : undefined,
+    agendaProfileRestore: false,
     sheet: undefined,
     sheetStack: [],
     openProjectId: tab === 'projects' ? undefined : ui.openProjectId,
@@ -89,6 +94,27 @@ export function goTo(tab: Tab) {
     agendaDate: tab === 'agenda' ? undefined : ui.agendaDate,
   });
   if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+}
+
+export function openProfile() {
+  if (ui.tab === 'profile') return;
+  const profileReturn = {tab:ui.tab,openProjectId:ui.openProjectId,agendaDate:ui.agendaDate,agendaView:ui.agendaView,agendaOpenDay:ui.agendaOpenDay,
+    scrollY:typeof window==='undefined'?0:window.scrollY,agendaScrollTop:typeof document==='undefined'?0:document.querySelector('.agenda-body')?.scrollTop??0};
+  goTo('profile');
+  setUI({profileReturn});
+}
+
+export function returnFromProfile() {
+  const target=ui.profileReturn;
+  if(!target){goTo('today');return;}
+  const {scrollY,agendaScrollTop,...context}=target;
+  setUI({...context,profileReturn:undefined,sheet:undefined,sheetStack:[],agendaProfileRestore:context.tab==='agenda'&&context.agendaView==='week'});
+  if(typeof window!=='undefined')requestAnimationFrame(()=>{
+    if(ui.tab!==target.tab)return;
+    window.scrollTo({top:scrollY});
+    const body=document.querySelector('.agenda-body');if(body)body.scrollTop=agendaScrollTop;
+    document.querySelector<HTMLButtonElement>('.topbar [aria-label="Conta e perfil"]')?.focus({preventScroll:true});
+  });
 }
 
 let toastSeq = 0;

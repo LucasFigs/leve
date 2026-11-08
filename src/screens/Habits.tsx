@@ -16,7 +16,7 @@ import { openSheet, toast } from "../store/ui";
 import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/ui";
 import { completeWithFeedback } from "../components/feedback";
-import { TopActions } from "./TopActions";
+import { HeaderCreate, TopActions } from "./TopActions";
 import { TasksProjectsSwitch } from "./Tasks";
 import {
   buildHabitGrid,
@@ -67,13 +67,7 @@ export function HabitsScreen() {
       <div className="topbar">
         <h1 className="page-title">Hábitos</h1>
         <TopActions>
-          <button
-            className="icon-btn"
-            onClick={handleNewHabit}
-            aria-label="Novo hábito"
-          >
-            <Icon name="plus" />
-          </button>
+          <HeaderCreate label="Novo hábito" onClick={handleNewHabit}/>
         </TopActions>
       </div>
 
