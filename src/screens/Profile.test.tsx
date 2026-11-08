@@ -9,7 +9,7 @@ import {getUI} from '../store/ui';
 
 const fixture=vi.hoisted(()=>({
   cloud:{userId:'owner-a',status:'synced',email:'fixture@example.test',user:{fullName:'Pessoa de teste',provider:'google'},lastSync:1,error:undefined as string|undefined},
-  google:{connected:false,email:'fixture@example.test',calendarId:'primary',autoSync:true,status:'idle',error:undefined as string|undefined,calendars:[{id:'primary',summary:'Teste'},{id:'other',summary:'Outra'}]},
+  google:{needsRevocation:false,connected:false,email:'fixture@example.test',calendarId:'primary',autoSync:true,status:'idle',error:undefined as string|undefined,calendars:[{id:'primary',summary:'Teste'},{id:'other',summary:'Outra'}]},
   listeners:new Set<()=>void>(),permission:'default',connect:vi.fn(),disconnect:vi.fn(),sync:vi.fn(),target:vi.fn(),toggle:vi.fn(),signOut:vi.fn(),accountSync:vi.fn(),request:vi.fn(),enable:vi.fn(),disable:vi.fn(),updateUser:vi.fn(),
 }));
 vi.mock('../store/sync',()=>({cloudEnabled:true,useCloud:(select:(c:typeof fixture.cloud)=>unknown)=>useSyncExternalStore(fn=>{fixture.listeners.add(fn);return()=>{fixture.listeners.delete(fn);};},()=>select(fixture.cloud)),confirmSignOut:fixture.signOut,syncNow:fixture.accountSync,supabase:{auth:{updateUser:fixture.updateUser}}}));
@@ -21,7 +21,7 @@ beforeEach(()=>{
   Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});vi.useFakeTimers();
   vi.stubGlobal('matchMedia',()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
   vi.spyOn(window,'confirm').mockReturnValue(false);
-  fixture.google={...fixture.google,connected:false,status:'idle',error:undefined};fixture.cloud={...fixture.cloud,status:'synced',error:undefined};fixture.permission='default';
+  fixture.google={...fixture.google,connected:false,needsRevocation:false,status:'idle',error:undefined};fixture.cloud={...fixture.cloud,status:'synced',error:undefined};fixture.permission='default';
   fixture.connect.mockReset().mockResolvedValue(false);fixture.disconnect.mockReset().mockResolvedValue(true);fixture.sync.mockReset().mockResolvedValue(undefined);fixture.target.mockReset();fixture.toggle.mockReset();fixture.signOut.mockReset();fixture.accountSync.mockReset();fixture.request.mockReset().mockResolvedValue(false);fixture.enable.mockReset().mockResolvedValue('ok');fixture.disable.mockReset().mockResolvedValue(undefined);fixture.updateUser.mockReset().mockResolvedValue({error:null});
   localStorage.clear();sessionStorage.clear();localRepository.clear();replaceState(emptyState());
   host=document.createElement('div');document.body.append(host);root=createRoot(host);
@@ -86,8 +86,8 @@ it('conta nova não exibe conexão Calendar nem erro técnico; login e sync Leve
  expect(host.textContent).not.toContain('Google Agenda');expect(host.textContent).not.toContain('Conectar');open('Conta e sincronização');expect(dialog().textContent).toContain('Tudo sincronizado');
 });
 it('conta antiga oferece apenas gerenciar vínculo, não conexão, destino ou sincronizar eventos',async()=>{
- fixture.google={...fixture.google,connected:true,status:'idle',error:undefined};emit();open('Google Agenda');expect(dialog().textContent).toContain('permanecem no Google Agenda');expect(dialog().querySelector('select')).toBeNull();expect(dialog().querySelector('[role=switch]')).toBeNull();expect(dialog().textContent).not.toContain('Reconectar');
- vi.mocked(window.confirm).mockReturnValue(true);click('Desconectar Google Agenda');await act(async()=>{await Promise.resolve();});expect(fixture.disconnect).toHaveBeenCalledTimes(1);expect(fixture.connect).not.toHaveBeenCalled();expect(fixture.target).not.toHaveBeenCalled();expect(fixture.toggle).not.toHaveBeenCalled();
+ fixture.google={...fixture.google,connected:true,status:'idle',error:undefined};emit();open('Google Agenda');expect(dialog().textContent).toContain('não apaga atividades do Leve');expect(dialog().querySelector('select')).toBeNull();expect(dialog().querySelector('[role=switch]')).toBeNull();expect(dialog().textContent).not.toContain('Reconectar');
+ vi.mocked(window.confirm).mockReturnValue(true);click('Revogar acesso');await act(async()=>{await Promise.resolve();});expect(fixture.disconnect).toHaveBeenCalledTimes(1);expect(fixture.connect).not.toHaveBeenCalled();expect(fixture.target).not.toHaveBeenCalled();expect(fixture.toggle).not.toHaveBeenCalled();
 });
 it('erro de desconexão tem instrução manual e não vira sucesso nem reconexão',async()=>{
  fixture.google={...fixture.google,connected:true,status:'error',error:'Não foi possível confirmar a revogação.'};fixture.disconnect.mockResolvedValue(false);emit();open('Google Agenda');expect(dialog().querySelector('[role=alert]')!.textContent).toContain('confirmar');expect(dialog().querySelector('a[href="https://myaccount.google.com/connections"]')).not.toBeNull();expect(dialog().textContent).not.toContain('Reconectar');
@@ -139,12 +139,15 @@ it('rascunho da identidade exige confirmação e erro de conta permite tentar de
 it('troca de conta fecha gerenciamento e remove metadados da conta anterior',()=>{
  fixture.google={...fixture.google,connected:true,email:'old-calendar@example.test'};emit();open('Google Agenda');expect(dialog().textContent).toContain('old-calendar@example.test');fixture.cloud={...fixture.cloud,userId:'owner-b',email:'new@example.test'};fixture.google={...fixture.google,connected:false,email:'',error:undefined};emit();expect(dialog()).toBeNull();expect(host.textContent).not.toContain('old-calendar@example.test');expect(host.textContent).not.toContain('Google Agenda');
 });
-it('IDs antigos continuam oferecendo gerenciamento mesmo offline',()=>{
- const task={id:'legacy',title:'Antiga',kind:'event' as const,status:'active' as const,googleEventId:'fixture-event',subtasks:[],postponed:0,createdAt:1,updatedAt:1};act(()=>replaceState({...getState(),tasks:[task]}));fixture.google={...fixture.google,connected:false,status:'error',error:'Não foi possível consultar o vínculo antigo.'};emit();open('Google Agenda');expect(dialog().querySelector('[role=alert]')!.textContent).toContain('consultar');expect(dialog().textContent).not.toContain('Reconectar');
+it('IDs históricos não exibem conexão nem são apagados, mesmo com falha de consulta',()=>{
+ const task={id:'legacy',title:'Antiga',kind:'event' as const,status:'active' as const,googleEventId:'fixture-event',subtasks:[],postponed:0,createdAt:1,updatedAt:1};act(()=>replaceState({...getState(),tasks:[task]}));fixture.google={...fixture.google,connected:false,status:'error',error:'Não foi possível consultar o vínculo antigo.'};emit();open('Dados e privacidade');expect(dialog().querySelector('[data-legacy-connections]')).toBeNull();expect(getState().tasks[0].googleEventId).toBe('fixture-event');expect(dialog().querySelector('a[href="https://myaccount.google.com/connections"]')).not.toBeNull();
+});
+it('revogação pendente sem conexão mantém caminho contextual, sem afirmar sucesso',()=>{
+ fixture.google={...fixture.google,connected:false,needsRevocation:true,status:'error',error:'Não foi possível confirmar a revogação.'};emit();open('Google Agenda');expect(dialog().textContent).toContain('Acessos autorizados');expect(dialog().textContent).not.toContain('revogação confirmadas');expect(dialog().querySelector('[role=alert]')?.textContent).toContain('confirmar');expect(dialog().querySelector('a[href="https://myaccount.google.com/connections"]')).not.toBeNull();
 });
 it('vínculo antigo só aparece dentro de Dados e privacidade e permite voltar com foco',async()=>{
  fixture.google={...fixture.google,connected:true};emit();expect(host.querySelector('.profile-settings-group')?.textContent).not.toContain('Google Agenda');
  expect([...host.querySelectorAll('.profile-setting-title')].map(e=>e.textContent)).not.toContain('Google Agenda');
- open('Dados e privacidade');expect(dialog().textContent).toContain('Conexões antigas');act(()=>host.querySelector<HTMLButtonElement>('[data-legacy-connections]')!.click());expect(dialog().textContent).toContain('Desconectar Google Agenda');click('Dados e privacidade');await act(async()=>{await Promise.resolve();});expect(document.activeElement).toBe(host.querySelector('[data-legacy-connections]'));
+ open('Dados e privacidade');expect(dialog().textContent).toContain('Acessos autorizados');act(()=>host.querySelector<HTMLButtonElement>('[data-legacy-connections]')!.click());expect(dialog().textContent).toContain('Revogar acesso');click('Dados e privacidade');await act(async()=>{await Promise.resolve();});expect(document.activeElement).toBe(host.querySelector('[data-legacy-connections]'));
 });
-it('conta sem vínculo não oferece Conexões antigas',()=>{open('Dados e privacidade');expect(host.querySelector('[data-legacy-connections]')).toBeNull();});
+it('conta sem vínculo não oferece Acessos autorizados',()=>{open('Dados e privacidade');expect(host.querySelector('[data-legacy-connections]')).toBeNull();});

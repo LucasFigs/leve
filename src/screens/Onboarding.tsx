@@ -38,7 +38,7 @@ export function Onboarding() {
           <label className="field">Fim<input type="time" className="input" value={end} onChange={e => setEnd(e.target.value)} /></label>
         </div>
       </Disclosure>
-      <p className="small muted">O plano considera os itens do Leve. Compromissos existentes no Google Agenda não são importados.</p>
+      <p className="small muted">O plano considera as tarefas e os compromissos registrados no Leve.</p>
       {error && <p role="alert">{error}</p>}
       <button className="btn btn-primary btn-lg btn-block" type="submit">{capture.trim() ? 'Guardar e abrir meu dia' : 'Abrir meu dia'}</button>
     </form>

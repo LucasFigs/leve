@@ -59,6 +59,7 @@ describe('primeiro uso e disponibilidade', () => {
     act(() => Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'Atualizar período')!.click());
     expect(getState().settings.dayEnd).toBe('09:00');
     expect(host.textContent).toContain('Não sobrou espaço livre');
-    expect(host.textContent).toContain('Google Agenda não são importados');
+    expect(host.textContent).toContain('Estimativa com base nas tarefas e compromissos do Leve');
+    expect(host.textContent).not.toContain('Google Agenda');
   });
 });

@@ -99,7 +99,7 @@ export function PlanSheet({ date }: { date: string }) {
         )
       }
     >
-      <p className="small muted" style={{ marginBottom: 12 }}>Estimativa com base nas tarefas e compromissos do Leve. Compromissos já existentes no Google Agenda não são importados. Sem duração informada, usamos {settings.defaultDuration} min.</p>
+      <p className="small muted" style={{ marginBottom: 12 }}>Estimativa com base nas tarefas e compromissos do Leve. Sem duração informada, usamos {settings.defaultDuration} min.</p>
       <AvailabilityEditor />
       {nothing ? (
         <EmptyState icon={<Icon name="check-circle" size={28} />} title="Nada para organizar." text="Não há tarefas sem horário para encaixar neste dia." />
