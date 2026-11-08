@@ -6,16 +6,16 @@ import { newTask, useStore } from '../store/store';
 import { goTo, openSheet, useUI } from '../store/ui';
 import { TaskCard } from '../components/TaskCard';
 import { Icon } from '../components/Icon';
-import { EmptyState, Segmented } from '../components/ui';
+import { EmptyState } from '../components/ui';
 import { TopActions } from './TopActions';
 import { useClock } from '../hooks/hooks';
 import { emptyCatalogFilters, taskCatalog, type CatalogFilters } from './taskCatalog';
 
 /** Navegação compartilhada preservada. */
 export function TasksProjectsSwitch({ current }: { current: 'tasks' | 'habits' | 'projects' }) {
-  return <div className="mobile-only tasks-projects-switch" style={{marginBottom:14}}>
-    <Segmented label="Ver" value={current} onChange={v=>v!==current&&goTo(v)} options={[{value:'tasks',label:'Tarefas'},{value:'habits',label:'Hábitos'},{value:'projects',label:'Projetos'}]}/>
-  </div>;
+  return <nav className="area-nav mobile-only" aria-label="Áreas de atividades">
+    {([{value:'tasks',label:'Tarefas'},{value:'habits',label:'Hábitos'},{value:'projects',label:'Projetos'}] as const).map(o=><button type="button" key={o.value} aria-current={current===o.value?'page':undefined} onClick={()=>{if(current!==o.value)goTo(o.value);}}>{o.label}</button>)}
+  </nav>;
 }
 
 export function TasksScreen() {
@@ -58,7 +58,9 @@ export function TasksScreen() {
       <input ref={input} value={filters.q} onChange={e=>update('q',e.target.value)} placeholder="Buscar nas tarefas…" aria-label="Filtrar tarefas" autoComplete="off"/>
       {filters.q&&<button type="button" className="icon-btn" aria-label="Limpar pesquisa" onClick={clearSearch}><Icon name="x" size={16}/></button>}
     </div>
-    <Segmented label="Situação" value={filters.status} onChange={v=>update('status',v)} options={[{value:'open',label:'Abertas'},{value:'done',label:'Concluídas'},{value:'all',label:'Todas'}]}/>
+    <div className="task-status-filters" role="group" aria-label="Situação">
+      {([{value:'open',label:'Abertas'},{value:'done',label:'Concluídas'},{value:'all',label:'Todas'}] as const).map(o=><button type="button" key={o.value} aria-pressed={filters.status===o.value} onClick={()=>update('status',o.value)}>{filters.status===o.value&&<Icon name="check" size={13}/>} {o.label}</button>)}
+    </div>
     <div className="tasks-results-bar">
       <p className="xs muted" role="status">{total} {total===1?'resultado':'resultados'}{criteria.length>0?' · filtrados':''}</p>
       <div className="tasks-list-tools">

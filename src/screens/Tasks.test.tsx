@@ -70,3 +70,10 @@ it('volume grande tem apresentação progressiva e busca examina registros ainda
  act(()=>replaceState({...getState(),tasks:Array.from({length:500},(_,i)=>t(`Tarefa longa ${i} com detalhes para continuar`,{category:'trabalho'}))}));expect(host.querySelectorAll('.task')).toHaveLength(40);expect(host.textContent).toContain('500 resultados');click('Mostrar mais 40');expect(host.querySelectorAll('.task')).toHaveLength(80);input('499');expect(titles()).toEqual(['Tarefa longa 499 com detalhes para continuar']);
 });
 it('nova tarefa usa formulário existente e filtros não escondem tarefas profissionais fora do expediente',()=>{click('Nova tarefa');expect(getUI().sheet?.type).toBe('newTask');expect(titles()).toContain('Enviar relatório');});
+it('áreas usam navegação com página atual e situação preserva pesquisa e filtros avançados',()=>{
+ expect(host.querySelector('nav[aria-label="Áreas de atividades"] [aria-current="page"]')?.textContent).toBe('Tarefas');
+ click('Filtros');select('Categoria','pessoal');input('Atrasada');
+ click('Concluídas');expect(titles()).toEqual([]);expect(host.querySelector('[aria-label="Situação"] [aria-pressed="true"]')?.textContent).toContain('Concluídas');
+ click('Todas');expect(titles()).toEqual(['Atrasada']);expect(host.querySelector<HTMLInputElement>('[aria-label="Filtrar tarefas"]')!.value).toBe('Atrasada');expect(host.querySelector<HTMLSelectElement>('select[aria-label="Categoria"]')!.value).toBe('pessoal');
+ click('Hábitos');expect(host.querySelector('nav [aria-current="page"]')?.textContent).toBe('Hábitos');click('Projetos');expect(host.querySelector('nav [aria-current="page"]')?.textContent).toBe('Projetos');click('Tarefas');expect(host.querySelector('nav [aria-current="page"]')?.textContent).toBe('Tarefas');
+});
