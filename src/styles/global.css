@@ -1408,7 +1408,7 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 /* No celular, o fechamento continua pelo gesto no puxador/cabecalho. */
 .sheet-close { display: none; }
 @media (min-width: 1024px) {
-  .sheet-close { display: inline-flex; }
+  .sheet-close { display: inline-grid; }
 }
 
 .sheet-body {
